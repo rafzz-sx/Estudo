@@ -1,0 +1,304 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   BatCaverna — Design System Global CSS
+   Paleta escura, neon roxo/amarelo, efeitos de glow
+   ============================================================ */
+
+/* ─── Theme Tokens (Tailwind v4) ───────────────────────────── */
+@theme inline {
+  /* Cores de fundo */
+  --color-bat-bg: #0B0B0F;
+  --color-bat-bg-secondary: #121218;
+  --color-bat-bg-tertiary: #1A1A24;
+  --color-bat-bg-card: #16161E;
+  --color-bat-bg-elevated: #1E1E28;
+
+  /* Roxo (primário) */
+  --color-bat-purple-50: #F3EAFF;
+  --color-bat-purple-100: #E0CCFF;
+  --color-bat-purple-200: #C49CFF;
+  --color-bat-purple-300: #A86DFF;
+  --color-bat-purple-400: #A855F7;
+  --color-bat-purple-500: #7C3AED;
+  --color-bat-purple-600: #6D28D9;
+  --color-bat-purple-700: #5B21B6;
+  --color-bat-purple-800: #4C1D95;
+  --color-bat-purple-900: #3B0F7A;
+
+  /* Amarelo-ouro (secundário) */
+  --color-bat-gold-50: #FFFBEB;
+  --color-bat-gold-100: #FEF3C7;
+  --color-bat-gold-200: #FDE68A;
+  --color-bat-gold-300: #FCD34D;
+  --color-bat-gold-400: #F5C518;
+  --color-bat-gold-500: #EAB308;
+  --color-bat-gold-600: #CA8A04;
+
+  /* Textos */
+  --color-bat-text: #F5F5F7;
+  --color-bat-text-secondary: #A1A1B5;
+  --color-bat-text-muted: #6B7280;
+  --color-bat-text-disabled: #4A4A5A;
+
+  /* Bordas */
+  --color-bat-border: #2A2A35;
+  --color-bat-border-subtle: #1F1F2B;
+  --color-bat-border-strong: #3A3A48;
+
+  /* Feedback */
+  --color-bat-success: #22C55E;
+  --color-bat-error: #EF4444;
+  --color-bat-warning: #F59E0B;
+  --color-bat-info: #3B82F6;
+
+  /* Ranking */
+  --color-bat-gold: #FFD700;
+  --color-bat-silver: #C0C0C0;
+  --color-bat-bronze: #CD7F32;
+
+  /* Fontes */
+  --font-heading: 'Chakra Petch', 'Orbitron', sans-serif;
+  --font-body: 'Inter', 'Sora', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ─── Base Styles ──────────────────────────────────────────── */
+:root {
+  --background: #0B0B0F;
+  --foreground: #F5F5F7;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ─── Scrollbar personalizada ──────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #121218;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A2A35;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7C3AED;
+}
+
+/* ─── Seleção de texto ─────────────────────────────────────── */
+::selection {
+  background: rgba(124, 58, 237, 0.4);
+  color: #F5F5F7;
+}
+
+/* ─── Efeitos de Glow reutilizáveis ────────────────────────── */
+.glow-purple {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
+}
+
+.glow-purple-strong {
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.6), 0 0 60px rgba(124, 58, 237, 0.2);
+}
+
+.glow-gold {
+  box-shadow: 0 0 20px rgba(245, 197, 24, 0.4);
+}
+
+.glow-gold-strong {
+  box-shadow: 0 0 30px rgba(245, 197, 24, 0.6), 0 0 60px rgba(245, 197, 24, 0.2);
+}
+
+.glow-success {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+}
+
+.glow-error {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+/* ─── Card hover com glow ──────────────────────────────────── */
+.card-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-glow:hover {
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.3), 0 0 60px rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.5);
+  transform: translateY(-2px);
+}
+
+/* ─── Botão primário com glow ──────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #7C3AED, #A855F7);
+  color: #F5F5F7;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.5), 0 0 50px rgba(124, 58, 237, 0.2);
+  transform: translateY(-1px) scale(1.02);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* ─── Botão secundário (outline com glow) ──────────────────── */
+.btn-secondary {
+  background: transparent;
+  color: #F5C518;
+  border: 2px solid #F5C518;
+  border-radius: 12px;
+  padding: 12px 28px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-secondary:hover {
+  background: rgba(245, 197, 24, 0.1);
+  box-shadow: 0 0 20px rgba(245, 197, 24, 0.3);
+  transform: translateY(-1px);
+}
+
+/* ─── Efeito shimmer (skeleton loading) ────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #16161E 25%,
+    #1E1E28 50%,
+    #16161E 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ─── Efeito pulse (notificações) ──────────────────────────── */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(124, 58, 237, 0); }
+}
+
+.pulse-notification {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ─── Indicador "ao vivo" (bolinha pulsante) ───────────────── */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22C55E;
+  animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Efeito de névoa (fundo do hero) ──────────────────────── */
+@keyframes fog-drift {
+  0%, 100% { transform: translateX(-5%) translateY(0); opacity: 0.3; }
+  50% { transform: translateX(5%) translateY(-3%); opacity: 0.15; }
+}
+
+.fog-layer {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(124, 58, 237, 0.08) 0%, transparent 70%);
+  animation: fog-drift 12s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ─── Heading style (Chakra Petch) ─────────────────────────── */
+.heading {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Badge ADMIN ──────────────────────────────────────────── */
+.badge-admin {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #F5C518;
+  background: rgba(22, 22, 30, 0.9);
+  border: 1px solid rgba(245, 197, 24, 0.4);
+  border-radius: 6px;
+  box-shadow: 0 0 12px rgba(245, 197, 24, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.badge-admin:hover {
+  box-shadow: 0 0 20px rgba(245, 197, 24, 0.4);
+  border-color: rgba(245, 197, 24, 0.7);
+}
+
+/* ─── Input field ──────────────────────────────────────────── */
+.input-field {
+  width: 100%;
+  padding: 12px 16px;
+  background: #16161E;
+  border: 1px solid #2A2A35;
+  border-radius: 10px;
+  color: #F5F5F7;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+.input-field::placeholder {
+  color: #4A4A5A;
+}

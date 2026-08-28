@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "BatCaverna",
+    "slug": "batcaverna",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0B0B0F",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.batcaverna.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B0F"
+      },
+      "package": "br.com.batcaverna.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

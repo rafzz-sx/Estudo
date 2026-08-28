@@ -1,0 +1,35 @@
+{
+  "name": "@batcaverna/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@batcaverna/types": "*",
+    "@batcaverna/ui": "*",
+    "@batcaverna/utils": "*",
+    "@supabase/supabase-js": "^2.45.0",
+    "framer-motion": "^11.5.0",
+    "jose": "^6.2.10",
+    "lucide-react": "^0.460.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "recharts": "^2.15.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
