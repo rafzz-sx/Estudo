@@ -31,12 +31,16 @@ def execNode(String code, String fallback) {
     return fallback
 }
 
+def versionToNumber(major, minor, patch) {
+    return patch * 100 + minor * 10000 + major * 1000000
+}
+
 def getRNVersion() {
     try {
         def version = execNode("console.log(require('react-native/package.json').version);", "0.74.5")
         def coreVersion = version.split("-")[0]
         def (major, minor, patch) = coreVersion.tokenize('.').collect { it.toInteger() }
-        return patch * 100 + minor * 10000 + major * 1000000
+        return versionToNumber(major, minor, patch)
     } catch (Exception ignored) {
         return 740500
     }
@@ -176,11 +180,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
-    }
-    buildFeatures {
-        compose true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
@@ -205,23 +206,8 @@ android {
 }
 
 dependencies {
-    implementation platform(libs.compose.bom)
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation libs.activity.compose
-    implementation libs.core.ktx
-    implementation libs.lifecycle.runtime.ktx
-    implementation libs.material3
-    implementation libs.ui
-    implementation libs.ui.graphics
-    implementation libs.ui.tooling.preview
-    testImplementation libs.junit
-    androidTestImplementation platform(libs.compose.bom)
-    androidTestImplementation libs.espresso.core
-    androidTestImplementation libs.ext.junit
-    androidTestImplementation libs.ui.test.junit4
-    debugImplementation libs.ui.test.manifest
-    debugImplementation libs.ui.tooling
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
@@ -248,7 +234,9 @@ dependencies {
     }
 }
 
-if (rnVersion < versionToNumber(0, 75, 0)) {
-    apply from: new File(["node", "--print", "require.resolve('@react-native-community/cli-platform-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), "../native_modules.gradle");
+if (rnVersion < 750000) {
+    def nativeModulesGradle = resolveNodePath('@react-native-community/cli-platform-android/package.json', '../../../node_modules/@react-native-community/cli-platform-android/package.json')
+    apply from: new File(nativeModulesGradle.getParentFile(), "native_modules.gradle");
     applyNativeModulesAppBuildGradle(project)
 }
+
