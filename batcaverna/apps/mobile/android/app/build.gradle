@@ -1,3 +1,6 @@
+plugins {
+    alias(libs.plugins.kotlin.compose)
+}
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -144,6 +147,13 @@ android {
             useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    buildFeatures {
+        compose true
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
@@ -167,8 +177,23 @@ android {
 }
 
 dependencies {
+    implementation platform(libs.compose.bom)
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation libs.activity.compose
+    implementation libs.core.ktx
+    implementation libs.lifecycle.runtime.ktx
+    implementation libs.material3
+    implementation libs.ui
+    implementation libs.ui.graphics
+    implementation libs.ui.tooling.preview
+    testImplementation libs.junit
+    androidTestImplementation platform(libs.compose.bom)
+    androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.ui.test.junit4
+    debugImplementation libs.ui.test.manifest
+    debugImplementation libs.ui.tooling
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
