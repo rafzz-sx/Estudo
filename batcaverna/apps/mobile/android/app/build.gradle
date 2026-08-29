@@ -1,46 +1,74 @@
-plugins {
-    alias(libs.plugins.kotlin.compose)
-}
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def findNode() {
+    def candidates = [
+        "node",
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Program Files (x86)\\nodejs\\node.exe",
+        (System.getenv("ProgramFiles") ?: "C:\\Program Files") + "\\nodejs\\node.exe"
+    ]
+    for (String cand : candidates) {
+        try {
+            def p = [cand, "-v"].execute()
+            p.waitFor()
+            if (p.exitValue() == 0) return cand
+        } catch (Exception ignored) {}
+    }
+    return "node"
+}
+
+def nodeCmd = findNode()
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
-static def versionToNumber(major, minor, patch) {
-  return patch * 100 + minor * 10000 + major * 1000000
+def execNode(String code, String fallback) {
+    try {
+        def p = [nodeCmd, "-e", code].execute(null, rootDir)
+        def text = p.text.trim()
+        if (text && !text.isEmpty()) return text
+    } catch (Exception ignored) {}
+    return fallback
 }
 
 def getRNVersion() {
-  def version = providers.exec {
-    workingDir(projectDir)
-    commandLine("node", "-e", "console.log(require('react-native/package.json').version);")
-  }.standardOutput.asText.get().trim()
-
-  def coreVersion = version.split("-")[0]
-  def (major, minor, patch) = coreVersion.tokenize('.').collect { it.toInteger() }
-
-  return versionToNumber(
-      major,
-      minor,
-      patch
-  )
+    try {
+        def version = execNode("console.log(require('react-native/package.json').version);", "0.74.5")
+        def coreVersion = version.split("-")[0]
+        def (major, minor, patch) = coreVersion.tokenize('.').collect { it.toInteger() }
+        return patch * 100 + minor * 10000 + major * 1000000
+    } catch (Exception ignored) {
+        return 740500
+    }
 }
 def rnVersion = getRNVersion()
 
-/**
- * This is the configuration block to customize your React Native Android app.
- * By default you don't need to apply any configuration, just uncomment the lines you need.
- */
-react {
-    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
-    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
-    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+def resolveNodePath(String requirePath, String fallbackRelPath) {
+    try {
+        def out = [nodeCmd, "--print", "require.resolve('" + requirePath + "')"].execute(null, rootDir).text.trim()
+        if (out && !out.isEmpty()) return new File(out)
+    } catch (Exception ignored) {}
+    def f = new File(rootDir, fallbackRelPath)
+    if (f.exists()) return f
+    return new File(rootDir, "../../../node_modules/" + requirePath)
+}
 
-    // Use Expo CLI to bundle the app, this ensures the Metro config
-    // works correctly with Expo projects.
-    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+react {
+    def entryStr = execNode("require('expo/scripts/resolveAppEntry')", "")
+    if (entryStr && !entryStr.isEmpty()) {
+        entryFile = file(entryStr)
+    } else {
+        entryFile = file("../App.tsx")
+    }
+
+    def rnPackageJson = resolveNodePath('react-native/package.json', '../../../node_modules/react-native/package.json')
+    reactNativeDir = rnPackageJson.getParentFile().getAbsoluteFile()
+    hermesCommand = rnPackageJson.getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    
+    def codegenPkg = resolveNodePath('@react-native/codegen/package.json', '../../../node_modules/@react-native/codegen/package.json')
+    codegenDir = codegenPkg.getParentFile().getAbsoluteFile()
+
+    cliFile = resolveNodePath('@expo/cli', '../../../node_modules/@expo/cli/build/bin/cli')
     bundleCommand = "export:embed"
 
     /* Folders */
