@@ -7,7 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  AppRegistry,
 } from "react-native";
+import { registerRootComponent } from "expo";
 import { colors, NIVEIS_GAMIFICACAO } from "@batcaverna/ui";
 import { formatarTempoEstudo } from "@batcaverna/utils";
 
@@ -382,3 +384,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 });
+
+registerRootComponent(App);
+AppRegistry.registerComponent("main", () => App);
+
