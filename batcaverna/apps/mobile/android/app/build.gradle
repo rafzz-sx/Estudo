@@ -58,12 +58,8 @@ def resolveNodePath(String requirePath, String fallbackRelPath) {
 }
 
 react {
-    def entryStr = execNode("require('expo/scripts/resolveAppEntry')", "")
-    if (entryStr && !entryStr.isEmpty()) {
-        entryFile = file(entryStr)
-    } else {
-        entryFile = file("../App.tsx")
-    }
+    root = file("../../")
+    entryFile = file("../../index.js")
 
     def rnPackageJson = resolveNodePath('react-native/package.json', '../../../node_modules/react-native/package.json')
     reactNativeDir = rnPackageJson.getParentFile().getAbsoluteFile()
@@ -72,22 +68,7 @@ react {
     def codegenPkg = resolveNodePath('@react-native/codegen/package.json', '../../../node_modules/@react-native/codegen/package.json')
     codegenDir = codegenPkg.getParentFile().getAbsoluteFile()
 
-    cliFile = resolveNodePath('@expo/cli', '../../../node_modules/@expo/cli/build/bin/cli')
-    bundleCommand = "export:embed"
-
-    /* Folders */
-    //   The root of your project, i.e. where "package.json" lives. Default is '..'
-    // root = file("../")
-    //   The folder where the react-native NPM package is. Default is ../node_modules/react-native
-    // reactNativeDir = file("../node_modules/react-native")
-    //   The folder where the react-native Codegen package is. Default is ../node_modules/@react-native/codegen
-    // codegenDir = file("../node_modules/@react-native/codegen")
-
-    /* Variants */
-    //   The list of variants to that are debuggable. For those we're going to
-    //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
-    //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "prodDebug"]
+    debuggableVariants = []
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
