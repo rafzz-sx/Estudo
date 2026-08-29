@@ -11,5 +11,9 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(monorepoRoot, 'node_modules'),
 ];
+config.resolver.blockList = [
+  /.*\/apps\/web\/.next\/.*/,
+  /.*\\apps\\web\\.next\\.*/,
+];
 
 module.exports = config;

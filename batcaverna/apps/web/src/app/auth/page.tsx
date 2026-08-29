@@ -72,6 +72,19 @@ function AuthForm() {
   const [aceiteIdade, setAceiteIdade] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
+  // Status de Disponibilidade em Tempo Real
+  const [apelidoStatus, setApelidoStatus] = useState<{
+    checking: boolean;
+    available?: boolean;
+    message?: string;
+  }>({ checking: false });
+
+  const [emailStatus, setEmailStatus] = useState<{
+    checking: boolean;
+    available?: boolean;
+    message?: string;
+  }>({ checking: false });
+
   // Erros & Status
   const [erros, setErros] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,6 +95,78 @@ function AuthForm() {
       setTab("cadastro");
     }
   }, [searchParams]);
+
+  // ─── Verificador de Apelido em Tempo Real (Debounce 350ms) ────
+  useEffect(() => {
+    if (!apelido.trim()) {
+      setApelidoStatus({ checking: false });
+      return;
+    }
+
+    if (apelido.trim().length < 3) {
+      setApelidoStatus({
+        checking: false,
+        available: false,
+        message: "Apelido deve ter no mínimo 3 caracteres",
+      });
+      return;
+    }
+
+    setApelidoStatus({ checking: true });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/auth/check-availability?field=apelido&value=${encodeURIComponent(apelido.trim())}`
+        );
+        const data = await res.json();
+        setApelidoStatus({
+          checking: false,
+          available: data.available,
+          message: data.available ? (data.message || "✓ Este apelido está disponível!") : (data.error || "Este apelido já está em uso"),
+        });
+      } catch {
+        setApelidoStatus({ checking: false });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [apelido]);
+
+  // ─── Verificador de E-mail Anti-Fake em Tempo Real (Debounce 400ms) ──
+  useEffect(() => {
+    if (!email.trim()) {
+      setEmailStatus({ checking: false });
+      return;
+    }
+
+    if (!email.includes("@") || !email.includes(".")) {
+      setEmailStatus({
+        checking: false,
+        available: false,
+        message: "Digite um e-mail válido (ex: seu@email.com)",
+      });
+      return;
+    }
+
+    setEmailStatus({ checking: true });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/auth/check-availability?field=email&value=${encodeURIComponent(email.trim())}`
+        );
+        const data = await res.json();
+        setEmailStatus({
+          checking: false,
+          available: data.available,
+          message: data.available ? (data.message || "✓ E-mail válido e disponível!") : (data.error || "E-mail inválido ou indisponível"),
+        });
+      } catch {
+        setEmailStatus({ checking: false });
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [email]);
 
   const toggleConcurso = (id: string) => {
     setConcursosSelecionados((prev) =>
@@ -136,9 +221,12 @@ function AuthForm() {
     if (!nome.trim()) novosErros.push("Nome é obrigatório");
     if (!apelido.trim() || apelido.trim().length < 3)
       novosErros.push("Apelido deve ter pelo menos 3 caracteres");
+    if (apelidoStatus.available === false)
+      novosErros.push(apelidoStatus.message || "Apelido indisponível");
+
     if (!email.trim()) novosErros.push("E-mail é obrigatório");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      novosErros.push("E-mail inválido");
+    if (emailStatus.available === false)
+      novosErros.push(emailStatus.message || "E-mail inválido ou temporário detectado");
 
     const errosSenha = validarSenhaForte(senha);
     if (errosSenha.length > 0)
@@ -277,38 +365,97 @@ function AuthForm() {
           <form onSubmit={handleCadastro} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Nome</label>
+                <label className="block text-bat-text-secondary text-sm mb-1.5">Nome Completo</label>
                 <input
                   type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   placeholder="Seu nome"
                   className="input-field"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Apelido</label>
+                <label className="block text-bat-text-secondary text-sm mb-1.5">Apelido (Nome de Guerra)</label>
                 <input
                   type="text"
                   value={apelido}
                   onChange={(e) => setApelido(e.target.value)}
-                  placeholder="Seu nickname"
-                  className="input-field"
+                  placeholder="Ex: Falcao_FAB"
+                  className={`input-field font-mono text-xs ${
+                    apelidoStatus.available === true
+                      ? "border-emerald-500/70 focus:border-emerald-500"
+                      : apelidoStatus.available === false
+                      ? "border-bat-error/70 focus:border-bat-error"
+                      : ""
+                  }`}
                   maxLength={20}
+                  required
                 />
               </div>
             </div>
 
+            {/* Micro-badge de status do Apelido */}
+            {apelido.trim().length > 0 && (
+              <div className="text-[11px] px-1 -mt-2">
+                {apelidoStatus.checking ? (
+                  <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
+                    <span>⏳</span>
+                    <span>Verificando disponibilidade do apelido...</span>
+                  </span>
+                ) : apelidoStatus.available === true ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <span>✓</span>
+                    <span>{apelidoStatus.message || "Este apelido está disponível!"}</span>
+                  </span>
+                ) : apelidoStatus.available === false ? (
+                  <span className="text-bat-error font-semibold flex items-center gap-1">
+                    <span>⚠️</span>
+                    <span>{apelidoStatus.message}</span>
+                  </span>
+                ) : null}
+              </div>
+            )}
+
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-1.5">E-mail</label>
+              <label className="block text-bat-text-secondary text-sm mb-1.5">E-mail Real</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                className="input-field"
+                placeholder="seu.email@provedor.com"
+                className={`input-field ${
+                  emailStatus.available === true
+                    ? "border-emerald-500/70 focus:border-emerald-500"
+                    : emailStatus.available === false
+                    ? "border-bat-error/70 focus:border-bat-error"
+                    : ""
+                }`}
+                required
               />
             </div>
+
+            {/* Micro-badge de status do E-mail (Anti-Fake / Duplicidade) */}
+            {email.trim().length > 0 && (
+              <div className="text-[11px] px-1 -mt-2">
+                {emailStatus.checking ? (
+                  <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
+                    <span>⏳</span>
+                    <span>Verificando integridade e existência do e-mail...</span>
+                  </span>
+                ) : emailStatus.available === true ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <span>✓</span>
+                    <span>{emailStatus.message || "E-mail válido e disponível!"}</span>
+                  </span>
+                ) : emailStatus.available === false ? (
+                  <span className="text-bat-error font-semibold flex items-center gap-1">
+                    <span>⚠️</span>
+                    <span>{emailStatus.message}</span>
+                  </span>
+                ) : null}
+              </div>
+            )}
 
             <div>
               <label className="block text-bat-text-secondary text-sm mb-1.5">Data de Nascimento</label>

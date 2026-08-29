@@ -9,17 +9,29 @@ import {
   getEmailTokenExpiry,
 } from '@/lib/auth';
 
-// ─── Lista de domínios descartáveis (amostra) ────────────────
-const DISPOSABLE_DOMAINS = [
-  'mailinator.com', 'guerrillamail.com', 'tempmail.com',
-  'throwaway.email', 'yopmail.com', 'sharklasers.com',
-  'guerrillamailblock.com', 'grr.la', 'dispostable.com',
-  'trashmail.com', '10minutemail.com', 'temp-mail.org',
-];
+// ─── Lista abrangente de domínios descartáveis e falsos ──────
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'temp-mail.org',
+  'throwaway.email', 'yopmail.com', 'sharklasers.com', 'guerrillamailblock.com',
+  'grr.la', 'dispostable.com', 'trashmail.com', '10minutemail.com',
+  '10minutemail.net', 'crazymailing.com', 'fakemailgenerator.com',
+  'getairmail.com', 'inboxkitten.com', 'maildrop.cc', 'mohmal.com',
+  'nada.ltd', 'tempail.com', 'tempr.email', 'generator.email',
+  'burnermail.io', 'dropmail.me', 'emailondeck.com', 'mytemp.email',
+  'temp-mail.io', 'tmpmail.net', 'tmpmail.org', 'binkmail.com',
+  'safetymail.info', 'fakemail.net', 'fakeinbox.com', 'mailcatch.com',
+  'trashmail.net', 'trashmail.org', 'tempinbox.com', 'getnada.com',
+  'abcvg.com', 'disposablemail.com', 'dropmail.me', 'armyspy.com',
+  'cuvox.de', 'dayrep.com', 'einrot.com', 'fleckens.hu', 'gustr.com',
+  'jourrapide.com', 'rhyta.com', 'superrito.com', 'teleworm.us',
+  'test.com', 'exemplo.com', 'fake.com', 'asdf.com', 'teste.com',
+  'mail.com.test', 'temp.com', '123.com', 'abc.com', 'aaa.com',
+]);
 
 function isDisposableEmail(email: string): boolean {
-  const domain = email.split('@')[1]?.toLowerCase();
-  return DISPOSABLE_DOMAINS.includes(domain);
+  const domain = email.split('@')[1]?.toLowerCase().trim();
+  if (!domain) return false;
+  return DISPOSABLE_DOMAINS.has(domain);
 }
 
 function isValidEmail(email: string): boolean {
