@@ -1,81 +1,23 @@
 pluginManagement {
-  def findNode() {
-    def candidates = [
-        "node",
-        "C:\\Program Files\\nodejs\\node.exe",
-        "C:\\Program Files (x86)\\nodejs\\node.exe",
-        (System.getenv("ProgramFiles") ?: "C:\\Program Files") + "\\nodejs\\node.exe"
-    ]
-    for (String cand : candidates) {
-        try {
-            def p = [cand, "-v"].execute()
-            p.waitFor()
-            if (p.exitValue() == 0) return cand
-        } catch (Exception ignored) {}
-    }
-    return "node"
-  }
-
-  def nodeCmd = findNode()
-
-  def getPkgPath(String pkg) {
-    try {
-      def out = [nodeCmd, "--print", "require.resolve('" + pkg + "')"].execute(null, rootDir).text.trim()
-      if (out && !out.isEmpty()) return out
-    } catch (Exception ignored) {}
-    return new File(rootDir, "../../../node_modules/" + pkg).getAbsolutePath()
-  }
-
-  def gradlePluginPkg = getPkgPath('@react-native/gradle-plugin/package.json')
-  includeBuild(new File(gradlePluginPkg).getParentFile().toString())
+  includeBuild(new File(["node", "--print", "require.resolve('@react-native/gradle-plugin/package.json')"].execute(null, rootDir).text.trim()).getParentFile().toString())
 }
-
 plugins { id("com.facebook.react.settings") }
 
 rootProject.name = 'BatCaverna'
 
-def findNodeSetting() {
-    def candidates = [
-        "node",
-        "C:\\Program Files\\nodejs\\node.exe",
-        "C:\\Program Files (x86)\\nodejs\\node.exe",
-        (System.getenv("ProgramFiles") ?: "C:\\Program Files") + "\\nodejs\\node.exe"
-    ]
-    for (String cand : candidates) {
-        try {
-            def p = [cand, "-v"].execute()
-            p.waitFor()
-            if (p.exitValue() == 0) return cand
-        } catch (Exception ignored) {}
-    }
-    return "node"
-}
-
-def nodeCmdSetting = findNodeSetting()
-
-def resolveSettingPkg(String pkg) {
-    try {
-        def out = [nodeCmdSetting, "--print", "require.resolve('" + pkg + "')"].execute(null, rootDir).text.trim()
-        if (out && !out.isEmpty()) return out
-    } catch (Exception ignored) {}
-    return new File(rootDir, "../../../node_modules/" + pkg).getAbsolutePath()
-}
-
 dependencyResolutionManagement {
   versionCatalogs {
     reactAndroidLibs {
-      def rnPkg = resolveSettingPkg('react-native/package.json')
-      from(files(new File(new File(rnPkg).getParentFile(), "gradle/libs.versions.toml")))
+      from(files(new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim(), "../gradle/libs.versions.toml")))
     }
   }
 }
 
-def expoPkg = resolveSettingPkg('expo/package.json')
-apply from: new File(new File(expoPkg).getParentFile(), "scripts/autolinking.gradle");
+apply from: new File(["node", "--print", "require.resolve('expo/package.json')"].execute(null, rootDir).text.trim(), "../scripts/autolinking.gradle");
 useExpoModules()
 
-def cliPlatformAndroid = resolveSettingPkg('@react-native-community/cli-platform-android/package.json')
-apply from: new File(new File(cliPlatformAndroid).getParentFile(), "native_modules.gradle");
+apply from: new File(["node", "--print", "require.resolve('@react-native-community/cli-platform-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), "../native_modules.gradle");
 applyNativeModulesSettingsGradle(settings)
 
 include ':app'
+includeBuild(new File(["node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile())
