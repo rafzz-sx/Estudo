@@ -12,8 +12,10 @@ const navLinks = [
   { href: "/questoes", label: "Questões", icon: "❓" },
   { href: "/bizus", label: "Bizus", icon: "💡" },
   { href: "/ranking", label: "Ranking", icon: "🏆" },
-  { href: "/perfil", label: "Perfil", icon: "👤" },
+  { href: "/chat", label: "Chat & Squad", icon: "💬" },
   { href: "/tickets", label: "Suporte", icon: "🎫" },
+  { href: "/perfil", label: "Perfil", icon: "👤" },
+  { href: "/admin", label: "Painel Admin", icon: "🛡️" },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {

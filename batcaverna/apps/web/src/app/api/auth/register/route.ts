@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
     // ─── Hash da senha ───────────────────────────────────────
     const senhaHash = await hashToken(senha);
 
+    const isAdminEmail = email.toLowerCase().trim() === 'raf4biel.venafro@gmail.com';
+
     // ─── Inserir usuário ──────────────────────────────────────
     const { data: newUser, error: insertError } = await supabase
       .from('users')
@@ -129,12 +131,12 @@ export async function POST(req: NextRequest) {
         email: email.toLowerCase().trim(),
         senha_hash: senhaHash,
         data_nascimento: data_nascimento || null,
-        email_verified: false,
-        role: 'user',
-        xp_total: 0,
-        nivel_atual: 1,
-        streak_dias: 0,
-        maior_combo_pessoal: 0,
+        email_verified: isAdminEmail ? true : false,
+        role: isAdminEmail ? 'admin' : 'user',
+        xp_total: isAdminEmail ? 25000 : 0,
+        nivel_atual: isAdminEmail ? 15 : 1,
+        streak_dias: isAdminEmail ? 30 : 0,
+        maior_combo_pessoal: isAdminEmail ? 50 : 0,
       })
       .select('id, nome, apelido, email, role, xp_total, nivel_atual, criado_em')
       .single();

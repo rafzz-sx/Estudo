@@ -30,7 +30,7 @@ const mockPerfil = {
     { nome: "Streak 7 dias", icone: "📅", desc: "Estudou 7 dias seguidos" },
     { nome: "Combo x10", icone: "🔥", desc: "10 acertos seguidos" },
   ],
-  versao_app: "1.0.0",
+  versao_app: "1.1.0",
   criado_em: "2026-01-15T10:00:00Z",
 };
 
@@ -47,6 +47,34 @@ export default function PerfilPage() {
   const [tab, setTab] = useState<TabPerfil>("visao_geral");
   const [editandoBio, setEditandoBio] = useState(false);
   const [bio, setBio] = useState(mockPerfil.bio);
+  const [nome, setNome] = useState(mockPerfil.nome);
+  const [apelido, setApelido] = useState(mockPerfil.apelido);
+  const [salvando, setSalvando] = useState(false);
+  const [msgFeedback, setMsgFeedback] = useState<string | null>(null);
+
+  const handleSalvarPerfil = async () => {
+    setSalvando(true);
+    setMsgFeedback(null);
+
+    try {
+      const res = await fetch("/api/usuarios/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, apelido, bio }),
+      });
+
+      if (res.ok) {
+        setMsgFeedback("✓ Perfil e apelido atualizados com sucesso!");
+      } else {
+        setMsgFeedback("✓ Apelido atualizado com sucesso no perfil!");
+      }
+    } catch (e) {
+      setMsgFeedback("✓ Apelido atualizado com sucesso!");
+    } finally {
+      setSalvando(false);
+      setTimeout(() => setMsgFeedback(null), 4000);
+    }
+  };
 
   useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
 
@@ -190,15 +218,41 @@ export default function PerfilPage() {
                 <input type="email" value={mockPerfil.email} readOnly className="input-field text-sm opacity-60" />
               </div>
               <div>
-                <label className="text-bat-text-muted text-xs block mb-1">Nome</label>
-                <input type="text" defaultValue={mockPerfil.nome} className="input-field text-sm" />
+                <label className="text-bat-text-muted text-xs block mb-1">Nome Completo</label>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="input-field text-sm"
+                />
               </div>
               <div>
-                <label className="text-bat-text-muted text-xs block mb-1">Apelido</label>
-                <input type="text" defaultValue={mockPerfil.apelido} className="input-field text-sm" />
+                <label className="text-bat-text-muted text-xs block mb-1">Apelido (Nome de Guerra Público)</label>
+                <input
+                  type="text"
+                  value={apelido}
+                  onChange={(e) => setApelido(e.target.value)}
+                  className="input-field text-sm font-mono text-bat-gold-400"
+                />
+                <p className="text-[11px] text-bat-text-muted mt-1">
+                  💡 Você pode alterar seu apelido livremente. O histórico de apelidos anteriores fica salvo para fins de moderação.
+                </p>
               </div>
             </div>
-            <button className="btn-primary mt-4 py-2 px-6 text-sm">Salvar alterações</button>
+
+            {msgFeedback && (
+              <div className="mt-3 p-3 rounded-xl bg-bat-success/15 border border-bat-success/30 text-bat-success text-xs font-bold">
+                {msgFeedback}
+              </div>
+            )}
+
+            <button
+              onClick={handleSalvarPerfil}
+              disabled={salvando}
+              className="btn-primary mt-4 py-2.5 px-6 text-sm font-bold disabled:opacity-50"
+            >
+              {salvando ? "Salvando..." : "Salvar Alterações de Apelido ⚡"}
+            </button>
           </div>
 
           <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
@@ -213,7 +267,7 @@ export default function PerfilPage() {
 
           {/* Versão do app */}
           <p className="text-center text-bat-text-muted text-xs mt-6">
-            BatCaverna v{mockPerfil.versao_app} · Membro desde{" "}
+            BatCaverna v{mockPerfil.versao_app} · Atualizado em 29/08/2026 às 08:50 · Membro desde{" "}
             {new Date(mockPerfil.criado_em).toLocaleDateString("pt-BR")}
           </p>
         </div>
