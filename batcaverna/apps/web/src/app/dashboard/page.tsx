@@ -5,56 +5,27 @@ import Link from "next/link";
 import { BatLogo } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
 
-// ─── Dados mock (Admin) ──────────────────────────────────────
-const mockUser = {
-  apelido: "AdminCaverna",
-  email: "raf4biel.venafro@gmail.com",
-  role: "admin" as const,
-  nivel_atual: 15,
-  titulo_nivel: "Rei da Batcaverna",
-  xp_total: 25000,
-  xp_proximo_nivel: 30000,
-  streak_dias: 30,
-  maior_combo: 50,
-  tempo_estudo_hoje: 14400, // 4h em segundos
-  tempo_estudo_total: 450000,
-  questoes_respondidas_total: 1250,
-  percentual_acerto: 91.5,
-  sessao_ativa: true,
-};
-
-const mockConcursosFavoritos = [
-  { sigla: "EEAR", progresso: 35, emoji: "✈️" },
-  { sigla: "ESA", progresso: 22, emoji: "⭐" },
-  { sigla: "ENEM", progresso: 18, emoji: "📚" },
-];
-
-const mockQuestaoDoDia = {
-  materia: "Português",
-  assunto: "Crase",
-  enunciado: "Assinale a alternativa em que o uso da crase está CORRETO:",
-};
-
-// ─── Morcego SVG ─────────────────────────────────────────────
-function BatIcon({ size = 24, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" className={className}>
-      <path d="M32 8C32 8 28 16 20 20C12 24 4 22 4 22C4 22 8 30 14 34C14 34 10 42 8 48C8 48 16 44 22 42C24 46 28 52 32 56C36 52 40 46 42 42C48 44 56 48 56 48C54 42 50 34 50 34C56 30 60 22 60 22C60 22 52 24 44 20C36 16 32 8 32 8Z" fill="currentColor" fillOpacity="0.9"/>
-    </svg>
-  );
-}
-
 // ─── Formatar tempo ──────────────────────────────────────────
 function formatarTempo(segundos: number): string {
+  if (segundos <= 0) return "0min";
   const h = Math.floor(segundos / 3600);
   const m = Math.floor((segundos % 3600) / 60);
   if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`;
   return `${m}min`;
 }
 
+function getTituloNivel(nivel: number): string {
+  if (nivel >= 15) return "Rei da Batcaverna";
+  if (nivel >= 10) return "General Estrategista";
+  if (nivel >= 7) return "Capitão Tático";
+  if (nivel >= 5) return "Cabo de Operações";
+  if (nivel >= 3) return "Soldado da Caverna";
+  return "Recruta da Caverna";
+}
+
 // ─── Barra de progresso XP ───────────────────────────────────
 function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
-  const progresso = Math.min(100, (atual / proximo) * 100);
+  const progresso = proximo > 0 ? Math.min(100, (atual / proximo) * 100) : 0;
 
   return (
     <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
@@ -91,10 +62,9 @@ function StatCard({
   label: string;
   value: string;
   sub?: string;
-  glowColor?: "purple" | "gold" | "green" | "blue";
+  glowColor?: "gold" | "green" | "blue";
 }) {
   const glowMap = {
-    purple: "hover:border-bat-gold-400/40 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)]",
     gold: "hover:border-bat-gold-400/40 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)]",
     green: "hover:border-bat-success/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.2)]",
     blue: "hover:border-bat-info/40 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]",
@@ -119,18 +89,21 @@ function StatCard({
 // ═══════════════════════════════════════════════════════════════
 export default function DashboardPage() {
   const [visible, setVisible] = useState(false);
-  const storeUser = useAuthStore((state) => state.user);
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
   }, []);
 
-  const apelidoExibicao = storeUser?.apelido || storeUser?.nome || mockUser.apelido;
-  const roleExibicao = storeUser?.role || mockUser.role;
-  const nivelExibicao = storeUser?.nivel_atual || (storeUser ? 1 : mockUser.nivel_atual);
-  const xpExibicao = storeUser?.xp_total ?? mockUser.xp_total;
-  const xpProximo = nivelExibicao * 1000 + 500;
-  const tituloNivel = nivelExibicao >= 15 ? "Rei da Batcaverna" : nivelExibicao >= 10 ? "General Estrategista" : nivelExibicao >= 5 ? "Cabo Tático" : "Recruta da Caverna";
+  // Dados REAIS do usuário autenticado (começa tudo em 0 para conta nova)
+  const apelido = user?.apelido || user?.nome || "Soldado";
+  const role = user?.role || "user";
+  const nivel = user?.nivel_atual || 1;
+  const xp = user?.xp_total ?? 0;
+  const xpProximo = nivel * 1000 + 500;
+  const titulo = getTituloNivel(nivel);
+  const streak = user?.streak_dias ?? 0;
+  const maiorCombo = user?.maior_combo_pessoal ?? 0;
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -140,9 +113,9 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 mb-1">
             <BatLogo size={36} glow />
             <h1 className="heading text-2xl sm:text-3xl text-bat-text font-bold">
-              Bem-vindo à <span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {apelidoExibicao}
+              Bem-vindo à <span className="text-white">Bat</span><span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {apelido}
             </h1>
-            {roleExibicao === "admin" && (
+            {role === "admin" && (
               <Link href="/admin" className="badge-admin no-underline">
                 ADMIN
               </Link>
@@ -152,22 +125,14 @@ export default function DashboardPage() {
             Vamos dominar mais um dia de estudos? 💪
           </p>
         </div>
-
-        {/* Sessão ativa */}
-        <div className="flex items-center gap-2 bg-bat-success/10 border border-bat-success/30 rounded-xl px-4 py-2">
-          <div className="live-indicator" />
-          <span className="text-bat-success text-sm font-medium">
-            Estudando agora · {formatarTempo(mockUser.tempo_estudo_hoje)}
-          </span>
-        </div>
       </div>
 
       {/* ═══ BARRA DE XP ═══ */}
       <XpBar
-        atual={xpExibicao}
+        atual={xp}
         proximo={xpProximo}
-        nivel={nivelExibicao}
-        titulo={tituloNivel}
+        nivel={nivel}
+        titulo={titulo}
       />
 
       {/* ═══ CARDS ESTATÍSTICOS ═══ */}
@@ -175,69 +140,49 @@ export default function DashboardPage() {
         <StatCard
           icon="🔥"
           label="Streak"
-          value={`${mockUser.streak_dias} dias`}
-          sub="Não perca a sequência!"
+          value={streak > 0 ? `${streak} dias` : "0 dias"}
+          sub={streak > 0 ? "Não perca a sequência!" : "Comece a estudar hoje!"}
           glowColor="gold"
         />
         <StatCard
           icon="⏱️"
           label="Tempo Total"
-          value={formatarTempo(mockUser.tempo_estudo_total)}
-          sub="Desde o início"
+          value="0min"
+          sub="Comece uma sessão de estudo"
           glowColor="gold"
         />
         <StatCard
           icon="❓"
           label="Questões"
-          value={mockUser.questoes_respondidas_total.toString()}
-          sub={`${mockUser.percentual_acerto}% de acerto`}
+          value="0"
+          sub="Resolva sua primeira questão"
           glowColor="blue"
         />
         <StatCard
           icon="⚡"
           label="Maior Combo"
-          value={`x${mockUser.maior_combo}`}
-          sub="Acertos seguidos"
+          value={maiorCombo > 0 ? `x${maiorCombo}` : "x0"}
+          sub={maiorCombo > 0 ? "Acertos seguidos" : "Acerte questões em sequência"}
           glowColor="green"
         />
       </div>
 
-      {/* ═══ PROGRESSO POR CONCURSO ═══ */}
+      {/* ═══ PROGRESSO POR CONCURSO + QUESTÃO DO DIA ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Concursos favoritos */}
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
           <h2 className="heading text-lg text-bat-text mb-4">Seus Concursos</h2>
-          <div className="space-y-4">
-            {mockConcursosFavoritos.map((c) => (
-              <Link
-                key={c.sigla}
-                href={`/concursos/${c.sigla.toLowerCase()}`}
-                className="flex items-center gap-3 no-underline group"
-              >
-                <span className="text-xl">{c.emoji}</span>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-bat-text text-sm font-medium group-hover:text-bat-gold-400 transition-colors">
-                      {c.sigla}
-                    </span>
-                    <span className="text-bat-text-muted text-xs">{c.progresso}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-bat-bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-bat-gold-400 transition-all duration-500"
-                      style={{ width: `${c.progresso}%` }}
-                    />
-                  </div>
-                </div>
-              </Link>
-            ))}
+          <div className="py-6 text-center">
+            <p className="text-bat-text-muted text-sm mb-3">
+              Você ainda não iniciou nenhuma trilha de estudos.
+            </p>
+            <Link
+              href="/concursos"
+              className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
+            >
+              Explorar concursos →
+            </Link>
           </div>
-          <Link
-            href="/concursos"
-            className="block mt-4 text-bat-gold-400 text-sm hover:underline no-underline text-center font-medium"
-          >
-            Ver todos os concursos →
-          </Link>
         </div>
 
         {/* Questão do dia */}
@@ -245,20 +190,17 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="heading text-lg text-bat-text">🎲 Questão do Dia</h2>
             <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
-              {mockQuestaoDoDia.materia}
+              Em breve
             </span>
           </div>
-          <p className="text-bat-text-secondary text-sm mb-2">
-            <span className="text-bat-text-muted">Assunto:</span> {mockQuestaoDoDia.assunto}
-          </p>
-          <p className="text-bat-text text-sm leading-relaxed mb-4 line-clamp-3">
-            {mockQuestaoDoDia.enunciado}
+          <p className="text-bat-text-secondary text-sm mb-4">
+            As questões do dia serão habilitadas quando houver questões oficiais importadas na plataforma.
           </p>
           <Link
-            href="/questoes/dia"
+            href="/questoes"
             className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
           >
-            Resolver agora
+            Ver banco de questões
           </Link>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useAuthStore } from "@/stores/auth-store";
 
 interface Mensagem {
@@ -209,12 +210,19 @@ export default function ChatPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="flex items-center justify-center w-9 h-9 rounded-xl bg-bat-bg-secondary border border-bat-border hover:border-[#F5C518]/40 hover:text-[#F5C518] text-bat-text-muted transition-all no-underline text-lg"
+              title="Voltar para a Dashboard"
+            >
+              ←
+            </Link>
             <h1 className="heading text-3xl text-bat-text">💬 Comunicação Tática</h1>
-            <span className="badge-admin bg-bat-purple-900/60 text-bat-purple-300 border border-bat-purple-500/40">
+            <span className="text-[10px] font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2 py-0.5 rounded-lg tracking-wider">
               ESQUADRÃO BATCAVERNA
             </span>
           </div>
-          <p className="text-bat-text-secondary text-sm">
+          <p className="text-bat-text-secondary text-sm ml-12">
             Tire dúvidas, compartilhe bizus e monte grupos de estudo com outros soldados em tempo real.
           </p>
         </div>

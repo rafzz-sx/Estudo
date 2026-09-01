@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BatLogo, BatBrand } from "@/components/BatLogo";
+import { useAuthStore } from "@/stores/auth-store";
 
 // ─── Links do menu ───────────────────────────────────────────
-const navLinks = [
+const navLinksBase = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/concursos", label: "Concursos", icon: "🎯" },
   { href: "/questoes", label: "Questões", icon: "❓" },
@@ -15,19 +16,35 @@ const navLinks = [
   { href: "/chat", label: "Chat & Squad", icon: "💬" },
   { href: "/tickets", label: "Suporte", icon: "🎫" },
   { href: "/perfil", label: "Perfil", icon: "👤" },
-  { href: "/admin", label: "Painel Admin", icon: "🛡️" },
 ];
+
+const adminLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Usuário padrão da sessão (Admin)
-  const user = {
-    apelido: "AdminCaverna",
-    email: "raf4biel.venafro@gmail.com",
-    role: "admin",
-    nivel_atual: 15,
+  // Dados REAIS do auth store
+  const storeUser = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+
+  const userApelido = storeUser?.apelido || storeUser?.nome || "Soldado";
+  const userNivel = storeUser?.nivel_atual || 1;
+  const userRole = storeUser?.role || "user";
+  const userAvatar = storeUser?.avatar_url;
+
+  // Só mostra link admin se o usuário for admin de verdade
+  const navLinks = userRole === "admin"
+    ? [...navLinksBase, adminLink]
+    : navLinksBase;
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
+    logout();
+    router.push("/auth");
   };
 
   return (
@@ -63,15 +80,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Usuário no rodapé */}
         <div className="px-4 py-4 border-t border-bat-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold">
-              {user.apelido[0]?.toUpperCase()}
+            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden">
+              {userAvatar ? (
+                <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                userApelido[0]?.toUpperCase()
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-bat-text text-sm font-medium truncate">{user.apelido}</p>
-              <p className="text-bat-gold-400 text-xs font-semibold">Nível {user.nivel_atual}</p>
+              <p className="text-bat-text text-sm font-medium truncate">{userApelido}</p>
+              <p className="text-bat-gold-400 text-xs font-semibold">Nível {userNivel}</p>
             </div>
-            {user.role === "admin" && <span className="badge-admin">ADMIN</span>}
+            {userRole === "admin" && <span className="badge-admin">ADMIN</span>}
           </div>
+          <button
+            onClick={handleLogout}
+            className="mt-3 w-full py-2 rounded-lg text-xs font-medium text-bat-text-muted hover:text-bat-error hover:bg-bat-error/10 border border-transparent hover:border-bat-error/20 transition-all cursor-pointer"
+          >
+            Sair da conta
+          </button>
         </div>
       </aside>
 
@@ -90,17 +117,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <BatBrand iconSize={28} textSize="text-base" />
           </div>
           <div className="flex items-center gap-3">
-            {/* Sino de notificações */}
-            <button className="relative text-bat-text-secondary hover:text-bat-text transition cursor-pointer">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-bat-error rounded-full text-white text-[10px] flex items-center justify-center font-bold pulse-notification">
-                3
-              </span>
-            </button>
-            <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold">
-              {user.apelido[0]?.toUpperCase()}
+            <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden">
+              {userAvatar ? (
+                <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                userApelido[0]?.toUpperCase()
+              )}
             </div>
           </div>
         </div>
@@ -145,6 +167,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </nav>
+            {/* Logout no menu mobile */}
+            <div className="px-4 py-4 border-t border-bat-border">
+              <button
+                onClick={handleLogout}
+                className="w-full py-2.5 rounded-xl text-sm font-medium text-bat-text-muted hover:text-bat-error hover:bg-bat-error/10 transition-all cursor-pointer"
+              >
+                Sair da conta
+              </button>
+            </div>
           </aside>
         </>
       )}

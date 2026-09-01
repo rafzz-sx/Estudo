@@ -1,43 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-// ─── Dados mock do ranking ───────────────────────────────────
-const mockRankingTempo = [
-  { posicao: 1, apelido: "SombraNoturna", avatar: null, nivel: 14, titulo: "Cavaleiro de Gotham", valor: 360000, percentual_acerto: 89.2 },
-  { posicao: 2, apelido: "GuerreiroDark", avatar: null, nivel: 12, titulo: "Protetor Noturno", valor: 324000, percentual_acerto: 85.1 },
-  { posicao: 3, apelido: "BatStudy", avatar: null, nivel: 11, titulo: "O Implacável", valor: 288000, percentual_acerto: 82.7 },
-  { posicao: 4, apelido: "FocoTotal", avatar: null, nivel: 10, titulo: "Lenda em Ascensão", valor: 252000, percentual_acerto: 78.5 },
-  { posicao: 5, apelido: "MenteAfiada", avatar: null, nivel: 9, titulo: "Guardião da Caverna", valor: 216000, percentual_acerto: 76.3 },
-  { posicao: 6, apelido: "CaveStudies", avatar: null, nivel: 8, titulo: "Caçador de Questões", valor: 180000, percentual_acerto: 74.1 },
-  { posicao: 7, apelido: "EstudanteX", avatar: null, nivel: 7, titulo: "Sombra de Gotham", valor: 144000, percentual_acerto: 71.9 },
-  { posicao: 8, apelido: "NightOwl", avatar: null, nivel: 6, titulo: "Estrategista Sombrio", valor: 108000, percentual_acerto: 69.5 },
-  { posicao: 9, apelido: "DarkBrain", avatar: null, nivel: 5, titulo: "Predador da Noite", valor: 72000, percentual_acerto: 67.2 },
-  { posicao: 10, apelido: "CavernaStudy", avatar: null, nivel: 4, titulo: "Rastreador de Pistas", valor: 36000, percentual_acerto: 65.0 },
-];
-
-const mockMinhaPos = { posicao: 42, apelido: "Soldado", nivel: 3, titulo: "Vigia Noturno", valor: 108000, percentual_acerto: 72.3 };
-
-function formatarTempo(seg: number): string {
-  const h = Math.floor(seg / 3600);
-  const m = Math.floor((seg % 3600) / 60);
-  if (h >= 24) { const d = Math.floor(h / 24); const hr = h % 24; return hr > 0 ? `${d}d ${hr}h` : `${d}d`; }
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
-
-function getMedalha(pos: number): string {
-  if (pos === 1) return "🥇";
-  if (pos === 2) return "🥈";
-  if (pos === 3) return "🥉";
-  return `${pos}`;
-}
-
-function getMedalhaGlow(pos: number): string {
-  if (pos === 1) return "shadow-[0_0_20px_rgba(255,215,0,0.4)] border-bat-gold/40";
-  if (pos === 2) return "shadow-[0_0_20px_rgba(192,192,192,0.3)] border-bat-silver/40";
-  if (pos === 3) return "shadow-[0_0_20px_rgba(205,127,50,0.3)] border-bat-bronze/40";
-  return "";
-}
+import { useAuthStore } from "@/stores/auth-store";
+import Link from "next/link";
 
 type TabTipo = "tempo_estudo" | "questoes";
 type PeriodoTipo = "semanal" | "mensal" | "geral";
@@ -46,11 +11,9 @@ export default function RankingPage() {
   const [tab, setTab] = useState<TabTipo>("tempo_estudo");
   const [periodo, setPeriodo] = useState<PeriodoTipo>("geral");
   const [visible, setVisible] = useState(false);
-  const [showMiniPerfil, setShowMiniPerfil] = useState<number | null>(null);
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
-
-  const ranking = mockRankingTempo;
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -98,95 +61,51 @@ export default function RankingPage() {
         </div>
       </div>
 
-      {/* ═══ TOP 3 (Cards destacados) ═══ */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        {ranking.slice(0, 3).map((r) => (
-          <div
-            key={r.posicao}
-            className={`relative bg-bat-bg-card border rounded-2xl p-5 text-center transition-all duration-300 cursor-pointer hover:scale-[1.02] ${getMedalhaGlow(r.posicao)}`}
-            onClick={() => setShowMiniPerfil(showMiniPerfil === r.posicao ? null : r.posicao)}
+      {/* ═══ ESTADO VAZIO: Sem dados de ranking ═══ */}
+      <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-10 text-center">
+        <div className="text-6xl mb-4">🦇</div>
+        <h2 className="heading text-xl text-bat-text mb-2">O ranking está vazio por enquanto</h2>
+        <p className="text-bat-text-secondary text-sm max-w-md mx-auto mb-6">
+          Quando os soldados começarem a estudar, resolver questões e acumular tempo de estudo, 
+          o ranking será preenchido automaticamente com dados reais.
+        </p>
+        <p className="text-bat-text-muted text-xs mb-6">
+          Seja o primeiro a aparecer aqui! Comece uma sessão de estudo ou resolva questões.
+        </p>
+        <div className="flex justify-center gap-3">
+          <Link
+            href="/questoes"
+            className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
           >
-            <span className="text-4xl mb-2 block">{getMedalha(r.posicao)}</span>
-            <div className="w-14 h-14 rounded-full bg-bat-gold-400/20 border-2 border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xl font-bold mx-auto mb-2">
-              {r.apelido[0]}
+            Resolver questões
+          </Link>
+          <Link
+            href="/concursos"
+            className="inline-block py-2.5 px-5 text-sm no-underline bg-bat-bg-secondary border border-bat-border text-bat-text rounded-xl hover:border-bat-gold-400/40 transition-colors"
+          >
+            Ver concursos
+          </Link>
+        </div>
+      </div>
+
+      {/* ═══ SUA POSIÇÃO ═══ */}
+      {user && (
+        <div className="mt-4 bg-bat-gold-400/10 border border-bat-gold-400/20 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="heading text-xl font-bold text-bat-gold-400">—</span>
+            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold">
+              {user.apelido?.[0] || "?"}
             </div>
-            <p className="heading text-bat-text font-bold">{r.apelido}</p>
-            <p className="text-bat-text-muted text-xs mt-0.5">Nv. {r.nivel} · {r.titulo}</p>
-            <p className="heading text-bat-gold-400 text-lg font-bold mt-2">
-              {tab === "tempo_estudo" ? formatarTempo(r.valor) : `${r.valor} questões`}
-            </p>
-            <p className="text-bat-text-muted text-xs">{r.percentual_acerto}% acerto</p>
+            <div>
+              <p className="text-bat-text text-sm font-medium">{user.apelido} <span className="text-bat-text-muted text-xs">(você)</span></p>
+              <p className="text-bat-text-muted text-xs">Nv. {user.nivel_atual || 1} · {user.nivel_atual >= 5 ? "Cabo de Operações" : "Recruta da Caverna"}</p>
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* ═══ TABELA COMPLETA ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-bat-border text-bat-text-muted text-xs uppercase tracking-wider">
-                <th className="px-4 py-3">#</th>
-                <th className="px-4 py-3">Guerreiro</th>
-                <th className="px-4 py-3 text-center">Nível</th>
-                <th className="px-4 py-3 text-right">{tab === "tempo_estudo" ? "Tempo" : "Questões"}</th>
-                <th className="px-4 py-3 text-right">Acerto</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-bat-border/50 text-sm">
-              {ranking.map((r) => (
-                <tr
-                  key={r.posicao}
-                  className="hover:bg-bat-bg-elevated transition-colors cursor-pointer"
-                  onClick={() => setShowMiniPerfil(showMiniPerfil === r.posicao ? null : r.posicao)}
-                >
-                  <td className="px-4 py-3 font-bold">
-                    {r.posicao <= 3 ? getMedalha(r.posicao) : `#${r.posicao}`}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/20 flex items-center justify-center text-bat-gold-400 text-xs font-bold">
-                        {r.apelido[0]}
-                      </div>
-                      <div>
-                        <span className="text-bat-text font-medium">{r.apelido}</span>
-                        {r.apelido === "AdminCaverna" && (
-                          <span className="ml-2 text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/10 px-1.5 py-0.5 rounded">VOCÊ</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center text-bat-text-secondary text-xs">Nv. {r.nivel}</td>
-                  <td className="px-4 py-3 text-right heading text-bat-gold-400 text-sm font-bold">
-                    {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
-                  </td>
-                  <td className="px-4 py-3 text-right text-xs text-bat-text-secondary">{r.percentual_acerto}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ═══ SUA POSIÇÃO FIXA ═══ */}
-      <div className="mt-4 bg-bat-gold-400/10 border border-bat-gold-400/20 rounded-2xl p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="heading text-xl font-bold text-bat-gold-400">#{mockMinhaPos.posicao}</span>
-          <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold">
-            {mockMinhaPos.apelido[0]}
-          </div>
-          <div>
-            <p className="text-bat-text text-sm font-medium">{mockMinhaPos.apelido} <span className="text-bat-text-muted text-xs">(você)</span></p>
-            <p className="text-bat-text-muted text-xs">Nv. {mockMinhaPos.nivel} · {mockMinhaPos.titulo}</p>
+          <div className="text-right">
+            <p className="text-bat-text-muted text-sm">Sem dados ainda</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="heading text-bat-gold-400 font-bold">
-            {tab === "tempo_estudo" ? formatarTempo(mockMinhaPos.valor) : `${mockMinhaPos.valor} questões`}
-          </p>
-          <p className="text-bat-text-muted text-xs">{mockMinhaPos.percentual_acerto}% acerto</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
