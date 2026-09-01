@@ -1,11 +1,11 @@
 -- ============================================================
--- BatCaverna — Seed Data
+-- BatCaverna — Seed Data (Idempotente)
 -- Dados iniciais: concursos, matérias, assuntos, níveis,
 -- badges, questões de exemplo, bizus, app_info
 -- ============================================================
 
 -- ═══════════════════════════════════════════════════════════════
--- NÍVEIS DE GAMIFICAÇÃO (15 níveis, seção 8.1)
+-- NÍVEIS DE GAMIFICAÇÃO (15 níveis)
 -- ═══════════════════════════════════════════════════════════════
 
 INSERT INTO nivel_gamificacao (nivel, titulo, xp_minimo_necessario) VALUES
@@ -23,13 +23,9 @@ INSERT INTO nivel_gamificacao (nivel, titulo, xp_minimo_necessario) VALUES
   (12, 'Protetor Noturno',      11000),
   (13, 'Lenda da Caverna',      14000),
   (14, 'Cavaleiro de Gotham',   18000),
-  (15, 'Rei da Batcaverna',     23000);
-
--- ═══════════════════════════════════════════════════════════════
--- APP INFO
--- ═══════════════════════════════════════════════════════════════
-
-INSERT INTO app_info (versao_atual) VALUES ('1.0.0');
+  (15, 'Rei da Batcaverna',     23000)
+ON CONFLICT (nivel) DO UPDATE 
+SET titulo = EXCLUDED.titulo, xp_minimo_necessario = EXCLUDED.xp_minimo_necessario;
 
 -- ═══════════════════════════════════════════════════════════════
 -- 9 CONCURSOS
@@ -70,10 +66,11 @@ INSERT INTO concursos (nome, sigla, descricao, nivel_ensino, forca, frase_curta_
 
   ('Exame Nacional do Ensino Médio', 'ENEM',
    'Exame para ingresso em universidades. 4 áreas + Redação.',
-   'medio', 'enem', '4 áreas + Redação · Questões contextualizadas');
+   'medio', 'enem', '4 áreas + Redação · Questões contextualizadas')
+ON CONFLICT (sigla) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════
--- MATÉRIAS (banco-mestre, seção 3.1)
+-- MATÉRIAS (banco-mestre)
 -- ═══════════════════════════════════════════════════════════════
 
 INSERT INTO materias (nome, descricao, icone_emoji) VALUES
@@ -91,131 +88,99 @@ INSERT INTO materias (nome, descricao, icone_emoji) VALUES
   ('Redação',             'Dissertação argumentativa, narração',         '✍️'),
   ('Ciências da Natureza','Área integrada ENEM: Física+Química+Bio',     '🔬'),
   ('Ciências Humanas',    'Área integrada ENEM: Hist+Geo+Fil+Soc',      '🏛️'),
-  ('Linguagens',          'Área integrada ENEM: Port+Lit+Ing+Artes',     '🗣️');
+  ('Linguagens',          'Área integrada ENEM: Port+Lit+Ing+Artes',     '🗣️')
+ON CONFLICT (nome) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════
--- MAPEAMENTO CONCURSO → MATÉRIA (seção 3.2)
+-- MAPEAMENTO CONCURSO → MATÉRIA
 -- ═══════════════════════════════════════════════════════════════
 
--- EEAR: Português, Matemática, Inglês
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'EEAR' AND m.nome IN ('Português', 'Matemática', 'Inglês');
+WHERE c.sigla = 'EEAR' AND m.nome IN ('Português', 'Matemática', 'Inglês')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- ESA: Português, Matemática, História do Brasil, Geografia do Brasil
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'ESA' AND m.nome IN ('Português', 'Matemática', 'História do Brasil', 'Geografia do Brasil');
+WHERE c.sigla = 'ESA' AND m.nome IN ('Português', 'Matemática', 'História do Brasil', 'Geografia do Brasil')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- EAM: Português, Matemática, Física, Inglês
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'EAM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês');
+WHERE c.sigla = 'EAM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- CN: Português, Matemática, Inglês, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'CN' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação');
+WHERE c.sigla = 'CN' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- EPCAR: Português, Matemática, Inglês, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'EPCAR' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação');
+WHERE c.sigla = 'EPCAR' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- EsPCEx: Português, Matemática, Física, Química, Inglês, História do Brasil, Geografia do Brasil, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'EsPCEx' AND m.nome IN ('Português', 'Matemática', 'Física', 'Química', 'Inglês', 'História do Brasil', 'Geografia do Brasil', 'Redação');
+WHERE c.sigla = 'EsPCEx' AND m.nome IN ('Português', 'Matemática', 'Física', 'Química', 'Inglês', 'História do Brasil', 'Geografia do Brasil', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- EFOMM: Português, Matemática, Física, Inglês, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'EFOMM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês', 'Redação');
+WHERE c.sigla = 'EFOMM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- IME: Matemática, Física, Química, Inglês, Português, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'IME' AND m.nome IN ('Matemática', 'Física', 'Química', 'Inglês', 'Português', 'Redação');
+WHERE c.sigla = 'IME' AND m.nome IN ('Matemática', 'Física', 'Química', 'Inglês', 'Português', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
--- ENEM: Ciências da Natureza, Ciências Humanas, Linguagens, Matemática, Redação
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
-WHERE c.sigla = 'ENEM' AND m.nome IN ('Ciências da Natureza', 'Ciências Humanas', 'Linguagens', 'Matemática', 'Redação');
+WHERE c.sigla = 'ENEM' AND m.nome IN ('Ciências da Natureza', 'Ciências Humanas', 'Linguagens', 'Matemática', 'Redação')
+ON CONFLICT (concurso_id, materia_id) DO NOTHING;
 
 -- ═══════════════════════════════════════════════════════════════
--- ASSUNTOS DE EXEMPLO (principais por matéria)
+-- ASSUNTOS DE EXEMPLO
 -- ═══════════════════════════════════════════════════════════════
 
 -- Português
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Acentuação Gráfica', 1),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Crase', 2),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Concordância Verbal e Nominal', 3),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Regência Verbal e Nominal', 4),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Interpretação de Texto', 5),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Classes de Palavras', 6),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Ortografia', 7),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Pontuação', 8),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Vozes Verbais', 9),
-  ((SELECT id FROM materias WHERE nome = 'Português'), 'Figuras de Linguagem', 10);
+INSERT INTO assuntos (materia_id, nome, ordem)
+SELECT m.id, a.nome, a.ordem
+FROM materias m
+CROSS JOIN (VALUES
+  ('Acentuação Gráfica', 1),
+  ('Crase', 2),
+  ('Concordância Verbal e Nominal', 3),
+  ('Regência Verbal e Nominal', 4),
+  ('Interpretação de Texto', 5),
+  ('Classes de Palavras', 6),
+  ('Ortografia', 7),
+  ('Pontuação', 8),
+  ('Vozes Verbais', 9),
+  ('Figuras de Linguagem', 10)
+) AS a(nome, ordem)
+WHERE m.nome = 'Português'
+AND NOT EXISTS (SELECT 1 FROM assuntos sub WHERE sub.materia_id = m.id AND sub.nome = a.nome);
 
 -- Matemática
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Equações do 1º e 2º Grau', 1),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Razão e Proporção', 2),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Porcentagem', 3),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Regra de Três', 4),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Geometria Plana', 5),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Geometria Espacial', 6),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Funções', 7),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Trigonometria', 8),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Progressões (PA e PG)', 9),
-  ((SELECT id FROM materias WHERE nome = 'Matemática'), 'Análise Combinatória e Probabilidade', 10);
-
--- Física
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Cinemática (MRU e MRUV)', 1),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Leis de Newton', 2),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Trabalho e Energia', 3),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Termodinâmica', 4),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Óptica', 5),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Eletricidade', 6),
-  ((SELECT id FROM materias WHERE nome = 'Física'), 'Ondas', 7);
-
--- Química
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Tabela Periódica e Propriedades', 1),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Ligações Químicas', 2),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Estequiometria', 3),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Reações Químicas', 4),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Soluções', 5),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Termoquímica', 6),
-  ((SELECT id FROM materias WHERE nome = 'Química'), 'Química Orgânica — Funções', 7);
-
--- Inglês
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Inglês'), 'Verb Tenses', 1),
-  ((SELECT id FROM materias WHERE nome = 'Inglês'), 'Conditionals', 2),
-  ((SELECT id FROM materias WHERE nome = 'Inglês'), 'Prepositions', 3),
-  ((SELECT id FROM materias WHERE nome = 'Inglês'), 'Reading Comprehension', 4),
-  ((SELECT id FROM materias WHERE nome = 'Inglês'), 'Vocabulary in Context', 5);
-
--- História do Brasil
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'Brasil Colônia', 1),
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'Brasil Império', 2),
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'República Velha', 3),
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'Era Vargas', 4),
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'Ditadura Militar', 5),
-  ((SELECT id FROM materias WHERE nome = 'História do Brasil'), 'Redemocratização', 6);
-
--- Geografia do Brasil
-INSERT INTO assuntos (materia_id, nome, ordem) VALUES
-  ((SELECT id FROM materias WHERE nome = 'Geografia do Brasil'), 'Relevo e Hidrografia', 1),
-  ((SELECT id FROM materias WHERE nome = 'Geografia do Brasil'), 'Clima e Vegetação', 2),
-  ((SELECT id FROM materias WHERE nome = 'Geografia do Brasil'), 'População e Urbanização', 3),
-  ((SELECT id FROM materias WHERE nome = 'Geografia do Brasil'), 'Economia Brasileira', 4),
-  ((SELECT id FROM materias WHERE nome = 'Geografia do Brasil'), 'Regiões do Brasil', 5);
+INSERT INTO assuntos (materia_id, nome, ordem)
+SELECT m.id, a.nome, a.ordem
+FROM materias m
+CROSS JOIN (VALUES
+  ('Equações do 1º e 2º Grau', 1),
+  ('Razão e Proporção', 2),
+  ('Porcentagem', 3),
+  ('Regra de Três', 4),
+  ('Geometria Plana', 5),
+  ('Geometria Espacial', 6),
+  ('Funções', 7),
+  ('Trigonometria', 8),
+  ('Progressões (PA e PG)', 9),
+  ('Análise Combinatória e Probabilidade', 10)
+) AS a(nome, ordem)
+WHERE m.nome = 'Matemática'
+AND NOT EXISTS (SELECT 1 FROM assuntos sub WHERE sub.materia_id = m.id AND sub.nome = a.nome);
 
 -- ═══════════════════════════════════════════════════════════════
 -- USUÁRIO ADMINISTRADOR PADRÃO (raf4biel.venafro@gmail.com)
@@ -227,7 +192,7 @@ INSERT INTO users (
   'Administrador BatCaverna',
   'AdminCaverna',
   'raf4biel.venafro@gmail.com',
-  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', -- default hash, alterável no primeiro login
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
   TRUE,
   'admin',
   25000,
@@ -243,24 +208,28 @@ INSERT INTO users (
 
 INSERT INTO questoes (
   concurso_id, materia_id, assunto_id, enunciado, alternativas, resposta_correta, explicacao, ano, banca, dificuldade
-) VALUES
-  (
-    (SELECT id FROM concursos WHERE sigla = 'EEAR'),
-    (SELECT id FROM materias WHERE nome = 'Português'),
-    (SELECT id FROM assuntos WHERE nome = 'Crase'),
-    'Assinale a alternativa em que o uso do acento indicativo de crase é OBRIGATÓRIO:',
-    '[{"letra": "A", "texto": "Fui a pé até a escola."}, {"letra": "B", "texto": "Entreguei o relatório à capitã."}, {"letra": "C", "texto": "Ele começou a falar sem parar."}, {"letra": "D", "texto": "Dirigi-me a ela com respeito."}]'::jsonb,
-    'B',
-    'A alternativa B está correta porque o verbo "entregar" rege a preposição "a" e "capitã" admite o artigo feminino "a", resultando em crase (à capitã). As demais são proibições: A (palavra masculina), C (antes de verbo), D (antes de pronome pessoal).',
-    2023, 'Aeronáutica', 'medio'
-  ),
-  (
-    (SELECT id FROM concursos WHERE sigla = 'ESA'),
-    (SELECT id FROM materias WHERE nome = 'Matemática'),
-    (SELECT id FROM assuntos WHERE nome = 'Equações do 1º e 2º Grau'),
-    'Na equação do segundo grau 3x² - 12x + 9 = 0, a soma das raízes é igual a:',
-    '[{"letra": "A", "texto": "2"}, {"letra": "B", "texto": "3"}, {"letra": "C", "texto": "4"}, {"letra": "D", "texto": "12"}]'::jsonb,
-    'C',
-    'Pela relação de Girard, a soma das raízes de ax² + bx + c = 0 é dada por S = -b/a. Logo, S = -(-12)/3 = 12/3 = 4.',
-    2023, 'Exército', 'facil'
-  );
+)
+SELECT
+  c.id, m.id, a.id,
+  'Assinale a alternativa em que o uso do acento indicativo de crase é OBRIGATÓRIO:',
+  '[{"letra": "A", "texto": "Fui a pé até a escola."}, {"letra": "B", "texto": "Entreguei o relatório à capitã."}, {"letra": "C", "texto": "Ele começou a falar sem parar."}, {"letra": "D", "texto": "Dirigi-me a ela com respeito."}]'::jsonb,
+  'B',
+  'A alternativa B está correta porque o verbo "entregar" rege a preposição "a" e "capitã" admite o artigo feminino "a", resultando em crase (à capitã). As demais são proibições: A (palavra masculina), C (antes de verbo), D (antes de pronome pessoal).',
+  2023, 'Aeronáutica', 'medio'
+FROM concursos c, materias m, assuntos a
+WHERE c.sigla = 'EEAR' AND m.nome = 'Português' AND a.nome = 'Crase'
+AND NOT EXISTS (SELECT 1 FROM questoes q WHERE q.concurso_id = c.id AND q.enunciado LIKE 'Assinale a alternativa em que o uso do acento indicativo de crase%');
+
+INSERT INTO questoes (
+  concurso_id, materia_id, assunto_id, enunciado, alternativas, resposta_correta, explicacao, ano, banca, dificuldade
+)
+SELECT
+  c.id, m.id, a.id,
+  'Na equação do segundo grau 3x² - 12x + 9 = 0, a soma das raízes é igual a:',
+  '[{"letra": "A", "texto": "2"}, {"letra": "B", "texto": "3"}, {"letra": "C", "texto": "4"}, {"letra": "D", "texto": "12"}]'::jsonb,
+  'C',
+  'Pela relação de Girard, a soma das raízes de ax² + bx + c = 0 é dada por S = -b/a. Logo, S = -(-12)/3 = 12/3 = 4.',
+  2023, 'Exército', 'facil'
+FROM concursos c, materias m, assuntos a
+WHERE c.sigla = 'ESA' AND m.nome = 'Matemática' AND a.nome = 'Equações do 1º e 2º Grau'
+AND NOT EXISTS (SELECT 1 FROM questoes q WHERE q.concurso_id = c.id AND q.enunciado LIKE 'Na equação do segundo grau 3x² - 12x + 9 = 0%');
