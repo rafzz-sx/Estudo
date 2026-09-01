@@ -150,7 +150,7 @@ export default function QuestoesPage() {
             {/* Header da questão */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-bat-purple-400 bg-bat-purple-500/10 px-2.5 py-1 rounded-lg">
+                <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
                   {q.concurso}
                 </span>
                 <span className="text-xs text-bat-text-muted bg-bat-bg-secondary px-2.5 py-1 rounded-lg">
@@ -178,18 +178,18 @@ export default function QuestoesPage() {
             {/* Alternativas */}
             <div className="space-y-3 mb-6">
               {q.alternativas.map((alt) => {
-                let estilo = "bg-bat-bg-secondary border-bat-border text-bat-text-secondary hover:border-bat-purple-500/30 hover:bg-bat-bg-elevated";
+                let estilo = "bg-bat-bg-secondary border-bat-border text-bat-text-secondary hover:border-bat-gold-400/30 hover:bg-bat-bg-elevated";
 
                 if (respondida) {
                   if (alt.letra === q.resposta_correta) {
-                    estilo = "bg-bat-success/10 border-bat-success/40 text-bat-success glow-success";
+                    estilo = "bg-bat-success/10 border-bat-success/40 text-bat-success glow-success font-medium";
                   } else if (alt.letra === respostaSelecionada && !isCorreta) {
                     estilo = "bg-bat-error/10 border-bat-error/40 text-bat-error glow-error";
                   } else {
                     estilo = "bg-bat-bg-secondary border-bat-border text-bat-text-disabled opacity-50";
                   }
                 } else if (respostaSelecionada === alt.letra) {
-                  estilo = "bg-bat-purple-500/10 border-bat-purple-500/40 text-bat-purple-300";
+                  estilo = "bg-bat-gold-400/10 border-bat-gold-400/40 text-bat-gold-400 font-medium";
                 }
 
                 return (

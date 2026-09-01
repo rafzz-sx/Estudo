@@ -19,18 +19,18 @@ export const colors = {
     elevated: '#1E1E28',
   },
 
-  // Destaque primário — Roxo elétrico / violeta neon
+  // Destaque primário — Amarelo-ouro oficial BatCaverna (#F5C518)
   primary: {
-    50: '#F3EAFF',
-    100: '#E0CCFF',
-    200: '#C49CFF',
-    300: '#A86DFF',
-    400: '#A855F7',
-    500: '#7C3AED',
-    600: '#6D28D9',
-    700: '#5B21B6',
-    800: '#4C1D95',
-    900: '#3B0F7A',
+    50: '#FFFBEB',
+    100: '#FEF3C7',
+    200: '#FDE68A',
+    300: '#FCD34D',
+    400: '#F5C518',
+    500: '#EAB308',
+    600: '#CA8A04',
+    700: '#A16207',
+    800: '#854D0E',
+    900: '#713F12',
   },
 
   // Destaque secundário — Amarelo-ouro (holofote)

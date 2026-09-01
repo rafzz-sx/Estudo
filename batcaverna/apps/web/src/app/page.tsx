@@ -249,11 +249,11 @@ export default function LandingPage() {
           {/* Slogan */}
           <p className="text-bat-text-secondary text-lg sm:text-xl md:text-2xl max-w-2xl mx-auto mb-4 leading-relaxed">
             Sua central de operações para dominar os{" "}
-            <span className="text-bat-purple-400 font-semibold drop-shadow-[0_0_12px_rgba(124,58,237,0.4)]">
+            <span className="text-bat-gold-400 font-semibold drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">
               concursos militares
             </span>{" "}
             e o{" "}
-            <span className="text-bat-purple-400 font-semibold drop-shadow-[0_0_12px_rgba(124,58,237,0.4)]">
+            <span className="text-bat-gold-400 font-semibold drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">
               ENEM
             </span>.
           </p>
@@ -288,7 +288,7 @@ export default function LandingPage() {
       <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
-            <span className="text-bat-purple-400">9 concursos</span> em uma só plataforma
+            <span className="text-bat-gold-400">9 concursos</span> em uma só plataforma
           </h2>
           <p className="text-bat-text-secondary text-center text-lg mb-14 max-w-2xl mx-auto">
             Conteúdo organizado por edital, com questões, bizus e simulados específicos para cada prova.
@@ -299,7 +299,7 @@ export default function LandingPage() {
               <Link
                 key={c.sigla}
                 href={`/concursos/${c.sigla.toLowerCase()}`}
-                className="card-glow group relative bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden cursor-pointer no-underline block hover:border-bat-purple-500/50 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl"
+                className="card-glow group relative bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden cursor-pointer no-underline block hover:border-bat-gold-400/50 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl"
               >
                 {/* Foto de Fundo Militar */}
                 <div
@@ -382,7 +382,7 @@ export default function LandingPage() {
                 className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-6 hover:border-bat-gold-400/30"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-bat-purple-400 bg-bat-purple-500/10 px-3 py-1 rounded-full">
+                  <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 px-3 py-1 rounded-full border border-bat-gold-400/20">
                     {bizu.materia}
                   </span>
                   <span className="text-xs">{bizu.impacto}</span>
@@ -399,7 +399,7 @@ export default function LandingPage() {
       <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="heading text-3xl sm:text-4xl mb-4">
-            Quem estuda na <span className="text-bat-purple-400">Caverna</span>, aprova
+            Quem estuda na <span className="text-bat-gold-400">Caverna</span>, aprova
           </h2>
           <p className="text-bat-text-secondary text-lg mb-14">
             Em breve, depoimentos de quem conquistou a vaga dos sonhos.
@@ -456,8 +456,8 @@ export default function LandingPage() {
             <div>
               <h4 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Plataforma</h4>
               <ul className="space-y-2 text-sm text-bat-text-muted">
-                <li><Link href="/auth" className="hover:text-bat-purple-400 transition-colors">Entrar</Link></li>
-                <li><Link href="/auth?tab=cadastro" className="hover:text-bat-purple-400 transition-colors">Criar conta</Link></li>
+                <li><Link href="/auth" className="hover:text-bat-gold-400 transition-colors">Entrar</Link></li>
+                <li><Link href="/auth?tab=cadastro" className="hover:text-bat-gold-400 transition-colors">Criar conta</Link></li>
                 <li><span className="opacity-50">Banco de Questões</span></li>
                 <li><span className="opacity-50">Ranking</span></li>
               </ul>
@@ -476,9 +476,9 @@ export default function LandingPage() {
             <div>
               <h4 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Legal</h4>
               <ul className="space-y-2 text-sm text-bat-text-muted">
-                <li><Link href="/termos" className="hover:text-bat-purple-400 transition-colors">Termos de Uso</Link></li>
-                <li><Link href="/privacidade" className="hover:text-bat-purple-400 transition-colors">Política de Privacidade</Link></li>
-                <li><Link href="/contato" className="hover:text-bat-purple-400 transition-colors">Contato</Link></li>
+                <li><Link href="/termos" className="hover:text-bat-gold-400 transition-colors">Termos de Uso</Link></li>
+                <li><Link href="/privacidade" className="hover:text-bat-gold-400 transition-colors">Política de Privacidade</Link></li>
+                <li><Link href="/contato" className="hover:text-bat-gold-400 transition-colors">Contato</Link></li>
               </ul>
             </div>
           </div>

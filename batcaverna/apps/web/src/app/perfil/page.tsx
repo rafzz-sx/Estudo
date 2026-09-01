@@ -82,11 +82,11 @@ export default function PerfilPage() {
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ BANNER + AVATAR ═══ */}
       <div className="relative mb-16">
-        <div className="h-40 rounded-2xl bg-gradient-to-r from-bat-purple-800/40 via-bat-purple-600/20 to-bat-bg-tertiary border border-bat-border overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(124,58,237,0.15),transparent_60%)]" />
+        <div className="h-40 rounded-2xl bg-gradient-to-r from-[#F5C518]/25 via-[#EAB308]/15 to-bat-bg-tertiary border border-bat-border overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,197,24,0.15),transparent_60%)]" />
         </div>
         <div className="absolute -bottom-12 left-6 flex items-end gap-4">
-          <div className="w-24 h-24 rounded-2xl bg-bat-bg-card border-4 border-bat-bg flex items-center justify-center text-bat-purple-300 text-3xl font-bold shadow-xl">
+          <div className="w-24 h-24 rounded-2xl bg-bat-bg-card border-4 border-bat-bg flex items-center justify-center text-bat-gold-400 text-3xl font-bold shadow-xl">
             {mockPerfil.apelido[0]?.toUpperCase()}
           </div>
           <div className="pb-1">
@@ -107,7 +107,7 @@ export default function PerfilPage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-              tab === t.key ? "bg-bat-purple-500 text-white" : "text-bat-text-muted hover:text-bat-text"
+              tab === t.key ? "bg-bat-gold-400 text-black font-bold shadow-[0_0_15px_rgba(245,197,24,0.3)]" : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
             {t.label}
@@ -124,7 +124,7 @@ export default function PerfilPage() {
               <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider">Bio</h3>
               <button
                 onClick={() => setEditandoBio(!editandoBio)}
-                className="text-bat-purple-400 text-xs hover:underline cursor-pointer"
+                className="text-bat-gold-400 text-xs hover:underline cursor-pointer font-medium"
               >
                 {editandoBio ? "Salvar" : "Editar"}
               </button>
@@ -146,7 +146,7 @@ export default function PerfilPage() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-bat-bg-card border border-bat-border rounded-xl p-4 text-center">
-              <p className="heading text-2xl text-bat-purple-400 font-bold">Nv. {mockPerfil.nivel_atual}</p>
+              <p className="heading text-2xl text-bat-gold-400 font-bold">Nv. {mockPerfil.nivel_atual}</p>
               <p className="text-bat-text-muted text-xs">{mockPerfil.titulo_nivel}</p>
             </div>
             <div className="bg-bat-bg-card border border-bat-border rounded-xl p-4 text-center">
@@ -191,7 +191,7 @@ export default function PerfilPage() {
       {tab === "badges" && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {mockPerfil.badges.map((badge, i) => (
-            <div key={i} className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 text-center card-glow hover:border-bat-purple-500/30">
+            <div key={i} className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 text-center card-glow hover:border-bat-gold-400/40">
               <span className="text-4xl mb-2 block">{badge.icone}</span>
               <p className="heading text-sm text-bat-text font-bold mb-1">{badge.nome}</p>
               <p className="text-bat-text-muted text-xs">{badge.desc}</p>

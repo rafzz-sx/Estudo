@@ -15,6 +15,7 @@
     "dev:web": "turbo run dev --filter=@batcaverna/web",
     "dev:mobile": "turbo run dev --filter=@batcaverna/mobile",
     "dev:api": "turbo run dev --filter=@batcaverna/api",
+    "build:apk": "cd apps/mobile/android && .\\gradlew.bat assembleRelease",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
   },
   "devDependencies": {

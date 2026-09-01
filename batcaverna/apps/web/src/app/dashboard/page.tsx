@@ -59,7 +59,7 @@ function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: numb
     <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="heading text-bat-purple-400 text-lg font-bold">Nv. {nivel}</span>
+          <span className="heading text-bat-gold-400 text-lg font-bold">Nv. {nivel}</span>
           <span className="text-bat-text-secondary text-sm">{titulo}</span>
         </div>
         <span className="text-bat-text-muted text-xs">{atual} / {proximo} XP</span>
@@ -69,8 +69,8 @@ function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: numb
           className="h-full rounded-full transition-all duration-1000 ease-out"
           style={{
             width: `${progresso}%`,
-            background: "linear-gradient(90deg, #7C3AED, #A855F7, #C49CFF)",
-            boxShadow: "0 0 12px rgba(124, 58, 237, 0.5)",
+            background: "linear-gradient(90deg, #F5C518, #FFD700, #EAB308)",
+            boxShadow: "0 0 12px rgba(245, 197, 24, 0.5)",
           }}
         />
       </div>
@@ -84,7 +84,7 @@ function StatCard({
   label,
   value,
   sub,
-  glowColor = "purple",
+  glowColor = "gold",
 }: {
   icon: string;
   label: string;
@@ -93,7 +93,7 @@ function StatCard({
   glowColor?: "purple" | "gold" | "green" | "blue";
 }) {
   const glowMap = {
-    purple: "hover:border-bat-purple-500/40 hover:shadow-[0_0_20px_rgba(124,58,237,0.2)]",
+    purple: "hover:border-bat-gold-400/40 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)]",
     gold: "hover:border-bat-gold-400/40 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)]",
     green: "hover:border-bat-success/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.2)]",
     blue: "hover:border-bat-info/40 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]",
@@ -177,7 +177,7 @@ export default function DashboardPage() {
           label="Tempo Total"
           value={formatarTempo(mockUser.tempo_estudo_total)}
           sub="Desde o início"
-          glowColor="purple"
+          glowColor="gold"
         />
         <StatCard
           icon="❓"
@@ -210,14 +210,14 @@ export default function DashboardPage() {
                 <span className="text-xl">{c.emoji}</span>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-bat-text text-sm font-medium group-hover:text-bat-purple-400 transition-colors">
+                    <span className="text-bat-text text-sm font-medium group-hover:text-bat-gold-400 transition-colors">
                       {c.sigla}
                     </span>
                     <span className="text-bat-text-muted text-xs">{c.progresso}%</span>
                   </div>
                   <div className="w-full h-2 bg-bat-bg-secondary rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-bat-purple-500 transition-all duration-500"
+                      className="h-full rounded-full bg-bat-gold-400 transition-all duration-500"
                       style={{ width: `${c.progresso}%` }}
                     />
                   </div>
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/concursos"
-            className="block mt-4 text-bat-purple-400 text-sm hover:underline no-underline text-center"
+            className="block mt-4 text-bat-gold-400 text-sm hover:underline no-underline text-center font-medium"
           >
             Ver todos os concursos →
           </Link>
@@ -237,7 +237,7 @@ export default function DashboardPage() {
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="heading text-lg text-bat-text">🎲 Questão do Dia</h2>
-            <span className="text-xs text-bat-purple-400 bg-bat-purple-500/10 px-2 py-1 rounded-lg">
+            <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
               {mockQuestaoDoDia.materia}
             </span>
           </div>
@@ -259,8 +259,8 @@ export default function DashboardPage() {
       {/* ═══ AÇÕES RÁPIDAS ═══ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { href: "/questoes", label: "Banco de Questões", icon: "📝", cor: "border-bat-purple-500/20 hover:border-bat-purple-500/40" },
-          { href: "/simulado", label: "Simulado Rápido", icon: "⏱️", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/40" },
+          { href: "/questoes", label: "Banco de Questões", icon: "📝", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
+          { href: "/simulado", label: "Simulado Rápido", icon: "⏱️", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
           { href: "/bizus", label: "Bizus", icon: "💡", cor: "border-bat-success/20 hover:border-bat-success/40" },
           { href: "/ranking", label: "Ranking", icon: "🏆", cor: "border-bat-info/20 hover:border-bat-info/40" },
         ].map((a) => (

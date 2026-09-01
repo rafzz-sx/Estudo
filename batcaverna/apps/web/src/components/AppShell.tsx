@@ -49,7 +49,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 href={link.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
                   isActive
-                    ? "bg-bat-purple-500/15 text-bat-purple-300 border border-bat-purple-500/20 glow-purple"
+                    ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 glow-gold font-bold"
                     : "text-bat-text-secondary hover:bg-bat-bg-elevated hover:text-bat-text border border-transparent"
                 }`}
               >
@@ -135,7 +135,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     onClick={() => setSidebarOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
                       isActive
-                        ? "bg-bat-purple-500/15 text-bat-purple-300 border border-bat-purple-500/20"
+                        ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 font-bold"
                         : "text-bat-text-secondary hover:bg-bat-bg-elevated hover:text-bat-text border border-transparent"
                     }`}
                   >

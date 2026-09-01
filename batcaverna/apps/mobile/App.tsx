@@ -1,154 +1,122 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   StyleSheet,
-  Text,
   View,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
+  Text,
   StatusBar,
+  SafeAreaView,
+  ActivityIndicator,
+  TouchableOpacity,
+  BackHandler,
+  Platform,
 } from "react-native";
-import { colors, NIVEIS_GAMIFICACAO } from "@batcaverna/ui";
-import { formatarTempoEstudo } from "@batcaverna/utils";
+import { WebView } from "react-native-webview";
+
+// ─── URL da Plataforma Web BatCaverna ──────────────────────────────
+// Altere aqui para o domínio oficial de produção no Vercel
+const PLATFORM_URL = "https://batcaverna.vercel.app";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "concursos" | "questoes" | "ranking">("dashboard");
+  const webViewRef = useRef<WebView>(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [errorDetails, setErrorDetails] = useState("");
+
+  // ─── Suporte ao Botão Físico de Voltar no Android ──────────────────
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      const onBackPress = () => {
+        if (canGoBack && webViewRef.current) {
+          webViewRef.current.goBack();
+          return true;
+        }
+        return false;
+      };
+
+      const backHandler = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+      return () => backHandler.remove();
+    }
+  }, [canGoBack]);
+
+  const handleReload = () => {
+    setHasError(false);
+    setErrorDetails("");
+    setLoading(true);
+    webViewRef.current?.reload();
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0B0F" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
+      {/* ─── WebView Principal da Plataforma Web ─────────────────────── */}
+      <WebView
+        ref={webViewRef}
+        source={{ uri: PLATFORM_URL }}
+        style={styles.webview}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
+        scalesPageToFit={true}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        onNavigationStateChange={(navState) => {
+          setCanGoBack(navState.canGoBack);
+        }}
+        onLoadStart={() => {
+          setLoading(true);
+          setHasError(false);
+        }}
+        onLoadEnd={() => {
+          setLoading(false);
+        }}
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          setLoading(false);
+          setHasError(true);
+          setErrorDetails(nativeEvent.description || "Não foi possível conectar ao servidor.");
+        }}
+        onHttpError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          if (nativeEvent.statusCode >= 500) {
+            setHasError(true);
+            setErrorDetails(`Erro ${nativeEvent.statusCode} no servidor.`);
+          }
+        }}
+      />
+
+      {/* ─── Loader Inicial Temático BatCaverna ───────────────────────── */}
+      {loading && !hasError && (
+        <View style={styles.loadingOverlay}>
           <Text style={styles.batIcon}>🦇</Text>
-          <Text style={styles.logoText}>
-            Bat<Text style={styles.logoHighlight}>Caverna</Text>
+          <Text style={styles.brandTitle}>
+            Bat<Text style={styles.brandHighlight}>Caverna</Text>
           </Text>
+          <Text style={styles.subText}>Carregando a central de operações...</Text>
+          <ActivityIndicator size="large" color="#F5C518" style={{ marginTop: 24 }} />
         </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>S</Text>
-        </View>
-      </View>
+      )}
 
-      {/* Main Content Scroll */}
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {activeTab === "dashboard" && (
-          <View style={styles.section}>
-            {/* Boas-vindas */}
-            <Text style={styles.title}>Bem-vindo à Caverna, Soldado</Text>
-            <Text style={styles.subtitle}>Sua central de operações móvel para concursos militares.</Text>
-
-            {/* XP Card */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.cardHighlight}>Nível 3 · Vigia Noturno</Text>
-                <Text style={styles.cardMuted}>620 / 750 XP</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: "82%" }]} />
-              </View>
-            </View>
-
-            {/* Stats Grid */}
-            <View style={styles.grid2}>
-              <View style={styles.statCard}>
-                <Text style={styles.statIcon}>🔥</Text>
-                <Text style={styles.statValue}>5 dias</Text>
-                <Text style={styles.statLabel}>Streak Diário</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statIcon}>⏱️</Text>
-                <Text style={styles.statValue}>{formatarTempoEstudo(108000)}</Text>
-                <Text style={styles.statLabel}>Tempo Total</Text>
-              </View>
-            </View>
-
-            {/* Ação Rápida */}
-            <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Iniciar Sessão de Estudo ⚡</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {activeTab === "concursos" && (
-          <View style={styles.section}>
-            <Text style={styles.title}>9 Concursos Atendidos</Text>
-            <Text style={styles.subtitle}>Selecione para ver o edital verticalizado e simulados.</Text>
-
-            {["EEAR", "ESA", "EAM", "CN", "EPCAR", "EsPCEx", "EFOMM", "IME", "ENEM"].map((sigla) => (
-              <View key={sigla} style={styles.concursoCard}>
-                <Text style={styles.concursoSigla}>{sigla}</Text>
-                <Text style={styles.concursoArrow}>→</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {activeTab === "questoes" && (
-          <View style={styles.section}>
-            <Text style={styles.title}>Banco de Questões</Text>
-            <Text style={styles.subtitle}>Resolva questões com correção imediata e bizus vinculados.</Text>
-
-            <View style={styles.card}>
-              <Text style={styles.badge}>Português · Crase</Text>
-              <Text style={styles.questionText}>
-                Assinale a alternativa em que o uso da crase está CORRETO:
-              </Text>
-              {["A) Fui à São Paulo ontem.", "B) Refiro-me à sua proposta.", "C) Ela saiu à pé."].map((opt) => (
-                <TouchableOpacity key={opt} style={styles.optionButton}>
-                  <Text style={styles.optionText}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {activeTab === "ranking" && (
-          <View style={styles.section}>
-            <Text style={styles.title}>🏆 Ranking dos Guardiões</Text>
-            <Text style={styles.subtitle}>Os alunos com maior dedicação e acertos na semana.</Text>
-
-            {[
-              { pos: "🥇 #1", nome: "SombraNoturna", xp: "24.500 XP" },
-              { pos: "🥈 #2", nome: "GuerreiroDark", xp: "19.200 XP" },
-              { pos: "🥉 #3", nome: "BatStudy", xp: "15.800 XP" },
-            ].map((r) => (
-              <View key={r.pos} style={styles.rankingRow}>
-                <Text style={styles.rankingPos}>{r.pos}</Text>
-                <Text style={styles.rankingNome}>{r.nome}</Text>
-                <Text style={styles.rankingXp}>{r.xp}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {[
-          { key: "dashboard", label: "Início", icon: "🏠" },
-          { key: "concursos", label: "Concursos", icon: "🎯" },
-          { key: "questoes", label: "Questões", icon: "❓" },
-          { key: "ranking", label: "Ranking", icon: "🏆" },
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            onPress={() => setActiveTab(tab.key as any)}
-            style={styles.navItem}
-          >
-            <Text style={styles.navIcon}>{tab.icon}</Text>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === tab.key && styles.navLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
+      {/* ─── Tela de Erro de Conexão (Fallback Offline) ──────────────── */}
+      {hasError && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>📡</Text>
+          <Text style={styles.errorTitle}>Falha na Conexão</Text>
+          <Text style={styles.errorMessage}>
+            Não conseguimos nos conectar à plataforma BatCaverna. Verifique sua conexão com a internet ou tente novamente.
+          </Text>
+          {errorDetails ? (
+            <Text style={styles.errorSubDetails}>{errorDetails}</Text>
+          ) : null}
+          <TouchableOpacity style={styles.retryButton} onPress={handleReload}>
+            <Text style={styles.retryButtonText}>Tentar Novamente ⚡</Text>
           </TouchableOpacity>
-        ))}
-      </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -158,228 +126,82 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0B0B0F",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1F1F2B",
+  webview: {
+    flex: 1,
+    backgroundColor: "#0B0B0F",
   },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  batIcon: {
-    fontSize: 22,
-  },
-  logoText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#F5F5F7",
-  },
-  logoHighlight: {
-    color: "#A855F7",
-  },
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(124, 58, 237, 0.2)",
-    borderWidth: 1,
-    borderColor: "#7C3AED",
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0B0B0F",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 99,
   },
-  avatarText: {
-    color: "#C49CFF",
+  batIcon: {
+    fontSize: 56,
+    marginBottom: 8,
+  },
+  brandTitle: {
+    fontSize: 32,
     fontWeight: "bold",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  brandHighlight: {
+    color: "#F5C518",
+  },
+  subText: {
+    color: "#A1A1B5",
     fontSize: 14,
+    marginTop: 8,
   },
-  content: {
-    flex: 1,
+  errorContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0B0B0F",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+    zIndex: 100,
   },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
+  errorIcon: {
+    fontSize: 64,
+    marginBottom: 16,
   },
-  section: {
-    gap: 16,
-  },
-  title: {
+  errorTitle: {
     fontSize: 22,
     fontWeight: "bold",
     color: "#F5F5F7",
+    marginBottom: 8,
+    textAlign: "center",
   },
-  subtitle: {
-    fontSize: 13,
+  errorMessage: {
+    fontSize: 14,
     color: "#A1A1B5",
-    marginTop: -8,
-  },
-  card: {
-    backgroundColor: "#16161E",
-    borderWidth: 1,
-    borderColor: "#2A2A35",
-    borderRadius: 16,
-    padding: 16,
-    gap: 10,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  cardHighlight: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#A855F7",
-  },
-  cardMuted: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  progressBarBg: {
-    height: 8,
-    backgroundColor: "#121218",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#7C3AED",
-    borderRadius: 4,
-  },
-  grid2: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#16161E",
-    borderWidth: 1,
-    borderColor: "#2A2A35",
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-    gap: 4,
-  },
-  statIcon: {
-    fontSize: 24,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#F5F5F7",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  primaryButton: {
-    backgroundColor: "#7C3AED",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  primaryButtonText: {
-    color: "#F5F5F7",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  concursoCard: {
-    backgroundColor: "#16161E",
-    borderWidth: 1,
-    borderColor: "#2A2A35",
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  concursoSigla: {
-    color: "#F5F5F7",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  concursoArrow: {
-    color: "#7C3AED",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  badge: {
-    color: "#A855F7",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  questionText: {
-    color: "#F5F5F7",
-    fontSize: 14,
+    textAlign: "center",
     lineHeight: 20,
+    marginBottom: 12,
   },
-  optionButton: {
-    backgroundColor: "#121218",
-    borderWidth: 1,
-    borderColor: "#2A2A35",
-    borderRadius: 10,
-    padding: 12,
+  errorSubDetails: {
+    fontSize: 12,
+    color: "#EF4444",
+    textAlign: "center",
+    marginBottom: 20,
   },
-  optionText: {
-    color: "#A1A1B5",
-    fontSize: 13,
-  },
-  rankingRow: {
-    backgroundColor: "#16161E",
-    borderWidth: 1,
-    borderColor: "#2A2A35",
+  retryButton: {
+    backgroundColor: "#F5C518",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
     borderRadius: 12,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    marginTop: 12,
+    shadowColor: "#F5C518",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  rankingPos: {
-    fontSize: 15,
+  retryButtonText: {
+    color: "#000000",
     fontWeight: "bold",
-    color: "#F5C518",
-    width: 60,
-  },
-  rankingNome: {
-    color: "#F5F5F7",
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-  },
-  rankingXp: {
-    color: "#A855F7",
-    fontSize: 13,
-    fontWeight: "bold",
-  },
-  bottomNav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#1F1F2B",
-    backgroundColor: "#121218",
-    paddingVertical: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  navIcon: {
-    fontSize: 18,
-  },
-  navLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  navLabelActive: {
-    color: "#A855F7",
-    fontWeight: "bold",
+    fontSize: 16,
   },
 });
-

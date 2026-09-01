@@ -79,7 +79,7 @@ export default function TicketsPage() {
                   key={t.id}
                   onClick={() => { setTicketAberto(t.id); setCriandoTicket(false); }}
                   className={`w-full text-left bg-bat-bg-card border rounded-xl p-4 transition-all cursor-pointer ${
-                    ticketAberto === t.id ? "border-bat-purple-500/40 glow-purple" : "border-bat-border hover:border-bat-border-strong"
+                    ticketAberto === t.id ? "border-bat-gold-400/40 glow-gold" : "border-bat-border hover:border-bat-border-strong"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -182,12 +182,12 @@ export default function TicketsPage() {
                     <div
                       className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                         msg.role === "usuario"
-                          ? "bg-bat-purple-500/15 border border-bat-purple-500/20 text-bat-text"
+                          ? "bg-bat-gold-400/15 border border-bat-gold-400/20 text-bat-text"
                           : "bg-bat-bg-elevated border border-bat-border text-bat-text"
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs font-bold ${msg.role === "admin" ? "text-bat-gold-400" : "text-bat-purple-300"}`}>
+                        <span className={`text-xs font-bold ${msg.role === "admin" ? "text-bat-gold-400" : "text-bat-gold-400"}`}>
                           {msg.autor}
                         </span>
                         <span className="text-bat-text-muted text-xs">{msg.hora}</span>

@@ -284,14 +284,14 @@ function AuthForm() {
       </div>
 
       {/* Card de autenticação */}
-      <div className="relative z-10 w-full max-w-md bg-bat-bg-card border border-bat-border rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md bg-bat-bg-card border border-bat-border hover:border-[#F5C518]/30 rounded-2xl p-6 sm:p-8 shadow-2xl transition-colors duration-300">
         {/* Toggle Entrar / Criar conta */}
-        <div className="flex bg-bat-bg-secondary rounded-xl p-1 mb-6">
+        <div className="flex bg-bat-bg-secondary rounded-xl p-1 mb-6 border border-bat-border/60">
           <button
             onClick={() => { setTab("login"); setErros([]); }}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 cursor-pointer ${
               tab === "login"
-                ? "bg-bat-purple-500 text-white shadow-md glow-purple"
+                ? "bg-[#F5C518] text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]"
                 : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
@@ -299,9 +299,9 @@ function AuthForm() {
           </button>
           <button
             onClick={() => { setTab("cadastro"); setErros([]); }}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 cursor-pointer ${
               tab === "cadastro"
-                ? "bg-bat-purple-500 text-white shadow-md glow-purple"
+                ? "bg-[#F5C518] text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]"
                 : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
@@ -322,30 +322,30 @@ function AuthForm() {
         {tab === "login" && (
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-1.5">E-mail</label>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">E-mail</label>
               <input
                 type="email"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="input-field"
+                className="input-field focus:!border-[#F5C518] focus:!ring-[#F5C518]/30"
                 autoComplete="email"
               />
             </div>
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-1.5">Senha</label>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Senha</label>
               <input
                 type="password"
                 value={loginSenha}
                 onChange={(e) => setLoginSenha(e.target.value)}
                 placeholder="••••••••"
-                className="input-field"
+                className="input-field focus:!border-[#F5C518] focus:!ring-[#F5C518]/30"
                 autoComplete="current-password"
               />
             </div>
 
             <div className="text-right">
-              <Link href="/auth/recuperar" className="text-bat-purple-400 text-sm hover:underline">
+              <Link href="/auth/recuperar" className="text-[#F5C518] hover:text-[#FDE68A] text-sm hover:underline font-medium transition-colors">
                 Esqueci minha senha
               </Link>
             </div>
@@ -353,7 +353,7 @@ function AuthForm() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full py-3.5 text-base disabled:opacity-50"
+              className="w-full py-3.5 text-base font-bold text-black bg-gradient-to-r from-[#F5C518] via-[#FFD700] to-[#EAB308] hover:shadow-[0_0_25px_rgba(245,197,24,0.45)] active:scale-[0.99] rounded-xl transition-all duration-300 cursor-pointer disabled:opacity-50"
             >
               {loading ? "Entrando..." : "Entrar na Caverna"}
             </button>
@@ -495,14 +495,14 @@ function AuthForm() {
                 type="checkbox"
                 checked={mostrarSenha}
                 onChange={() => setMostrarSenha(!mostrarSenha)}
-                className="accent-bat-purple-500"
+                className="accent-[#F5C518]"
               />
               Mostrar senhas
             </label>
 
             {/* Seleção de concursos */}
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-2">
+              <label className="block text-bat-text-secondary text-sm mb-2 font-medium">
                 Concursos de interesse <span className="text-bat-text-muted">(selecione pelo menos 1)</span>
               </label>
               <div className="flex flex-wrap gap-2">
@@ -511,10 +511,10 @@ function AuthForm() {
                     key={c.id}
                     type="button"
                     onClick={() => toggleConcurso(c.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                       concursosSelecionados.includes(c.id)
-                        ? "bg-bat-purple-500/20 border-bat-purple-500 text-bat-purple-300"
-                        : "bg-bat-bg-secondary border-bat-border text-bat-text-muted hover:border-bat-border-strong"
+                        ? "bg-[#F5C518]/20 border-[#F5C518] text-[#F5C518] shadow-[0_0_12px_rgba(245,197,24,0.25)]"
+                        : "bg-bat-bg-secondary border-bat-border text-bat-text-muted hover:border-[#F5C518]/40 hover:text-bat-text"
                     }`}
                     title={c.nome}
                   >
@@ -531,15 +531,15 @@ function AuthForm() {
                   type="checkbox"
                   checked={aceiteTermos}
                   onChange={() => setAceiteTermos(!aceiteTermos)}
-                  className="accent-bat-purple-500 mt-0.5"
+                  className="accent-[#F5C518] mt-0.5"
                 />
                 <span className="text-bat-text-muted text-xs leading-snug">
                   Li e aceito os{" "}
-                  <Link href="/termos" className="text-bat-purple-400 hover:underline">
+                  <Link href="/termos" className="text-[#F5C518] hover:text-[#FDE68A] hover:underline font-medium">
                     Termos de Uso
                   </Link>{" "}
                   e a{" "}
-                  <Link href="/privacidade" className="text-bat-purple-400 hover:underline">
+                  <Link href="/privacidade" className="text-[#F5C518] hover:text-[#FDE68A] hover:underline font-medium">
                     Política de Privacidade
                   </Link>
                 </span>
@@ -549,7 +549,7 @@ function AuthForm() {
                   type="checkbox"
                   checked={aceiteIdade}
                   onChange={() => setAceiteIdade(!aceiteIdade)}
-                  className="accent-bat-purple-500 mt-0.5"
+                  className="accent-[#F5C518] mt-0.5"
                 />
                 <span className="text-bat-text-muted text-xs leading-snug">
                   Declaro que tenho 18 anos ou mais, ou que possuo autorização de um responsável legal
@@ -560,7 +560,7 @@ function AuthForm() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full py-3.5 text-base disabled:opacity-50"
+              className="w-full py-3.5 text-base font-bold text-black bg-gradient-to-r from-[#F5C518] via-[#FFD700] to-[#EAB308] hover:shadow-[0_0_25px_rgba(245,197,24,0.45)] active:scale-[0.99] rounded-xl transition-all duration-300 cursor-pointer disabled:opacity-50"
             >
               {loading ? "Criando conta..." : "Criar minha conta"}
             </button>

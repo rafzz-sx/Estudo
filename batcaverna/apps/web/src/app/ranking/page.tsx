@@ -65,7 +65,7 @@ export default function RankingPage() {
           <button
             onClick={() => setTab("tempo_estudo")}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              tab === "tempo_estudo" ? "bg-bat-purple-500 text-white glow-purple" : "text-bat-text-muted hover:text-bat-text"
+              tab === "tempo_estudo" ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]" : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
             ⏱️ Tempo de Estudo
@@ -73,7 +73,7 @@ export default function RankingPage() {
           <button
             onClick={() => setTab("questoes")}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              tab === "questoes" ? "bg-bat-purple-500 text-white glow-purple" : "text-bat-text-muted hover:text-bat-text"
+              tab === "questoes" ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]" : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
             ❓ Questões
@@ -88,7 +88,7 @@ export default function RankingPage() {
               onClick={() => setPeriodo(p)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                 periodo === p
-                  ? "bg-bat-purple-500/15 border-bat-purple-500/30 text-bat-purple-300"
+                  ? "bg-bat-gold-400/15 border-bat-gold-400/30 text-bat-gold-400"
                   : "bg-bat-bg-card border-bat-border text-bat-text-muted hover:text-bat-text"
               }`}
             >
@@ -107,12 +107,12 @@ export default function RankingPage() {
             onClick={() => setShowMiniPerfil(showMiniPerfil === r.posicao ? null : r.posicao)}
           >
             <span className="text-4xl mb-2 block">{getMedalha(r.posicao)}</span>
-            <div className="w-14 h-14 rounded-full bg-bat-purple-500/20 border-2 border-bat-purple-500/30 flex items-center justify-center text-bat-purple-300 text-xl font-bold mx-auto mb-2">
+            <div className="w-14 h-14 rounded-full bg-bat-gold-400/20 border-2 border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xl font-bold mx-auto mb-2">
               {r.apelido[0]}
             </div>
             <p className="heading text-bat-text font-bold">{r.apelido}</p>
             <p className="text-bat-text-muted text-xs mt-0.5">Nv. {r.nivel} · {r.titulo}</p>
-            <p className="heading text-bat-purple-400 text-lg font-bold mt-2">
+            <p className="heading text-bat-gold-400 text-lg font-bold mt-2">
               {tab === "tempo_estudo" ? formatarTempo(r.valor) : `${r.valor} questões`}
             </p>
             <p className="text-bat-text-muted text-xs">{r.percentual_acerto}% acerto</p>
@@ -120,55 +120,59 @@ export default function RankingPage() {
         ))}
       </div>
 
-      {/* ═══ TABELA DO RANKING (posições 4-10+) ═══ */}
+      {/* ═══ TABELA COMPLETA ═══ */}
       <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-bat-border text-bat-text-muted text-xs uppercase">
-              <th className="px-4 py-3 text-left w-12">#</th>
-              <th className="px-4 py-3 text-left">Jogador</th>
-              <th className="px-4 py-3 text-right">Nível</th>
-              <th className="px-4 py-3 text-right">{tab === "tempo_estudo" ? "Tempo" : "Questões"}</th>
-              <th className="px-4 py-3 text-right hidden sm:table-cell">Acerto</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranking.slice(3).map((r) => (
-              <tr
-                key={r.posicao}
-                className="border-b border-bat-border/50 hover:bg-bat-bg-elevated/50 transition-colors cursor-pointer"
-                onClick={() => setShowMiniPerfil(showMiniPerfil === r.posicao ? null : r.posicao)}
-              >
-                <td className="px-4 py-3 text-bat-text-secondary text-sm font-bold">{r.posicao}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-bat-purple-500/15 border border-bat-purple-500/20 flex items-center justify-center text-bat-purple-300 text-xs font-bold">
-                      {r.apelido[0]}
-                    </div>
-                    <div>
-                      <p className="text-bat-text text-sm font-medium">{r.apelido}</p>
-                      <p className="text-bat-text-muted text-xs">{r.titulo}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right text-bat-text-secondary text-sm">{r.nivel}</td>
-                <td className="px-4 py-3 text-right heading text-bat-purple-400 text-sm font-bold">
-                  {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
-                </td>
-                <td className="px-4 py-3 text-right text-bat-text-secondary text-sm hidden sm:table-cell">
-                  {r.percentual_acerto}%
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-bat-border text-bat-text-muted text-xs uppercase tracking-wider">
+                <th className="px-4 py-3">#</th>
+                <th className="px-4 py-3">Guerreiro</th>
+                <th className="px-4 py-3 text-center">Nível</th>
+                <th className="px-4 py-3 text-right">{tab === "tempo_estudo" ? "Tempo" : "Questões"}</th>
+                <th className="px-4 py-3 text-right">Acerto</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-bat-border/50 text-sm">
+              {ranking.map((r) => (
+                <tr
+                  key={r.posicao}
+                  className="hover:bg-bat-bg-elevated transition-colors cursor-pointer"
+                  onClick={() => setShowMiniPerfil(showMiniPerfil === r.posicao ? null : r.posicao)}
+                >
+                  <td className="px-4 py-3 font-bold">
+                    {r.posicao <= 3 ? getMedalha(r.posicao) : `#${r.posicao}`}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/20 flex items-center justify-center text-bat-gold-400 text-xs font-bold">
+                        {r.apelido[0]}
+                      </div>
+                      <div>
+                        <span className="text-bat-text font-medium">{r.apelido}</span>
+                        {r.apelido === "AdminCaverna" && (
+                          <span className="ml-2 text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/10 px-1.5 py-0.5 rounded">VOCÊ</span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center text-bat-text-secondary text-xs">Nv. {r.nivel}</td>
+                  <td className="px-4 py-3 text-right heading text-bat-gold-400 text-sm font-bold">
+                    {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-bat-text-secondary">{r.percentual_acerto}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* ═══ SUA POSIÇÃO (fixo no rodapé) ═══ */}
-      <div className="mt-4 bg-bat-purple-500/10 border border-bat-purple-500/20 rounded-2xl p-4 flex items-center justify-between">
+      {/* ═══ SUA POSIÇÃO FIXA ═══ */}
+      <div className="mt-4 bg-bat-gold-400/10 border border-bat-gold-400/20 rounded-2xl p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="heading text-bat-gold-400 text-lg font-bold">#{mockMinhaPos.posicao}</span>
-          <div className="w-9 h-9 rounded-full bg-bat-purple-500/20 border border-bat-purple-500/30 flex items-center justify-center text-bat-purple-300 text-sm font-bold">
+          <span className="heading text-xl font-bold text-bat-gold-400">#{mockMinhaPos.posicao}</span>
+          <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold">
             {mockMinhaPos.apelido[0]}
           </div>
           <div>
@@ -177,7 +181,7 @@ export default function RankingPage() {
           </div>
         </div>
         <div className="text-right">
-          <p className="heading text-bat-purple-400 font-bold">
+          <p className="heading text-bat-gold-400 font-bold">
             {tab === "tempo_estudo" ? formatarTempo(mockMinhaPos.valor) : `${mockMinhaPos.valor} questões`}
           </p>
           <p className="text-bat-text-muted text-xs">{mockMinhaPos.percentual_acerto}% acerto</p>

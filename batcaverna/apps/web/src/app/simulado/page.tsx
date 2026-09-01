@@ -175,7 +175,7 @@ export default function SimuladoPage() {
           {/* Topbar do Simulado com Cronômetro */}
           <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="heading text-lg text-bat-purple-400 font-bold">{concursoSel}</span>
+              <span className="heading text-lg text-bat-gold-400 font-bold">{concursoSel}</span>
               <span className="text-bat-text-muted text-xs">
                 Questão {questaoIndex + 1} de {totalQuestoes}
               </span>
@@ -213,9 +213,9 @@ export default function SimuladoPage() {
                   onClick={() => setQuestaoIndex(idx)}
                   className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     isCurrent
-                      ? "bg-bat-purple-500 text-white border-2 border-white shadow-md"
+                      ? "bg-bat-gold-400 text-black border-2 border-white shadow-md"
                       : respondida
-                      ? "bg-bat-purple-500/20 border border-bat-purple-500/40 text-bat-purple-300"
+                      ? "bg-bat-gold-400/20 border border-bat-gold-400/40 text-bat-gold-400"
                       : "bg-bat-bg-secondary border border-bat-border text-bat-text-muted hover:text-bat-text"
                   }`}
                 >
@@ -229,7 +229,7 @@ export default function SimuladoPage() {
           {questoes[questaoIndex] && (
             <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-6">
               <div className="flex items-center justify-between pb-3 border-b border-bat-border">
-                <span className="text-xs font-bold text-bat-purple-400 bg-bat-purple-500/10 px-3 py-1 rounded-full">
+                <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-3 py-1 rounded-full">
                   {questoes[questaoIndex].materia}
                 </span>
                 <span className="text-bat-text-muted text-xs">
@@ -252,13 +252,13 @@ export default function SimuladoPage() {
                       onClick={() => handleSelectAlternativa(alt.letra)}
                       className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${
                         isSelected
-                          ? "bg-bat-purple-500/15 border-bat-purple-500 text-bat-purple-300 glow-purple"
-                          : "bg-bat-bg-secondary border-bat-border text-bat-text-secondary hover:border-bat-purple-500/30"
+                          ? "bg-bat-gold-400/15 border-bat-gold-400 text-bat-gold-400 glow-gold font-medium"
+                          : "bg-bat-bg-secondary border-bat-border text-bat-text-secondary hover:border-bat-gold-400/40"
                       }`}
                     >
                       <span
                         className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
-                          isSelected ? "bg-bat-purple-500 text-white" : "bg-bat-bg-card text-bat-text-muted"
+                          isSelected ? "bg-bat-gold-400 text-black font-bold" : "bg-bat-bg-card text-bat-text-muted"
                         }`}
                       >
                         {alt.letra}
@@ -315,7 +315,7 @@ export default function SimuladoPage() {
 
             <div className="grid grid-cols-3 gap-4 max-w-md mx-auto pt-2">
               <div className="bg-bat-bg-secondary p-4 rounded-xl border border-bat-border">
-                <p className="heading text-2xl text-bat-purple-400 font-bold">{pontuacaoPercent}%</p>
+                <p className="heading text-2xl text-bat-gold-400 font-bold">{pontuacaoPercent}%</p>
                 <p className="text-bat-text-muted text-xs">Aproveitamento</p>
               </div>
               <div className="bg-bat-bg-secondary p-4 rounded-xl border border-bat-border">
@@ -367,7 +367,7 @@ export default function SimuladoPage() {
                   <p className="text-bat-text text-sm font-medium">{q.enunciado}</p>
 
                   <div className="bg-bat-bg-secondary/60 border border-bat-border rounded-xl p-3.5 text-xs text-bat-text-secondary leading-relaxed">
-                    <strong className="text-bat-purple-400 block mb-1">Explicação do Professor:</strong>
+                    <strong className="text-bat-gold-400 block mb-1">Explicação do Professor:</strong>
                     {q.explicacao}
                   </div>
                 </div>

@@ -162,14 +162,38 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Salvar concursos de interesse ────────────────────────
-    if (concursos_interesse?.length > 0) {
-      const favoritosData = concursos_interesse.map((concursoId: string, idx: number) => ({
-        user_id: newUser.id,
-        concurso_id: concursoId,
-        ordem: idx,
-      }));
+    if (concursos_interesse && Array.isArray(concursos_interesse) && concursos_interesse.length > 0) {
+      try {
+        const { data: dbConcursos } = await supabase
+          .from('concursos')
+          .select('id, sigla');
 
-      await supabase.from('user_concurso_favoritos').insert(favoritosData);
+        const siglaToIdMap = new Map(
+          (dbConcursos || []).map((c) => [c.sigla.toLowerCase(), c.id])
+        );
+
+        const favoritosData = (concursos_interesse || [])
+          .map((item: string, idx: number) => {
+            const concursoId =
+              siglaToIdMap.get(item.toLowerCase()) ||
+              (item.length === 36 ? item : null);
+
+            return concursoId
+              ? {
+                  user_id: newUser.id,
+                  concurso_id: concursoId,
+                  ordem: idx,
+                }
+              : null;
+          })
+          .filter((item): item is { user_id: any; concurso_id: any; ordem: number } => item !== null);
+
+        if (favoritosData.length > 0) {
+          await supabase.from('user_concurso_favoritos').insert(favoritosData);
+        }
+      } catch (concursoErr) {
+        console.warn('Warning saving user preferred concursos:', concursoErr);
+      }
     }
 
     // ─── Gerar token de verificação de e-mail ─────────────────
