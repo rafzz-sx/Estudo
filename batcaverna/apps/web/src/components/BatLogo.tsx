@@ -7,7 +7,7 @@ interface BatLogoProps {
 }
 
 export function BatLogo({
-  size = 56,
+  size = 48,
   className = "",
   glow = true,
 }: BatLogoProps) {
@@ -17,12 +17,13 @@ export function BatLogo({
       alt="BatCaverna Morcego"
       width={size}
       style={{
-        width: `${size}px`,
+        maxWidth: `${size}px`,
+        width: "100%",
         height: "auto",
         objectFit: "contain",
         display: "inline-block",
         filter: glow
-          ? "drop-shadow(0 0 12px rgba(245, 197, 24, 0.65)) drop-shadow(0 0 24px rgba(245, 197, 24, 0.3))"
+          ? "drop-shadow(0 0 10px rgba(245, 197, 24, 0.65)) drop-shadow(0 0 20px rgba(245, 197, 24, 0.3))"
           : "none",
       }}
       className={`shrink-0 select-none ${className}`}
@@ -38,18 +39,20 @@ interface BatBrandProps {
 }
 
 export function BatBrand({
-  iconSize = 56,
-  textSize = "text-4xl sm:text-5xl md:text-6xl",
+  iconSize = 44,
+  textSize = "text-3xl sm:text-5xl md:text-6xl",
   className = "",
   showSub = false,
 }: BatBrandProps) {
   return (
-    <div className={`flex flex-col items-center select-none ${className}`}>
-      <div className="flex items-center justify-center gap-3 sm:gap-4">
+    <div className={`flex flex-col items-center select-none max-w-full px-2 ${className}`}>
+      <div className="flex items-center justify-center gap-2 sm:gap-4 flex-nowrap max-w-full">
         {/* Morcego oficial do Batman amarelo */}
-        <BatLogo size={iconSize} glow />
+        <div className="w-8 sm:w-12 md:w-14 shrink-0 flex items-center justify-center">
+          <BatLogo size={iconSize} glow />
+        </div>
 
-        {/* Tipografia BatCaverna com Chakra Petch idêntica à foto */}
+        {/* Tipografia BatCaverna */}
         <span
           className={`heading font-extrabold tracking-tight leading-none ${textSize}`}
           style={{
@@ -70,7 +73,7 @@ export function BatBrand({
       </div>
 
       {showSub && (
-        <span className="text-bat-text-muted text-xs uppercase tracking-[0.25em] font-semibold mt-2">
+        <span className="text-bat-text-muted text-[10px] sm:text-xs uppercase tracking-[0.2em] font-semibold mt-2 text-center">
           Central de Concursos Militares & ENEM
         </span>
       )}

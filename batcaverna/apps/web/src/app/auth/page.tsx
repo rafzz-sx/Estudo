@@ -219,7 +219,10 @@ function AuthForm() {
     setErros([]);
     setLoading(true);
 
-    if (!loginEmail || !loginSenha) {
+    const emailLimpo = loginEmail.toLowerCase().trim();
+    const senhaLimpa = loginSenha;
+
+    if (!emailLimpo || !senhaLimpa) {
       setErros(["Preencha todos os campos"]);
       setLoading(false);
       return;
@@ -229,11 +232,19 @@ function AuthForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, senha: loginSenha }),
+        credentials: "include",
+        body: JSON.stringify({ email: emailLimpo, senha: senhaLimpa }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        setErros([json.error || "Erro ao fazer login"]);
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || !json?.success) {
+        setErros([json?.error || "E-mail ou senha incorretos"]);
       } else {
         // Salvar estado na store do cliente
         if (json.data?.user && json.data?.access_token) {
@@ -247,8 +258,9 @@ function AuthForm() {
         }
         window.location.href = getDestinationUrl();
       }
-    } catch {
-      setErros(["Falha de conexão. Tente novamente."]);
+    } catch (err: any) {
+      console.error("Erro no login:", err);
+      setErros(["Falha de conexão. Verifique sua internet ou tente novamente."]);
     } finally {
       setLoading(false);
     }
@@ -294,19 +306,27 @@ function AuthForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           nome: nome.trim(),
           apelido: apelido.trim(),
-          email: email.trim(),
+          email: email.toLowerCase().trim(),
           senha,
           data_nascimento: dataNascimento,
           concursos_interesse: concursosSelecionados,
           aceite_termos: aceiteTermos,
         }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        setErros([json.error || "Erro ao cadastrar"]);
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || !json?.success) {
+        setErros([json?.error || "Erro ao cadastrar"]);
       } else {
         // Salvar sessão diretamente e navegar para a Dashboard
         if (json.data?.user && json.data?.access_token) {
@@ -320,8 +340,9 @@ function AuthForm() {
         }
         window.location.href = getDestinationUrl();
       }
-    } catch {
-      setErros(["Falha de conexão. Tente novamente."]);
+    } catch (err: any) {
+      console.error("Erro no cadastro:", err);
+      setErros(["Falha de conexão. Verifique sua internet ou tente novamente."]);
     } finally {
       setLoading(false);
     }

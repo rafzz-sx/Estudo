@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Component, ErrorInfo } from "react";
 import {
   StyleSheet,
   View,
@@ -9,14 +9,80 @@ import {
   TouchableOpacity,
   BackHandler,
   Platform,
+  Linking,
 } from "react-native";
-import { WebView } from "react-native-webview";
+import { WebView, WebViewNavigation } from "react-native-webview";
 
 // ─── URL da Plataforma Web BatCaverna ──────────────────────────────
-// Altere aqui para o domínio oficial de produção no Vercel
-const PLATFORM_URL = "https://batcaverna.vercel.app";
+const PLATFORM_URL = "https://estudo-tan.vercel.app";
 
-export default function App() {
+// Injeta flag discreta no JavaScript antes do carregamento da página
+const INJECTED_JAVASCRIPT = `
+  (function() {
+    window.IS_BATCAVERNA_MOBILE_APP = true;
+    window.ReactNativeWebView = window.ReactNativeWebView || {};
+  })();
+  true;
+`;
+
+// ─── ErrorBoundary — Evita crash fatal do app no Android ───────────
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn("ErrorBoundary caught:", error, errorInfo);
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="light-content" backgroundColor="#0B0B0F" />
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorTitle}>Erro Inesperado</Text>
+            <Text style={styles.errorMessage}>
+              O aplicativo encontrou uma falha temporária. Toque abaixo para reiniciar.
+            </Text>
+            <Text style={styles.errorSubDetails}>
+              {this.state.error?.message || "Erro de inicialização"}
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={this.handleRetry}
+            >
+              <Text style={styles.retryButtonText}>Reiniciar App ⚡</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// ─── Componente Principal BatCaverna ────────────────────────────────
+function BatCavernaApp() {
   const webViewRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,48 +112,121 @@ export default function App() {
     setHasError(false);
     setErrorDetails("");
     setLoading(true);
-    webViewRef.current?.reload();
+    if (webViewRef.current) {
+      webViewRef.current.reload();
+    }
+  };
+
+  // Trata links externos como whatsapp, tel, mailto, etc.
+  const handleShouldStartLoadWithRequest = (request: WebViewNavigation) => {
+    const { url } = request;
+    if (!url) return false;
+
+    // Se for URL externa de terceiros ou protocolos nativos
+    if (
+      url.startsWith("tel:") ||
+      url.startsWith("mailto:") ||
+      url.startsWith("whatsapp:") ||
+      url.startsWith("intent:") ||
+      url.startsWith("market:")
+    ) {
+      Linking.canOpenURL(url)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(url);
+          }
+        })
+        .catch(() => {});
+      return false;
+    }
+
+    return true;
+  };
+
+  // Render de erro da WebView
+  const renderError = (
+    _errorDomain: string | undefined,
+    errorCode: number,
+    errorDesc: string
+  ) => {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorIcon}>📡</Text>
+        <Text style={styles.errorTitle}>Falha na Conexão</Text>
+        <Text style={styles.errorMessage}>
+          Não foi possível conectar à plataforma BatCaverna. Verifique sua conexão com a internet.
+        </Text>
+        <Text style={styles.errorSubDetails}>
+          {errorDesc || `Código de erro: ${errorCode}`}
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={handleReload}>
+          <Text style={styles.retryButtonText}>Tentar Novamente ⚡</Text>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0B0F" />
 
-      {/* ─── WebView Principal da Plataforma Web ─────────────────────── */}
-      <WebView
-        ref={webViewRef}
-        source={{ uri: PLATFORM_URL }}
-        style={styles.webview}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        onNavigationStateChange={(navState) => {
-          setCanGoBack(navState.canGoBack);
-        }}
-        onLoadStart={() => {
-          setLoading(true);
-          setHasError(false);
-        }}
-        onLoadEnd={() => {
-          setLoading(false);
-        }}
-        onError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          setLoading(false);
-          setHasError(true);
-          setErrorDetails(nativeEvent.description || "Não foi possível conectar ao servidor.");
-        }}
-        onHttpError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          if (nativeEvent.statusCode >= 500) {
+      {/* ─── WebView Principal com Compatibilidade Completa Web ──────── */}
+      {!hasError && (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: PLATFORM_URL }}
+          style={styles.webview}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          databaseEnabled={true}
+          sharedCookiesEnabled={true}
+          thirdPartyCookiesEnabled={true}
+          startInLoadingState={false}
+          scalesPageToFit={true}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          allowsFullscreenVideo={true}
+          mixedContentMode="always"
+          originWhitelist={["*"]}
+          cacheEnabled={true}
+          cacheMode="LOAD_DEFAULT"
+          setSupportMultipleWindows={false}
+          javaScriptCanOpenWindowsAutomatically={true}
+          injectedJavaScriptBeforeContentLoaded={INJECTED_JAVASCRIPT}
+          onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+          renderError={renderError}
+          onNavigationStateChange={(navState) => {
+            setCanGoBack(navState.canGoBack);
+          }}
+          onLoadStart={() => {
+            setLoading(true);
+            setHasError(false);
+          }}
+          onLoadEnd={() => {
+            setLoading(false);
+          }}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            setLoading(false);
             setHasError(true);
-            setErrorDetails(`Erro ${nativeEvent.statusCode} no servidor.`);
-          }
-        }}
-      />
+            setErrorDetails(
+              nativeEvent.description ||
+                "Não foi possível conectar ao servidor."
+            );
+          }}
+          onHttpError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            if (nativeEvent.statusCode >= 500) {
+              setHasError(true);
+              setErrorDetails(`Erro ${nativeEvent.statusCode} no servidor.`);
+            }
+          }}
+          onRenderProcessGone={() => {
+            setHasError(true);
+            setErrorDetails("O processo de renderização foi reiniciado. Toque em Tentar Novamente.");
+          }}
+        />
+      )}
 
       {/* ─── Loader Inicial Temático BatCaverna ───────────────────────── */}
       {loading && !hasError && (
@@ -97,7 +236,11 @@ export default function App() {
             Bat<Text style={styles.brandHighlight}>Caverna</Text>
           </Text>
           <Text style={styles.subText}>Carregando a central de operações...</Text>
-          <ActivityIndicator size="large" color="#F5C518" style={{ marginTop: 24 }} />
+          <ActivityIndicator
+            size="large"
+            color="#F5C518"
+            style={{ marginTop: 24 }}
+          />
         </View>
       )}
 
@@ -107,7 +250,8 @@ export default function App() {
           <Text style={styles.errorIcon}>📡</Text>
           <Text style={styles.errorTitle}>Falha na Conexão</Text>
           <Text style={styles.errorMessage}>
-            Não conseguimos nos conectar à plataforma BatCaverna. Verifique sua conexão com a internet ou tente novamente.
+            Não conseguimos nos conectar à plataforma BatCaverna. Verifique sua
+            conexão com a internet ou tente novamente.
           </Text>
           {errorDetails ? (
             <Text style={styles.errorSubDetails}>{errorDetails}</Text>
@@ -118,6 +262,15 @@ export default function App() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+// ─── Export com ErrorBoundary ────────────────────────────────────────
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <BatCavernaApp />
+    </ErrorBoundary>
   );
 }
 

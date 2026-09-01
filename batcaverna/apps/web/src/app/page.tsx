@@ -241,13 +241,13 @@ export default function LandingPage() {
         >
           {/* Logo + Nome (BatCaverna Oficial) */}
           <BatBrand
-            iconSize={72}
-            textSize="text-5xl sm:text-6xl md:text-7xl"
-            className="mb-6"
+            iconSize={52}
+            textSize="text-3xl sm:text-5xl md:text-6xl"
+            className="mb-6 max-w-full"
           />
 
           {/* Slogan */}
-          <p className="text-bat-text-secondary text-lg sm:text-xl md:text-2xl max-w-2xl mx-auto mb-4 leading-relaxed">
+          <p className="text-bat-text-secondary text-base sm:text-xl md:text-2xl max-w-2xl mx-auto mb-4 leading-relaxed px-2">
             Sua central de operações para dominar os{" "}
             <span className="text-bat-gold-400 font-semibold drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">
               concursos militares
@@ -258,7 +258,7 @@ export default function LandingPage() {
             </span>.
           </p>
 
-          <p className="text-bat-text-muted text-sm sm:text-base max-w-xl mx-auto mb-10">
+          <p className="text-bat-text-muted text-xs sm:text-sm md:text-base max-w-xl mx-auto mb-10 px-2 leading-relaxed">
             Banco de questões, simulados cronometrados, bizus estratégicos, ranking e gamificação — tudo em uma experiência imersiva.
           </p>
 
