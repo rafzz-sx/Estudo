@@ -7,22 +7,81 @@ import Link from "next/link";
 type TabTipo = "tempo_estudo" | "questoes";
 type PeriodoTipo = "semanal" | "mensal" | "geral";
 
+interface RankingItem {
+  posicao: number;
+  user_id: string;
+  apelido: string;
+  avatar_url: string | null;
+  nivel_atual: number;
+  titulo_nivel: string;
+  valor: number;
+  percentual_acerto: number;
+}
+
+function formatarTempo(seg: number): string {
+  const h = Math.floor(seg / 3600);
+  const m = Math.floor((seg % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const hr = h % 24;
+    return hr > 0 ? `${d}d ${hr}h` : `${d}d`;
+  }
+  if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  return `${m}min`;
+}
+
+function getMedalha(pos: number): string {
+  if (pos === 1) return "🥇";
+  if (pos === 2) return "🥈";
+  if (pos === 3) return "🥉";
+  return `#${pos}`;
+}
+
 export default function RankingPage() {
   const [tab, setTab] = useState<TabTipo>("tempo_estudo");
   const [periodo, setPeriodo] = useState<PeriodoTipo>("geral");
   const [visible, setVisible] = useState(false);
+  const [ranking, setRanking] = useState<RankingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const user = useAuthStore((state) => state.user);
 
-  useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
+  const carregarRanking = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ranking?tipo=${tab}&periodo=${periodo}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data?.ranking)) {
+          setRanking(json.data.ranking);
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar ranking:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setTimeout(() => setVisible(true), 100);
+  }, []);
+
+  useEffect(() => {
+    carregarRanking();
+  }, [tab, periodo]);
+
+  // Verificar posição do usuário logado
+  const minhaPosicao = ranking.find((r) => r.user_id === user?.id);
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       <div className="mb-6">
-        <h1 className="heading text-3xl text-bat-text mb-2">🏆 Ranking</h1>
-        <p className="text-bat-text-secondary">Os guerreiros mais dedicados da Caverna.</p>
+        <h1 className="heading text-3xl text-bat-text mb-2">🏆 Ranking da BatCaverna</h1>
+        <p className="text-bat-text-secondary">Os guerreiros com maior tempo de estudo dedicado e dedicação.</p>
       </div>
 
-      {/* ═══ ABAS: Tempo / Questões ═══ */}
+      {/* ═══ ABAS: Tempo de Estudo / Questões ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex bg-bat-bg-card border border-bat-border rounded-xl p-1">
           <button
@@ -31,7 +90,7 @@ export default function RankingPage() {
               tab === "tempo_estudo" ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]" : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
-            ⏱️ Tempo de Estudo
+            ⏱️ Tempo de Estudo Real
           </button>
           <button
             onClick={() => setTab("questoes")}
@@ -43,15 +102,15 @@ export default function RankingPage() {
           </button>
         </div>
 
-        {/* Filtro período */}
+        {/* Filtro de Período */}
         <div className="flex gap-2">
           {(["semanal", "mensal", "geral"] as PeriodoTipo[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriodo(p)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                 periodo === p
-                  ? "bg-bat-gold-400/15 border-bat-gold-400/30 text-bat-gold-400"
+                  ? "bg-bat-gold-400/15 border-bat-gold-400/30 text-bat-gold-400 font-bold"
                   : "bg-bat-bg-card border-bat-border text-bat-text-muted hover:text-bat-text"
               }`}
             >
@@ -61,48 +120,141 @@ export default function RankingPage() {
         </div>
       </div>
 
-      {/* ═══ ESTADO VAZIO: Sem dados de ranking ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-10 text-center">
-        <div className="text-6xl mb-4">🦇</div>
-        <h2 className="heading text-xl text-bat-text mb-2">O ranking está vazio por enquanto</h2>
-        <p className="text-bat-text-secondary text-sm max-w-md mx-auto mb-6">
-          Quando os soldados começarem a estudar, resolver questões e acumular tempo de estudo, 
-          o ranking será preenchido automaticamente com dados reais.
-        </p>
-        <p className="text-bat-text-muted text-xs mb-6">
-          Seja o primeiro a aparecer aqui! Comece uma sessão de estudo ou resolva questões.
-        </p>
-        <div className="flex justify-center gap-3">
-          <Link
-            href="/questoes"
-            className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-          >
-            Resolver questões
-          </Link>
-          <Link
-            href="/concursos"
-            className="inline-block py-2.5 px-5 text-sm no-underline bg-bat-bg-secondary border border-bat-border text-bat-text rounded-xl hover:border-bat-gold-400/40 transition-colors"
-          >
-            Ver concursos
-          </Link>
+      {/* ═══ CONTEÚDO DO RANKING ═══ */}
+      {loading ? (
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-12 text-center">
+          <span className="text-4xl block mb-2 animate-pulse">🦇</span>
+          <p className="text-bat-text-muted text-sm">Carregando classificação dos soldados...</p>
         </div>
-      </div>
+      ) : ranking.length === 0 ? (
+        /* Estado Vazio */
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-10 text-center">
+          <div className="text-6xl mb-4">🦇</div>
+          <h2 className="heading text-xl text-bat-text mb-2">O ranking está pronto para ser conquistado</h2>
+          <p className="text-bat-text-secondary text-sm max-w-md mx-auto mb-6">
+            O tempo de estudo registrado enquanto você resolve trilhas de concurso pontuará diretamente aqui.
+          </p>
+          <div className="flex justify-center gap-3">
+            <Link
+              href="/concursos"
+              className="btn-primary inline-block py-2.5 px-6 text-sm no-underline"
+            >
+              Iniciar Trilha de Concurso ⚡
+            </Link>
+          </div>
+        </div>
+      ) : (
+        /* Tabela e Top 3 */
+        <div className="space-y-6">
+          {/* Top 3 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {ranking.slice(0, 3).map((r) => (
+              <div
+                key={r.user_id}
+                className="bg-bat-bg-card border border-bat-gold-400/30 rounded-2xl p-5 text-center shadow-lg relative"
+              >
+                <span className="text-3xl mb-2 block">{getMedalha(r.posicao)}</span>
+                <div className="w-14 h-14 rounded-full bg-bat-gold-400/20 border-2 border-bat-gold-400/40 flex items-center justify-center text-bat-gold-400 text-xl font-bold mx-auto mb-2 overflow-hidden">
+                  {r.avatar_url ? (
+                    <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    r.apelido[0]?.toUpperCase()
+                  )}
+                </div>
+                <p className="heading text-bat-text font-bold text-base truncate">{r.apelido}</p>
+                <p className="text-bat-text-muted text-xs">Nv. {r.nivel_atual} · {r.titulo_nivel}</p>
+                <p className="heading text-bat-gold-400 text-lg font-bold mt-2">
+                  {tab === "tempo_estudo" ? formatarTempo(r.valor) : `${r.valor} questões`}
+                </p>
+              </div>
+            ))}
+          </div>
 
-      {/* ═══ SUA POSIÇÃO ═══ */}
+          {/* Tabela Geral */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-bat-border text-bat-text-muted text-xs uppercase tracking-wider bg-bat-bg-secondary/40">
+                  <th className="px-5 py-3.5">Posição</th>
+                  <th className="px-5 py-3.5">Soldado</th>
+                  <th className="px-5 py-3.5 text-center">Nível</th>
+                  <th className="px-5 py-3.5 text-right">{tab === "tempo_estudo" ? "Tempo Estudado" : "Questões"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-bat-border/50 text-sm">
+                {ranking.map((r) => {
+                  const isMe = r.user_id === user?.id;
+                  return (
+                    <tr
+                      key={r.user_id}
+                      className={`hover:bg-bat-bg-elevated transition-colors ${
+                        isMe ? "bg-bat-gold-400/10 font-semibold" : ""
+                      }`}
+                    >
+                      <td className="px-5 py-3.5 font-bold text-bat-gold-400">
+                        {getMedalha(r.posicao)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
+                            {r.avatar_url ? (
+                              <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              r.apelido[0]?.toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <span className="text-bat-text font-medium">{r.apelido}</span>
+                            {isMe && (
+                              <span className="ml-2 text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/20 px-1.5 py-0.5 rounded">
+                                VOCÊ
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-center text-bat-text-secondary text-xs">
+                        Nv. {r.nivel_atual}
+                      </td>
+                      <td className="px-5 py-3.5 text-right heading text-bat-gold-400 text-sm font-bold">
+                        {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SUA POSIÇÃO FIXA NO RODAPÉ ═══ */}
       {user && (
-        <div className="mt-4 bg-bat-gold-400/10 border border-bat-gold-400/20 rounded-2xl p-4 flex items-center justify-between">
+        <div className="mt-6 bg-bat-gold-400/10 border border-bat-gold-400/20 rounded-2xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="heading text-xl font-bold text-bat-gold-400">—</span>
-            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold">
-              {user.apelido?.[0] || "?"}
+            <span className="heading text-xl font-bold text-bat-gold-400">
+              {minhaPosicao ? `#${minhaPosicao.posicao}` : "—"}
+            </span>
+            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden flex-shrink-0">
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                user.apelido?.[0]?.toUpperCase() || "?"
+              )}
             </div>
             <div>
               <p className="text-bat-text text-sm font-medium">{user.apelido} <span className="text-bat-text-muted text-xs">(você)</span></p>
-              <p className="text-bat-text-muted text-xs">Nv. {user.nivel_atual || 1} · {user.nivel_atual >= 5 ? "Cabo de Operações" : "Recruta da Caverna"}</p>
+              <p className="text-bat-text-muted text-xs">Nv. {user.nivel_atual || 1}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-bat-text-muted text-sm">Sem dados ainda</p>
+            <p className="heading text-bat-gold-400 font-bold">
+              {minhaPosicao
+                ? tab === "tempo_estudo"
+                  ? formatarTempo(minhaPosicao.valor)
+                  : `${minhaPosicao.valor} questões`
+                : "Sem tempo registrado ainda"}
+            </p>
           </div>
         </div>
       )}
