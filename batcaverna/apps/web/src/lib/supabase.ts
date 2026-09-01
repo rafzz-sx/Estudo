@@ -1,3 +1,5 @@
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
 const DEFAULT_SUPABASE_URL = 'https://bzrrbbaqzlfmertirbak.supabase.co';
 const DEFAULT_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cnJiYmFxemxmbWVydGlyYmFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5NTk2MzgsImV4cCI6MjEwMzUzNTYzOH0.3jFVGn0QskUYNL2iLCglw6SOxW0SDX8Plo0jLWrx7XE';
