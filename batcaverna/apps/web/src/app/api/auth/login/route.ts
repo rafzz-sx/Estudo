@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import {
   generateAccessToken,
   generateRefreshToken,
   hashToken,
   getRefreshTokenExpiry,
 } from '@/lib/auth';
+
+// ─── Supabase client direto com fallback hardcoded ──────────
+function getSupabase() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bzrrbbaqzlfmertirbak.supabase.co').trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cnJiYmFxemxmbWVydGlyYmFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Nzk1OTYzOCwiZXhwIjoyMTAzNTM1NjM4fQ.YfNFyyNHbjF9kYF48uNWchYvQuI_PGaIC-2LNE2UktE'
+  ).trim();
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // POST /api/auth/login
@@ -22,7 +35,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = getSupabase();
 
     // ─── Buscar usuário ───────────────────────────────────────
     const { data: user, error } = await supabase
@@ -71,10 +84,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { success: false, error: 'Erro interno do servidor' },
+      { success: false, error: `Erro interno: ${error?.message || 'desconhecido'}` },
       { status: 500 }
     );
   }

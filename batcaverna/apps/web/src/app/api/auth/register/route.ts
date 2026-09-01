@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -9,7 +9,20 @@ import {
   getEmailTokenExpiry,
 } from '@/lib/auth';
 
-// ─── Lista abrangente de domínios descartáveis e falsos ──────
+// ─── Supabase client direto com fallback hardcoded ──────────
+function getSupabase() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bzrrbbaqzlfmertirbak.supabase.co').trim();
+  const key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cnJiYmFxemxmbWVydGlyYmFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Nzk1OTYzOCwiZXhwIjoyMTAzNTM1NjM4fQ.YfNFyyNHbjF9kYF48uNWchYvQuI_PGaIC-2LNE2UktE'
+  ).trim();
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+// ─── Lista de domínios descartáveis ──────────────────────────
 const DISPOSABLE_DOMAINS = new Set([
   'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'temp-mail.org',
   'throwaway.email', 'yopmail.com', 'sharklasers.com', 'guerrillamailblock.com',
@@ -99,7 +112,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = getSupabase();
 
     // ─── Verificar e-mail já cadastrado ───────────────────────
     const { data: existingUser } = await supabase
@@ -156,7 +169,7 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error('Error inserting user:', insertError);
       return NextResponse.json(
-        { success: false, error: `Erro ao criar usuário: ${insertError.message || 'Verifique se as tabelas foram criadas no Supabase.'}` },
+        { success: false, error: `Erro no banco de dados: ${insertError.message}` },
         { status: 500 }
       );
     }
@@ -169,7 +182,7 @@ export async function POST(req: NextRequest) {
           .select('id, sigla');
 
         const siglaToIdMap = new Map(
-          (dbConcursos || []).map((c) => [c.sigla.toLowerCase(), c.id])
+          (dbConcursos || []).map((c: any) => [c.sigla.toLowerCase(), c.id])
         );
 
         const favoritosData = (concursos_interesse || [])
@@ -186,7 +199,7 @@ export async function POST(req: NextRequest) {
                 }
               : null;
           })
-          .filter((item): item is { user_id: any; concurso_id: any; ordem: number } => item !== null);
+          .filter((item: any): item is { user_id: any; concurso_id: any; ordem: number } => item !== null);
 
         if (favoritosData.length > 0) {
           await supabase.from('user_concurso_favoritos').insert(favoritosData);
@@ -197,15 +210,17 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Gerar token de verificação de e-mail ─────────────────
-    const emailToken = generateEmailToken();
-    await supabase.from('email_verification_tokens').insert({
-      user_id: newUser.id,
-      token: emailToken,
-      expira_em: getEmailTokenExpiry().toISOString(),
-      usado: false,
-    });
-
-    console.log(`[DEV] Email verification token for ${email}: ${emailToken}`);
+    try {
+      const emailToken = generateEmailToken();
+      await supabase.from('email_verification_tokens').insert({
+        user_id: newUser.id,
+        token: emailToken,
+        expira_em: getEmailTokenExpiry().toISOString(),
+        usado: false,
+      });
+    } catch (emailTokenErr) {
+      console.warn('Warning saving email token:', emailTokenErr);
+    }
 
     // ─── Gerar tokens de autenticação ─────────────────────────
     const accessToken = await generateAccessToken(newUser.id, newUser.role);
@@ -233,7 +248,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Register error:', error);
     return NextResponse.json(
-      { success: false, error: error?.message || 'Erro interno do servidor ao criar conta' },
+      { success: false, error: `Erro interno: ${error?.message || 'desconhecido'}` },
       { status: 500 }
     );
   }
