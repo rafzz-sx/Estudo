@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
-import { StudySessionTracker, StudySessionBadge } from "@/components/StudySessionWidget";
+import { useStudySessionStore } from "@/stores/study-session-store";
+import { StudySessionBadge } from "@/components/StudySessionWidget";
 
 // ─── Links do menu ───────────────────────────────────────────
 const navLinksBase = [
@@ -28,7 +29,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Dados REAIS do auth store
   const storeUser = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
+
+  // 1. Sincronizar dados do usuário (avatar, banner, bio, stats) do Supabase
+  useEffect(() => {
+    const syncProfile = async () => {
+      try {
+        const res = await fetch("/api/usuarios/me");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            updateUser(json.data);
+          }
+        }
+      } catch (e) {
+        console.warn("Erro ao sincronizar perfil:", e);
+      }
+    };
+    syncProfile();
+  }, [updateUser]);
 
   const userApelido = storeUser?.apelido || storeUser?.nome || "Soldado";
   const userNivel = storeUser?.nivel_atual || 1;
@@ -50,9 +70,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bat-bg flex">
-      {/* ═══ TRACKER GLOBAL DE SESSÃO AUTOMÁTICA (LIMITE 8H) ═══ */}
-      <StudySessionTracker />
-
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
         {/* Logo */}
@@ -60,16 +77,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <BatBrand iconSize={36} textSize="text-xl" className="!items-start" />
         </div>
 
-        {/* Widget de Sessão na Sidebar */}
+        {/* Status de Estudo na Sidebar */}
         <div className="px-4 py-3 border-b border-bat-border/50 bg-bat-bg-secondary/40">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-bat-text-secondary uppercase tracking-wider">
-              Sessão de Estudo
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-bold text-bat-text-secondary uppercase tracking-wider">
+              Central de Estudo
             </span>
           </div>
-          <div className="mt-2">
-            <StudySessionBadge />
-          </div>
+          <StudySessionBadge />
         </div>
 
         {/* Nav links */}
@@ -96,7 +111,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Usuário no rodapé */}
         <div className="px-4 py-4 border-t border-bat-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden">
+            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden flex-shrink-0">
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -134,7 +149,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2.5">
             <StudySessionBadge />
-            <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden">
+            <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -165,9 +180,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             
-            {/* Sessão no mobile menu */}
             <div className="p-3 mx-3 mt-3 bg-bat-bg-secondary/60 border border-bat-border rounded-xl">
-              <p className="text-[10px] text-bat-text-muted mb-1.5 uppercase font-semibold">Sessão Automática 8h</p>
+              <p className="text-[10px] text-bat-text-muted mb-1.5 uppercase font-semibold">Central de Estudo</p>
               <StudySessionBadge />
             </div>
 

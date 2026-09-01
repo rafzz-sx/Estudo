@@ -4,7 +4,10 @@ import { verifyAccessToken } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    token = req.cookies.get('bat_access_token')?.value;
+  }
   if (!token) return null;
   const payload = await verifyAccessToken(token);
   return payload?.sub || null;
@@ -25,10 +28,7 @@ export async function GET(req: NextRequest) {
         id, nome, apelido, email, email_verified,
         avatar_url, banner_url, banner_tipo, bio,
         data_nascimento, role, xp_total, nivel_atual,
-        maior_combo_pessoal, streak_dias, ultimo_dia_estudado, criado_em,
-        user_concurso_favoritos (concursos (id, sigla, nome, icone_url, brasao_url)),
-        user_categoria_escrita (texto),
-        user_badges (badges (id, nome, descricao, icone))
+        maior_combo_pessoal, streak_dias, ultimo_dia_estudado, criado_em
       `)
       .eq('id', userId)
       .single();
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     // 2. Calcular nível exato e progresso de XP
     const nivelCalculado = calcularNivel(user.xp_total || 0);
 
-    // 3. Buscar tempo total de estudo
+    // 3. Buscar tempo total de estudo real
     const { data: sessions } = await supabase
       .from('study_sessions')
       .select('duracao_segundos')
@@ -96,9 +96,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
     }
 
-    const updates: Record<string, any> = {};
-    if (nome !== undefined) updates.nome = nome.trim();
-    if (bio !== undefined) updates.bio = bio?.trim() || null;
+    const updates: Record<string, any> = {
+      atualizado_em: new Date().toISOString(),
+    };
+
+    if (nome !== undefined && nome !== null) updates.nome = nome.trim();
+    if (bio !== undefined) updates.bio = bio ? bio.trim() : null;
     if (banner_url !== undefined) updates.banner_url = banner_url;
     if (banner_tipo !== undefined) updates.banner_tipo = banner_tipo;
     if (avatar_url !== undefined) updates.avatar_url = avatar_url;
@@ -116,44 +119,31 @@ export async function PATCH(req: NextRequest) {
         .select('id')
         .eq('apelido', novoApelido)
         .neq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (exist) {
         return NextResponse.json({ success: false, error: 'Este apelido já está em uso por outro aluno' }, { status: 409 });
       }
 
       updates.apelido = novoApelido;
-
-      // Registrar no log de auditoria o apelido antigo para histórico do admin
-      await supabase.from('admin_audit_logs').insert({
-        admin_id: userId,
-        alvo_tipo: 'user',
-        alvo_id: userId,
-        acao: 'troca_apelido',
-        detalhes_json: {
-          apelido_antigo: currentUser.apelido,
-          apelido_novo: novoApelido,
-          data: new Date().toISOString(),
-        },
-      });
     }
 
     const { data: updatedUser, error: updateErr } = await supabase
       .from('users')
       .update(updates)
       .eq('id', userId)
-      .select('id, nome, apelido, email, bio, avatar_url, banner_url, banner_tipo, role, xp_total, nivel_atual')
+      .select('id, nome, apelido, email, bio, avatar_url, banner_url, banner_tipo, role, xp_total, nivel_atual, streak_dias, maior_combo_pessoal')
       .single();
 
     if (updateErr) {
-      console.error('Error updating user profile:', updateErr);
-      return NextResponse.json({ success: false, error: 'Erro ao atualizar perfil' }, { status: 500 });
+      console.error('Error updating user profile in Supabase:', updateErr);
+      return NextResponse.json({ success: false, error: 'Erro ao salvar perfil no banco' }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       data: updatedUser,
-      message: 'Perfil atualizado com sucesso!',
+      message: 'Perfil atualizado e salvo com sucesso!',
     });
   } catch (error) {
     console.error('PATCH /api/usuarios/me error:', error);

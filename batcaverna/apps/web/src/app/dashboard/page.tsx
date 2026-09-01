@@ -91,6 +91,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
+
+    // Buscar tempo total e status de estudo atualizados do Supabase
+    const fetchStudyStats = async () => {
+      try {
+        const res = await fetch('/api/study-sessions/status');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            useStudySessionStore.setState({
+              tempoEstudoTotal: json.data.tempo_estudo_total_segundos || 0,
+              tempoEstudoHoje: json.data.tempo_estudo_hoje_segundos || 0,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao atualizar estatísticas de estudo:', e);
+      }
+    };
+
+    fetchStudyStats();
   }, []);
 
   // Dados REAIS do usuário autenticado

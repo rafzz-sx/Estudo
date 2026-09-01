@@ -10,6 +10,7 @@ interface AuthUser {
   email_verified: boolean;
   avatar_url: string | null;
   banner_url: string | null;
+  banner_tipo?: 'imagem' | 'gif' | 'video' | null;
   bio: string | null;
   role: 'user' | 'admin';
   xp_total: number;

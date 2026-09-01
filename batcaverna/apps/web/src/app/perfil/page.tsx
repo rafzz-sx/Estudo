@@ -6,8 +6,14 @@ import { useAuthStore } from "@/stores/auth-store";
 function formatarTempo(seg: number): string {
   if (seg <= 0) return "0min";
   const h = Math.floor(seg / 3600);
-  if (h >= 24) { const d = Math.floor(h / 24); return `${d} dias`; }
-  return `${h}h`;
+  const m = Math.floor((seg % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const hr = h % 24;
+    return hr > 0 ? `${d}d ${hr}h` : `${d}d`;
+  }
+  if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  return `${m}min`;
 }
 
 function getTituloNivel(nivel: number): string {
@@ -19,10 +25,9 @@ function getTituloNivel(nivel: number): string {
   return "Recruta da Caverna";
 }
 
-// Tipos de mídia aceitos no banner (estilo Discord Nitro)
 const BANNER_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm";
 const AVATAR_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 
 type TabPerfil = "visao_geral" | "badges" | "config";
 
@@ -34,6 +39,7 @@ export default function PerfilPage() {
   const [msgFeedback, setMsgFeedback] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [tempoTotalEstudo, setTempoTotalEstudo] = useState(0);
 
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
@@ -48,15 +54,52 @@ export default function PerfilPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
+  // 1. Carregar perfil atualizado diretamente do Supabase
+  const carregarPerfil = async () => {
+    try {
+      const res = await fetch("/api/usuarios/me");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const d = json.data;
+          setNome(d.nome || "");
+          setApelido(d.apelido || "");
+          setBio(d.bio || "");
+          setAvatarPreview(d.avatar_url || null);
+          setBannerPreview(d.banner_url || null);
+          setTempoTotalEstudo(d.tempo_total_estudo || 0);
+
+          updateUser({
+            nome: d.nome,
+            apelido: d.apelido,
+            bio: d.bio,
+            avatar_url: d.avatar_url,
+            banner_url: d.banner_url,
+            banner_tipo: d.banner_tipo,
+            xp_total: d.xp_total,
+            nivel_atual: d.nivel_atual,
+            streak_dias: d.streak_dias,
+            maior_combo_pessoal: d.maior_combo_pessoal,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar perfil atualizado:", e);
+    }
+  };
+
+  useEffect(() => {
+    setTimeout(() => setVisible(true), 100);
+    carregarPerfil();
+  }, []);
 
   useEffect(() => {
     if (user) {
-      setNome(user.nome || "");
-      setApelido(user.apelido || "");
-      setBio(user.bio || "");
-      setAvatarPreview(user.avatar_url || null);
-      setBannerPreview(user.banner_url || null);
+      if (!nome) setNome(user.nome || "");
+      if (!apelido) setApelido(user.apelido || "");
+      if (!bio && user.bio) setBio(user.bio);
+      if (!avatarPreview && user.avatar_url) setAvatarPreview(user.avatar_url);
+      if (!bannerPreview && user.banner_url) setBannerPreview(user.banner_url);
     }
   }, [user]);
 
@@ -64,53 +107,111 @@ export default function PerfilPage() {
   useEffect(() => {
     if (bannerPreview) {
       setBannerIsVideo(
-        bannerPreview.endsWith(".mp4") || bannerPreview.endsWith(".webm") ||
+        bannerPreview.endsWith(".mp4") ||
+        bannerPreview.endsWith(".webm") ||
         bannerPreview.startsWith("data:video/")
       );
     }
   }, [bannerPreview]);
 
-  const handleFileSelect = (file: File, type: "avatar" | "banner") => {
+  // 2. Upload e Salvamento Instantâneo de Foto e Banner no Supabase
+  const handleFileSelect = async (file: File, type: "avatar" | "banner") => {
     if (file.size > MAX_FILE_SIZE) {
-      setMsgFeedback("⚠️ Arquivo muito grande! Máximo 10MB.");
+      setMsgFeedback("⚠️ Arquivo muito grande! Máximo 15MB.");
       setTimeout(() => setMsgFeedback(null), 4000);
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
       if (type === "avatar") {
-        setAvatarPreview(result);
+        setAvatarPreview(dataUrl);
         setUploadingAvatar(true);
-        // Simular upload (futuramente conectar ao Supabase Storage)
-        setTimeout(() => {
+        setMsgFeedback("⏳ Salvando foto de perfil no banco de dados...");
+
+        try {
+          const res = await fetch("/api/usuarios/me", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ avatar_url: dataUrl }),
+          });
+
+          if (res.ok) {
+            updateUser({ avatar_url: dataUrl });
+            setMsgFeedback("✓ Foto de perfil salva com sucesso!");
+          } else {
+            setMsgFeedback("⚠️ Erro ao salvar foto no servidor.");
+          }
+        } catch {
+          setMsgFeedback("⚠️ Falha ao salvar foto.");
+        } finally {
           setUploadingAvatar(false);
-          setMsgFeedback("✓ Foto de perfil atualizada!");
-          setTimeout(() => setMsgFeedback(null), 3000);
-        }, 1200);
+          setTimeout(() => setMsgFeedback(null), 3500);
+        }
       } else {
-        setBannerPreview(result);
-        setBannerIsVideo(file.type.startsWith("video/"));
+        const isVideo = file.type.startsWith("video/") || file.name.endsWith(".mp4") || file.name.endsWith(".webm");
+        const isGif = file.type === "image/gif" || file.name.endsWith(".gif");
+        const tipo = isVideo ? "video" : isGif ? "gif" : "imagem";
+
+        setBannerPreview(dataUrl);
+        setBannerIsVideo(isVideo);
         setUploadingBanner(true);
-        setTimeout(() => {
+        setMsgFeedback("⏳ Salvando banner no banco de dados...");
+
+        try {
+          const res = await fetch("/api/usuarios/me", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ banner_url: dataUrl, banner_tipo: tipo }),
+          });
+
+          if (res.ok) {
+            updateUser({ banner_url: dataUrl, banner_tipo: tipo });
+            setMsgFeedback("✓ Banner salvo com sucesso!");
+          } else {
+            setMsgFeedback("⚠️ Erro ao salvar banner no servidor.");
+          }
+        } catch {
+          setMsgFeedback("⚠️ Falha ao salvar banner.");
+        } finally {
           setUploadingBanner(false);
-          setMsgFeedback("✓ Banner atualizado!");
-          setTimeout(() => setMsgFeedback(null), 3000);
-        }, 1200);
+          setTimeout(() => setMsgFeedback(null), 3500);
+        }
       }
     };
     reader.readAsDataURL(file);
   };
 
+  // 3. Salvar Informações de Texto (Nome, Apelido, Bio)
   const handleSalvarPerfil = async () => {
     setSalvando(true);
     setMsgFeedback(null);
     try {
-      // Futuramente: enviar para API
-      setMsgFeedback("✓ Perfil salvo com sucesso!");
+      const res = await fetch("/api/usuarios/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome,
+          apelido,
+          bio,
+          avatar_url: avatarPreview,
+          banner_url: bannerPreview,
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        updateUser(json.data);
+        setMsgFeedback("✓ Perfil e alterações salvas com sucesso!");
+        setEditandoBio(false);
+      } else {
+        setMsgFeedback(`⚠️ ${json.error || "Erro ao salvar perfil"}`);
+      }
     } catch {
-      setMsgFeedback("⚠️ Erro ao salvar perfil");
+      setMsgFeedback("⚠️ Erro de conexão ao salvar perfil");
     } finally {
       setSalvando(false);
       setTimeout(() => setMsgFeedback(null), 4000);
@@ -120,7 +221,6 @@ export default function PerfilPage() {
   const nivel = user?.nivel_atual || 1;
   const xp = user?.xp_total ?? 0;
   const streak = user?.streak_dias ?? 0;
-  const maiorCombo = user?.maior_combo_pessoal ?? 0;
   const titulo = getTituloNivel(nivel);
   const displayApelido = user?.apelido || apelido || "Soldado";
   const displayNome = user?.nome || nome || "";
@@ -131,7 +231,7 @@ export default function PerfilPage() {
       <div className="relative mb-16">
         {/* Banner (clicável para upload — suporta imagem, GIF, vídeo) */}
         <div
-          className="h-40 rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer"
+          className="h-44 sm:h-52 rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
           onClick={() => bannerInputRef.current?.click()}
         >
           {bannerPreview && bannerIsVideo ? (
@@ -159,10 +259,10 @@ export default function PerfilPage() {
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <div className="text-center">
               <span className="text-white text-2xl block mb-1">📷</span>
-              <span className="text-white text-xs font-medium">
-                {uploadingBanner ? "Enviando..." : "Trocar Banner"}
+              <span className="text-white text-xs font-semibold">
+                {uploadingBanner ? "Salvando Banner..." : "Trocar Banner"}
               </span>
-              <span className="text-white/60 text-[10px] block mt-0.5">
+              <span className="text-white/70 text-[10px] block mt-0.5">
                 Imagem, GIF animado ou Vídeo (MP4/WebM)
               </span>
             </div>
@@ -183,7 +283,7 @@ export default function PerfilPage() {
         {/* Avatar (clicável para upload — suporta imagem e GIF) */}
         <div className="absolute -bottom-12 left-6 flex items-end gap-4">
           <div
-            className="relative w-24 h-24 rounded-2xl bg-bat-bg-card border-4 border-bat-bg shadow-xl overflow-hidden group cursor-pointer"
+            className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-bat-bg-card border-4 border-bat-bg shadow-xl overflow-hidden group cursor-pointer"
             onClick={() => avatarInputRef.current?.click()}
           >
             {avatarPreview ? (
@@ -200,8 +300,8 @@ export default function PerfilPage() {
 
             {/* Overlay de upload */}
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
-              <span className="text-white text-sm">
-                {uploadingAvatar ? "⏳" : "📷"}
+              <span className="text-white text-xs font-bold text-center px-1">
+                {uploadingAvatar ? "Salvando..." : "Trocar Foto"}
               </span>
             </div>
           </div>
@@ -218,15 +318,15 @@ export default function PerfilPage() {
           />
 
           <div className="pb-1">
-            <h1 className="heading text-xl text-bat-text font-bold">{displayApelido}</h1>
+            <h1 className="heading text-xl sm:text-2xl text-bat-text font-bold">{displayApelido}</h1>
             <p className="text-bat-text-secondary text-sm">{displayNome}</p>
           </div>
         </div>
       </div>
 
-      {/* Feedback */}
+      {/* Feedback de Mensagem */}
       {msgFeedback && (
-        <div className={`mb-4 p-3 rounded-xl text-xs font-bold ${
+        <div className={`mb-4 p-3.5 rounded-xl text-xs font-bold ${
           msgFeedback.startsWith("⚠️")
             ? "bg-bat-error/15 border border-bat-error/30 text-bat-error"
             : "bg-bat-success/15 border border-bat-success/30 text-bat-success"
@@ -262,10 +362,16 @@ export default function PerfilPage() {
             <div className="flex items-center justify-between mb-2">
               <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider">Bio</h3>
               <button
-                onClick={() => setEditandoBio(!editandoBio)}
+                onClick={() => {
+                  if (editandoBio) {
+                    handleSalvarPerfil();
+                  } else {
+                    setEditandoBio(true);
+                  }
+                }}
                 className="text-bat-gold-400 text-xs hover:underline cursor-pointer font-medium"
               >
-                {editandoBio ? "Salvar" : "Editar"}
+                {editandoBio ? "Salvar Bio ⚡" : "Editar"}
               </button>
             </div>
             {editandoBio ? (
@@ -274,7 +380,7 @@ export default function PerfilPage() {
                 onChange={(e) => setBio(e.target.value.slice(0, 150))}
                 maxLength={150}
                 className="input-field text-sm resize-none h-20"
-                placeholder="Escreva algo sobre você..."
+                placeholder="Escreva sua bio de combate..."
               />
             ) : (
               <p className="text-bat-text text-sm">{bio || "Sem bio ainda. Clique em Editar para adicionar!"}</p>
@@ -282,7 +388,7 @@ export default function PerfilPage() {
             {editandoBio && <p className="text-bat-text-muted text-xs mt-1">{(bio?.length || 0)}/150</p>}
           </div>
 
-          {/* Stats (dados reais) */}
+          {/* Stats Reais */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-bat-bg-card border border-bat-border rounded-xl p-4 text-center">
               <p className="heading text-2xl text-bat-gold-400 font-bold">Nv. {nivel}</p>
@@ -294,11 +400,11 @@ export default function PerfilPage() {
             </div>
             <div className="bg-bat-bg-card border border-bat-border rounded-xl p-4 text-center">
               <p className="heading text-2xl text-bat-text font-bold">0</p>
-              <p className="text-bat-text-muted text-xs">Questões</p>
+              <p className="text-bat-text-muted text-xs">Questões resolvidas</p>
             </div>
             <div className="bg-bat-bg-card border border-bat-border rounded-xl p-4 text-center">
-              <p className="heading text-2xl text-bat-text font-bold">0min</p>
-              <p className="text-bat-text-muted text-xs">Tempo de estudo</p>
+              <p className="heading text-2xl text-bat-text font-bold">{formatarTempo(tempoTotalEstudo)}</p>
+              <p className="text-bat-text-muted text-xs">Tempo Real de Estudo</p>
             </div>
           </div>
 
@@ -338,7 +444,7 @@ export default function PerfilPage() {
       {/* ═══ CONFIGURAÇÕES ═══ */}
       {tab === "config" && (
         <div className="space-y-4 max-w-lg">
-          {/* Upload de mídia */}
+          {/* Upload de Foto e Banner */}
           <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
             <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-4">Foto & Banner</h3>
             <div className="space-y-3">
@@ -357,7 +463,7 @@ export default function PerfilPage() {
                 <span className="text-bat-text-muted text-[10px]">(PNG, JPG, GIF, MP4, WebM)</span>
               </button>
               <p className="text-bat-text-muted text-[11px] text-center">
-                💡 Suporta GIFs animados e vídeos curtos no banner, igual ao Discord Nitro!
+                💡 Suporta GIFs animados e vídeos no banner. Todas as mídias ficam salvas permanentemente na sua conta.
               </p>
             </div>
           </div>

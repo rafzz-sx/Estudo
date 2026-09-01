@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import {
+  useStudySessionStore,
+  formatarSegundosParaTimer,
+} from "@/stores/study-session-store";
 
 interface AssuntoItem {
   id: string;
@@ -106,7 +110,6 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
   ],
 };
 
-
 export default function TrilhaConcursoPage() {
   const params = useParams();
   const siglaParam = (params?.sigla as string)?.toLowerCase() || "eear";
@@ -116,6 +119,44 @@ export default function TrilhaConcursoPage() {
   const [materias, setMaterias] = useState<MateriaTrilha[]>(trilhaData);
   const [assuntoAberto, setAssuntoAberto] = useState<string | null>("p1");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+
+  // ═══ TEMPORIZADOR DE ESTUDO EXCLUSIVO DA TRILHA ═══
+  const {
+    isActive,
+    isPaused,
+    duracaoSegundos,
+    multiplicador,
+    xpGanhoNaSessao,
+    initSession,
+    sendHeartbeat,
+    tick,
+    pauseSession,
+    resumeSession,
+    stopSession,
+  } = useStudySessionStore();
+
+  // 1. Iniciar sessão de estudo ao entrar na trilha
+  useEffect(() => {
+    initSession();
+
+    // Cronômetro ativo na trilha (1 segundo)
+    const timerInterval = setInterval(() => {
+      tick();
+    }, 1000);
+
+    // Heartbeat a cada 30 segundos
+    const heartbeatInterval = setInterval(() => {
+      sendHeartbeat();
+    }, 30000);
+
+    // 2. Ao sair da trilha: salvar e pausar sessão para não contar tempo fora da trilha
+    return () => {
+      clearInterval(timerInterval);
+      clearInterval(heartbeatInterval);
+      sendHeartbeat();
+      pauseSession();
+    };
+  }, [initSession, sendHeartbeat, tick, pauseSession]);
 
   // Estatísticas de progresso
   const todosAssuntos = materias.flatMap((m) => m.assuntos);
@@ -143,6 +184,54 @@ export default function TrilhaConcursoPage() {
 
   return (
     <div className="space-y-6">
+      {/* ═══ BARRA DE ESTUDO ATIVO NA TRILHA (TEMPORIZADOR REAL) ═══ */}
+      <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className={`w-3.5 h-3.5 rounded-full ${isPaused ? "bg-amber-400" : "bg-bat-success animate-pulse"}`} />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-bat-text-secondary">
+                {isPaused ? "Estudo Pausado" : `Estudando Trilha ${siglaUpper}`}
+              </span>
+              {multiplicador > 1 && (
+                <span className="text-[10px] font-bold bg-bat-gold-400 text-black px-1.5 py-0.5 rounded shadow-sm">
+                  {multiplicador}x XP BÔNUS
+                </span>
+              )}
+            </div>
+            <p className="heading text-2xl font-mono font-bold text-bat-gold-400">
+              {formatarSegundosParaTimer(duracaoSegundos)}
+            </p>
+          </div>
+        </div>
+
+        {/* Informações de Bônus e Ações */}
+        <div className="flex items-center gap-3 self-end md:self-center">
+          <div className="text-right hidden sm:block">
+            <p className="text-[11px] text-bat-text-muted">XP Acumulado na Trilha</p>
+            <p className="text-sm font-bold text-bat-text">+{xpGanhoNaSessao} XP</p>
+          </div>
+
+          <div className="flex gap-2">
+            {isPaused ? (
+              <button
+                onClick={() => resumeSession()}
+                className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5"
+              >
+                ▶️ Retomar
+              </button>
+            ) : (
+              <button
+                onClick={() => pauseSession()}
+                className="py-2 px-4 rounded-xl text-xs font-semibold bg-bat-bg-secondary border border-bat-border hover:bg-bat-bg-elevated text-bat-text transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                ⏸️ Pausar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ═══ CABEÇALHO & PROGRESSO ═══ */}
       <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
