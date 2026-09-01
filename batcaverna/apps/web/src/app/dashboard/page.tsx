@@ -4,16 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BatLogo } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
+import { useStudySessionStore, formatarTempoLegivel } from "@/stores/study-session-store";
+import { StudySessionBadge } from "@/components/StudySessionWidget";
 
-// ─── Formatar tempo ──────────────────────────────────────────
-function formatarTempo(segundos: number): string {
-  if (segundos <= 0) return "0min";
-  const h = Math.floor(segundos / 3600);
-  const m = Math.floor((segundos % 3600) / 60);
-  if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`;
-  return `${m}min`;
-}
-
+// ─── Título de nível ─────────────────────────────────────────
 function getTituloNivel(nivel: number): string {
   if (nivel >= 15) return "Rei da Batcaverna";
   if (nivel >= 10) return "General Estrategista";
@@ -91,11 +85,15 @@ export default function DashboardPage() {
   const [visible, setVisible] = useState(false);
   const user = useAuthStore((state) => state.user);
 
+  // Sessão de estudo automática (limite 8h)
+  const tempoEstudoTotal = useStudySessionStore((state) => state.tempoEstudoTotal);
+  const tempoEstudoHoje = useStudySessionStore((state) => state.tempoEstudoHoje);
+
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
   }, []);
 
-  // Dados REAIS do usuário autenticado (começa tudo em 0 para conta nova)
+  // Dados REAIS do usuário autenticado
   const apelido = user?.apelido || user?.nome || "Soldado";
   const role = user?.role || "user";
   const nivel = user?.nivel_atual || 1;
@@ -107,7 +105,7 @@ export default function DashboardPage() {
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO ═══ */}
+      {/* ═══ CABEÇALHO COM BADGE DE SESSÃO AUTOMÁTICA (8H) ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -125,6 +123,11 @@ export default function DashboardPage() {
             Vamos dominar mais um dia de estudos? 💪
           </p>
         </div>
+
+        {/* Widget de Sessão Automática de 8h */}
+        <div className="self-start sm:self-center">
+          <StudySessionBadge variant="full" />
+        </div>
       </div>
 
       {/* ═══ BARRA DE XP ═══ */}
@@ -135,20 +138,20 @@ export default function DashboardPage() {
         titulo={titulo}
       />
 
-      {/* ═══ CARDS ESTATÍSTICOS ═══ */}
+      {/* ═══ CARDS ESTATÍSTICOS (DADOS REAIS COM TEMPO AUTOMÁTICO) ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon="🔥"
           label="Streak"
           value={streak > 0 ? `${streak} dias` : "0 dias"}
-          sub={streak > 0 ? "Não perca a sequência!" : "Comece a estudar hoje!"}
+          sub={streak > 0 ? "Não perca a sequência!" : "Estude hoje para pontuar!"}
           glowColor="gold"
         />
         <StatCard
           icon="⏱️"
           label="Tempo Total"
-          value="0min"
-          sub="Comece uma sessão de estudo"
+          value={formatarTempoLegivel(tempoEstudoTotal)}
+          sub={tempoEstudoHoje > 0 ? `Hoje: ${formatarTempoLegivel(tempoEstudoHoje)}` : "Sessão automática de até 8h"}
           glowColor="gold"
         />
         <StatCard

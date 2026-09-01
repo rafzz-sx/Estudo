@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { verifyAccessToken } from '@/lib/auth';
 
-// ─── Extrair user_id do token ────────────────────────────────
+const LIMITE_MAXIMO_SESSAO_SEGUNDOS = 8 * 3600; // 8 horas = 28.800 segundos
+
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    token = req.cookies.get('bat_access_token')?.value;
+  }
   if (!token) return null;
   const payload = await verifyAccessToken(token);
   return payload?.sub || null;
 }
 
-// POST /api/study-sessions/start — Iniciar sessão de estudo
+// POST /api/study-sessions/start — Iniciar sessão de estudo automática (limite 8h)
 export async function POST(req: NextRequest) {
   try {
     const userId = await getUserFromRequest(req);
@@ -24,20 +28,37 @@ export async function POST(req: NextRequest) {
     // Verificar se já existe sessão ativa
     const { data: existingSession } = await supabase
       .from('study_sessions')
-      .select('id')
+      .select('*')
       .eq('user_id', userId)
       .is('finalizada_em', null)
-      .single();
+      .order('iniciada_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (existingSession) {
-      return NextResponse.json({
-        success: true,
-        data: { session_id: existingSession.id },
-        message: 'Sessão já ativa.',
-      });
+      // Se a sessão existente já atingiu ou ultrapassou 8 horas, finalizá-la
+      if ((existingSession.duracao_segundos || 0) >= LIMITE_MAXIMO_SESSAO_SEGUNDOS) {
+        await supabase
+          .from('study_sessions')
+          .update({ finalizada_em: new Date().toISOString() })
+          .eq('id', existingSession.id);
+      } else {
+        return NextResponse.json({
+          success: true,
+          data: {
+            session_id: existingSession.id,
+            duracao_segundos: existingSession.duracao_segundos || 0,
+            multiplicador: existingSession.multiplicador_continuidade_atual || 1.0,
+            xp_ganho_na_sessao: existingSession.xp_ganho_na_sessao || 0,
+            tempo_restante_8h_segundos: Math.max(0, LIMITE_MAXIMO_SESSAO_SEGUNDOS - (existingSession.duracao_segundos || 0)),
+            limite_8h_segundos: LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+          },
+          message: 'Sessão de estudo ativa recuperada!',
+        });
+      }
     }
 
-    // Criar nova sessão
+    // Criar nova sessão com limite de 8h
     const { data: newSession, error } = await supabase
       .from('study_sessions')
       .insert({
@@ -47,16 +68,25 @@ export async function POST(req: NextRequest) {
         blocos_continuos_completados: 0,
         multiplicador_continuidade_atual: 1.0,
         xp_ganho_na_sessao: 0,
+        iniciada_em: new Date().toISOString(),
+        ultima_atividade_em: new Date().toISOString(),
       })
-      .select('id')
+      .select('*')
       .single();
 
     if (error) throw error;
 
     return NextResponse.json({
       success: true,
-      data: { session_id: newSession.id },
-      message: 'Sessão de estudo iniciada!',
+      data: {
+        session_id: newSession.id,
+        duracao_segundos: 0,
+        multiplicador: 1.0,
+        xp_ganho_na_sessao: 0,
+        tempo_restante_8h_segundos: LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+        limite_8h_segundos: LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+      },
+      message: 'Sessão automática de estudo iniciada (limite 8h)!',
     }, { status: 201 });
   } catch (error) {
     console.error('POST /api/study-sessions/start error:', error);

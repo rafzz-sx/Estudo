@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { verifyAccessToken } from '@/lib/auth';
 
+const LIMITE_MAXIMO_SESSAO_SEGUNDOS = 8 * 3600; // 8 horas = 28.800 segundos
+
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    token = req.cookies.get('bat_access_token')?.value;
+  }
   if (!token) return null;
   const payload = await verifyAccessToken(token);
   return payload?.sub || null;
 }
 
-// POST /api/study-sessions/heartbeat — Heartbeat a cada 30-60s
+// POST /api/study-sessions/heartbeat — Heartbeat periódico com limite automático de 8 horas
 export async function POST(req: NextRequest) {
   try {
     const userId = await getUserFromRequest(req);
@@ -23,84 +28,99 @@ export async function POST(req: NextRequest) {
       .select('*')
       .eq('user_id', userId)
       .is('finalizada_em', null)
-      .single();
+      .order('iniciada_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (sessErr || !session) {
       return NextResponse.json({ success: false, error: 'Nenhuma sessão ativa' }, { status: 404 });
     }
 
-    // Verificar inatividade (5 min sem heartbeat → pausar)
     const agora = new Date();
-    const ultimaAtividade = new Date(session.ultima_atividade_em);
-    const diffSegundos = Math.floor((agora.getTime() - ultimaAtividade.getTime()) / 1000);
+    const ultimaAtividade = new Date(session.ultima_atividade_em || session.iniciada_em);
+    let diffSegundos = Math.max(0, Math.floor((agora.getTime() - ultimaAtividade.getTime()) / 1000));
 
+    // Se houve mais de 5 min (300s) sem heartbeat, limitar o intervalo
     if (diffSegundos > 300) {
-      // Inativo por 5+ min → finalizar sessão automaticamente
-      await supabase
-        .from('study_sessions')
-        .update({
-          finalizada_em: ultimaAtividade.toISOString(),
-          duracao_segundos: session.duracao_segundos,
-        })
-        .eq('id', session.id);
-
-      return NextResponse.json({
-        success: false,
-        error: 'Sessão finalizada por inatividade',
-        data: { duracao_segundos: session.duracao_segundos },
-      }, { status: 410 });
+      diffSegundos = 30; // Tratar como intervalo normal
     }
 
     // Calcular nova duração
-    const novaDuracao = session.duracao_segundos + diffSegundos;
+    let novaDuracao = (session.duracao_segundos || 0) + diffSegundos;
+    let atingiuLimite8Horas = false;
 
-    // Calcular blocos de 15min contínuos
+    // ═══ REGRA DE SESSÃO AUTOMÁTICA DE 8 HORAS ═══
+    if (novaDuracao >= LIMITE_MAXIMO_SESSAO_SEGUNDOS) {
+      novaDuracao = LIMITE_MAXIMO_SESSAO_SEGUNDOS;
+      atingiuLimite8Horas = true;
+    }
+
+    // Calcular blocos de 15min contínuos (900s)
     const blocos15Min = Math.floor(novaDuracao / 900);
-    const novosBlocos = blocos15Min - session.blocos_continuos_completados;
+    const novosBlocos = Math.max(0, blocos15Min - (session.blocos_continuos_completados || 0));
 
-    // Multiplicador de continuidade (seção 8.2): +10% a cada 15min, até +50%
+    // Multiplicador de continuidade: +10% a cada 15min, até +50% (1.5x)
     const multiplicador = Math.min(1 + blocos15Min * 0.1, 1.5);
 
-    // XP base: 1 XP por minuto de estudo × multiplicador
-    const xpGanho = Math.floor((diffSegundos / 60) * multiplicador);
-    const novoXpSessao = session.xp_ganho_na_sessao + xpGanho;
+    // XP: 1 XP por minuto de estudo x multiplicador
+    const xpGanhoNesteIntervalo = Math.max(0, Math.round((diffSegundos / 60) * multiplicador));
+    const novoXpSessao = (session.xp_ganho_na_sessao || 0) + xpGanhoNesteIntervalo;
+
+    const updatePayload: Record<string, any> = {
+      ultima_atividade_em: agora.toISOString(),
+      duracao_segundos: novaDuracao,
+      blocos_continuos_completados: blocos15Min,
+      multiplicador_continuidade_atual: multiplicador,
+      xp_ganho_na_sessao: novoXpSessao,
+    };
+
+    if (atingiuLimite8Horas) {
+      updatePayload.finalizada_em = agora.toISOString();
+    }
 
     // Atualizar sessão
     await supabase
       .from('study_sessions')
-      .update({
-        ultima_atividade_em: agora.toISOString(),
-        duracao_segundos: novaDuracao,
-        blocos_continuos_completados: blocos15Min,
-        multiplicador_continuidade_atual: multiplicador,
-        xp_ganho_na_sessao: novoXpSessao,
-      })
+      .update(updatePayload)
       .eq('id', session.id);
 
-    // Atualizar XP total do usuário
-    if (xpGanho > 0) {
+    // Atualizar XP total do usuário e último dia estudado
+    if (xpGanhoNesteIntervalo > 0) {
       try {
-        await supabase.rpc('increment_user_xp', {
-          p_user_id: userId,
-          p_xp: xpGanho,
-        });
-      } catch {
-        // Fallback se a RPC não existir
+        const { data: userData } = await supabase
+          .from('users')
+          .select('xp_total')
+          .eq('id', userId)
+          .single();
+
+        const xpAtual = userData?.xp_total || 0;
         await supabase
           .from('users')
-          .update({ xp_total: session.xp_ganho_na_sessao + xpGanho })
+          .update({
+            xp_total: xpAtual + xpGanhoNesteIntervalo,
+            ultimo_dia_estudado: agora.toISOString().split('T')[0],
+          })
           .eq('id', userId);
+      } catch (err) {
+        console.warn('Aviso ao atualizar XP do usuário:', err);
       }
     }
+
+    const tempoRestante8h = Math.max(0, LIMITE_MAXIMO_SESSAO_SEGUNDOS - novaDuracao);
 
     return NextResponse.json({
       success: true,
       data: {
+        session_id: session.id,
         duracao_segundos: novaDuracao,
-        xp_ganho: xpGanho,
+        tempo_restante_8h_segundos: tempoRestante8h,
+        limite_8h_atingido: atingiuLimite8Horas,
+        xp_ganho_intervalo: xpGanhoNesteIntervalo,
+        xp_ganho_total_sessao: novoXpSessao,
         multiplicador,
         blocos_completados: blocos15Min,
         novos_blocos: novosBlocos,
+        finalizada: atingiuLimite8Horas,
       },
     });
   } catch (error) {

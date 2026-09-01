@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BatLogo, BatBrand } from "@/components/BatLogo";
+import { BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
+import { StudySessionTracker, StudySessionBadge } from "@/components/StudySessionWidget";
 
 // ─── Links do menu ───────────────────────────────────────────
 const navLinksBase = [
@@ -49,11 +50,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bat-bg flex">
+      {/* ═══ TRACKER GLOBAL DE SESSÃO AUTOMÁTICA (LIMITE 8H) ═══ */}
+      <StudySessionTracker />
+
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-bat-border">
+        <div className="px-5 py-5 border-b border-bat-border flex items-center justify-between">
           <BatBrand iconSize={36} textSize="text-xl" className="!items-start" />
+        </div>
+
+        {/* Widget de Sessão na Sidebar */}
+        <div className="px-4 py-3 border-b border-bat-border/50 bg-bat-bg-secondary/40">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-bat-text-secondary uppercase tracking-wider">
+              Sessão de Estudo
+            </span>
+          </div>
+          <div className="mt-2">
+            <StudySessionBadge />
+          </div>
         </div>
 
         {/* Nav links */}
@@ -116,7 +132,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <BatBrand iconSize={28} textSize="text-base" />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <StudySessionBadge />
             <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden">
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
@@ -147,6 +164,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
             </div>
+            
+            {/* Sessão no mobile menu */}
+            <div className="p-3 mx-3 mt-3 bg-bat-bg-secondary/60 border border-bat-border rounded-xl">
+              <p className="text-[10px] text-bat-text-muted mb-1.5 uppercase font-semibold">Sessão Automática 8h</p>
+              <StudySessionBadge />
+            </div>
+
             <nav className="flex-1 py-4 px-3 space-y-1">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
