@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error('Error inserting user:', insertError);
       return NextResponse.json(
-        { success: false, error: 'Erro ao criar conta. Tente novamente.' },
+        { success: false, error: `Erro ao criar usuário: ${insertError.message || 'Verifique se as tabelas foram criadas no Supabase.'}` },
         { status: 500 }
       );
     }
@@ -230,10 +230,10 @@ export async function POST(req: NextRequest) {
       message: 'Conta criada! Verifique seu e-mail para ativar.',
     }, { status: 201 });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Register error:', error);
     return NextResponse.json(
-      { success: false, error: 'Erro interno do servidor' },
+      { success: false, error: error?.message || 'Erro interno do servidor ao criar conta' },
       { status: 500 }
     );
   }
