@@ -37,6 +37,11 @@ export function formatarTempoLegivel(totalSegundos: number): string {
   if (totalSegundos <= 0) return '0min';
   const h = Math.floor(totalSegundos / 3600);
   const m = Math.floor((totalSegundos % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const hr = h % 24;
+    return hr > 0 ? `${d}d ${hr}h` : `${d}d`;
+  }
   if (h > 0) return m > 0 ? `${h}h ${m}min` : `${h}h`;
   return `${m}min`;
 }
@@ -57,7 +62,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     set({ isInitializing: true });
 
     try {
-      // 1. Consultar status atual da sessão
+      // 1. Consultar status atual da sessão no Supabase
       const statusRes = await fetch('/api/study-sessions/status');
       if (statusRes.ok) {
         const statusData = await statusRes.json();
@@ -72,6 +77,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
           if (sessao_ativa) {
             set({
               isActive: true,
+              isPaused: false,
               sessionId: sessao_ativa.id,
               duracaoSegundos: sessao_ativa.duracao_segundos || 0,
               multiplicador: sessao_ativa.multiplicador || 1.0,
@@ -111,27 +117,26 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   },
 
   sendHeartbeat: async () => {
-    const { isActive, isPaused } = get();
-    if (!isActive || isPaused) return;
+    const { isActive, duracaoSegundos } = get();
+    if (!isActive) return;
 
     try {
       const res = await fetch('/api/study-sessions/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const { duracao_segundos, xp_ganho_total_sessao, multiplicador, xp_ganho_intervalo } = data.data;
+          const { xp_ganho_total_sessao, multiplicador, xp_ganho_intervalo } = data.data;
 
-          set((state) => ({
-            duracaoSegundos: duracao_segundos,
+          // Atualizar apenas métricas de gamificação sem alterar os segundos da tela
+          set({
             xpGanhoNaSessao: xp_ganho_total_sessao,
             multiplicador,
-            tempoEstudoHoje: state.tempoEstudoHoje + (xp_ganho_intervalo ? 30 : 0),
-            tempoEstudoTotal: state.tempoEstudoTotal + (xp_ganho_intervalo ? 30 : 0),
-          }));
+          });
 
           // Se ganhou XP na sessão, atualizar auth store imediatamente
           if (xp_ganho_intervalo > 0) {
@@ -143,8 +148,6 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             }
           }
         }
-      } else if (res.status === 410 || res.status === 404) {
-        set({ isActive: false });
       }
     } catch (e) {
       console.warn('Erro ao enviar heartbeat de estudo:', e);
@@ -164,11 +167,21 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     }));
   },
 
-  pauseSession: () => set({ isPaused: true }),
+  pauseSession: () => {
+    set({ isPaused: true });
+    get().sendHeartbeat();
+  },
+
   resumeSession: () => set({ isPaused: false }),
 
   stopSession: async () => {
+    const { duracaoSegundos } = get();
     try {
+      await fetch('/api/study-sessions/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
+      });
       await fetch('/api/study-sessions/stop', { method: 'POST' });
     } catch (e) {
       console.warn('Erro ao finalizar sessão:', e);
