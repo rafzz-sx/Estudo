@@ -1,5 +1,5 @@
 -- ============================================================
--- BATCAVERNA — SCRIPT MESTRE COMPLETO (100% IDEMPOTENTE)
+-- BATCAVERNA — SCRIPT MESTRE COMPLETO (100% BLINDADO)
 -- Executa: Schema + Seed Data + Segurança RLS
 -- Pode ser executado no SQL Editor do Supabase de uma só vez!
 -- ============================================================
@@ -418,10 +418,12 @@ CREATE TRIGGER set_timestamp_tickets
   BEFORE UPDATE ON tickets
   FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
 
--- ─── 5. DADOS INICIAIS (SEED DATA) ──────────────────────────
+-- ─── 5. DADOS INICIAIS (SEED DATA COM WHERE NOT EXISTS) ─────
 
 -- Níveis
-INSERT INTO nivel_gamificacao (nivel, titulo, xp_minimo_necessario) VALUES
+INSERT INTO nivel_gamificacao (nivel, titulo, xp_minimo_necessario)
+SELECT val.nivel, val.titulo, val.xp_minimo_necessario
+FROM (VALUES
   (1,  'Recruta das Sombras',   0),
   (2,  'Aprendiz da Caverna',   150),
   (3,  'Vigia Noturno',         400),
@@ -437,50 +439,29 @@ INSERT INTO nivel_gamificacao (nivel, titulo, xp_minimo_necessario) VALUES
   (13, 'Lenda da Caverna',      14000),
   (14, 'Cavaleiro de Gotham',   18000),
   (15, 'Rei da Batcaverna',     23000)
-ON CONFLICT (nivel) DO UPDATE 
-SET titulo = EXCLUDED.titulo, xp_minimo_necessario = EXCLUDED.xp_minimo_necessario;
+) AS val(nivel, titulo, xp_minimo_necessario)
+WHERE NOT EXISTS (SELECT 1 FROM nivel_gamificacao ng WHERE ng.nivel = val.nivel);
 
 -- 9 Concursos
-INSERT INTO concursos (nome, sigla, descricao, nivel_ensino, forca, frase_curta_card) VALUES
-  ('Escola de Especialistas de Aeronáutica', 'EEAR',
-   'Formação de sargentos especialistas da FAB. Provas de Português, Matemática e Inglês.',
-   'medio', 'aeronautica', 'Sargentos Especialistas · Português, Matemática e Inglês'),
-
-  ('Escola de Sargentos das Armas', 'ESA',
-   'Formação de sargentos combatentes do Exército Brasileiro.',
-   'medio', 'exercito', 'Praças do Exército · Português, Matemática, História e Geografia'),
-
-  ('Escola de Aprendizes-Marinheiros', 'EAM',
-   'Ingresso na Marinha como Praça. Nível fundamental/médio.',
-   'fundamental', 'marinha', 'Praças da Marinha · Nível Fundamental/Médio'),
-
-  ('Colégio Naval', 'CN',
-   'Ensino médio na Marinha do Brasil. Ingresso pelo 9º ano.',
-   'fundamental', 'marinha', '9º ano → Ensino Médio · Marinha do Brasil'),
-
-  ('Escola Preparatória de Cadetes do Ar', 'EPCAR',
-   'Ensino médio da Força Aérea Brasileira. Ingresso pelo 9º ano.',
-   'fundamental', 'aeronautica', '9º ano → Ensino Médio · Força Aérea Brasileira'),
-
-  ('Escola Preparatória de Cadetes do Exército', 'EsPCEx',
-   'Formação de oficiais combatentes do Exército Brasileiro.',
-   'medio', 'exercito', 'Oficial do Exército · Todas as disciplinas'),
-
-  ('Escola de Formação de Oficiais da Marinha Mercante', 'EFOMM',
-   'Oficial da Marinha Mercante com banca própria.',
-   'medio', 'marinha', 'Oficial da Marinha Mercante · Banca própria'),
-
-  ('Instituto Militar de Engenharia', 'IME',
-   'Engenharia militar de alto nível. Provas discursivas complexas.',
-   'avancado', 'exercito', 'Oficial de Engenharia · Nível avançado'),
-
-  ('Exame Nacional do Ensino Médio', 'ENEM',
-   'Exame para ingresso em universidades. 4 áreas + Redação.',
-   'medio', 'enem', '4 áreas + Redação · Questões contextualizadas')
-ON CONFLICT (sigla) DO NOTHING;
+INSERT INTO concursos (nome, sigla, descricao, nivel_ensino, forca, frase_curta_card)
+SELECT val.nome, val.sigla, val.descricao, val.nivel_ensino::nivel_ensino_tipo, val.forca::forca_tipo, val.frase_curta_card
+FROM (VALUES
+  ('Escola de Especialistas de Aeronáutica', 'EEAR', 'Formação de sargentos especialistas da FAB. Provas de Português, Matemática e Inglês.', 'medio', 'aeronautica', 'Sargentos Especialistas · Português, Matemática e Inglês'),
+  ('Escola de Sargentos das Armas', 'ESA', 'Formação de sargentos combatentes do Exército Brasileiro.', 'medio', 'exercito', 'Praças do Exército · Português, Matemática, História e Geografia'),
+  ('Escola de Aprendizes-Marinheiros', 'EAM', 'Ingresso na Marinha como Praça. Nível fundamental/médio.', 'fundamental', 'marinha', 'Praças da Marinha · Nível Fundamental/Médio'),
+  ('Colégio Naval', 'CN', 'Ensino médio na Marinha do Brasil. Ingresso pelo 9º ano.', 'fundamental', 'marinha', '9º ano → Ensino Médio · Marinha do Brasil'),
+  ('Escola Preparatória de Cadetes do Ar', 'EPCAR', 'Ensino médio da Força Aérea Brasileira. Ingresso pelo 9º ano.', 'fundamental', 'aeronautica', '9º ano → Ensino Médio · Força Aérea Brasileira'),
+  ('Escola Preparatória de Cadetes do Exército', 'EsPCEx', 'Formação de oficiais combatentes do Exército Brasileiro.', 'medio', 'exercito', 'Oficial do Exército · Todas as disciplinas'),
+  ('Escola de Formação de Oficiais da Marinha Mercante', 'EFOMM', 'Oficial da Marinha Mercante com banca própria.', 'medio', 'marinha', 'Oficial da Marinha Mercante · Banca própria'),
+  ('Instituto Militar de Engenharia', 'IME', 'Engenharia militar de alto nível. Provas discursivas complexas.', 'avancado', 'exercito', 'Oficial de Engenharia · Nível avançado'),
+  ('Exame Nacional do Ensino Médio', 'ENEM', 'Exame para ingresso em universidades. 4 áreas + Redação.', 'medio', 'enem', '4 áreas + Redação · Questões contextualizadas')
+) AS val(nome, sigla, descricao, nivel_ensino, forca, frase_curta_card)
+WHERE NOT EXISTS (SELECT 1 FROM concursos c WHERE c.sigla = val.sigla);
 
 -- Matérias
-INSERT INTO materias (nome, descricao, icone_emoji) VALUES
+INSERT INTO materias (nome, descricao, icone_emoji)
+SELECT val.nome, val.descricao, val.icone_emoji
+FROM (VALUES
   ('Português',           'Gramática, interpretação de texto, redação',  '📝'),
   ('Matemática',          'Álgebra, geometria, aritmética, funções',     '📐'),
   ('Física',              'Mecânica, termodinâmica, óptica, eletricidade', '⚡'),
@@ -496,53 +477,54 @@ INSERT INTO materias (nome, descricao, icone_emoji) VALUES
   ('Ciências da Natureza','Área integrada ENEM: Física+Química+Bio',     '🔬'),
   ('Ciências Humanas',    'Área integrada ENEM: Hist+Geo+Fil+Soc',      '🏛️'),
   ('Linguagens',          'Área integrada ENEM: Port+Lit+Ing+Artes',     '🗣️')
-ON CONFLICT (nome) DO NOTHING;
+) AS val(nome, descricao, icone_emoji)
+WHERE NOT EXISTS (SELECT 1 FROM materias m WHERE m.nome = val.nome);
 
 -- Concurso ↔ Matérias
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'EEAR' AND m.nome IN ('Português', 'Matemática', 'Inglês')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'ESA' AND m.nome IN ('Português', 'Matemática', 'História do Brasil', 'Geografia do Brasil')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'EAM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'CN' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'EPCAR' AND m.nome IN ('Português', 'Matemática', 'Inglês', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'EsPCEx' AND m.nome IN ('Português', 'Matemática', 'Física', 'Química', 'Inglês', 'História do Brasil', 'Geografia do Brasil', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'EFOMM' AND m.nome IN ('Português', 'Matemática', 'Física', 'Inglês', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'IME' AND m.nome IN ('Matemática', 'Física', 'Química', 'Inglês', 'Português', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 INSERT INTO concurso_materias (concurso_id, materia_id)
 SELECT c.id, m.id FROM concursos c, materias m
 WHERE c.sigla = 'ENEM' AND m.nome IN ('Ciências da Natureza', 'Ciências Humanas', 'Linguagens', 'Matemática', 'Redação')
-ON CONFLICT (concurso_id, materia_id) DO NOTHING;
+AND NOT EXISTS (SELECT 1 FROM concurso_materias cm WHERE cm.concurso_id = c.id AND cm.materia_id = m.id);
 
 -- Assuntos
 INSERT INTO assuntos (materia_id, nome, ordem)
@@ -584,7 +566,8 @@ AND NOT EXISTS (SELECT 1 FROM assuntos sub WHERE sub.materia_id = m.id AND sub.n
 -- Usuário Admin Padrão
 INSERT INTO users (
   nome, apelido, email, senha_hash, email_verified, role, xp_total, nivel_atual, streak_dias, maior_combo_pessoal, bio
-) VALUES (
+)
+SELECT
   'Administrador BatCaverna',
   'AdminCaverna',
   'raf4biel.venafro@gmail.com',
@@ -596,7 +579,7 @@ INSERT INTO users (
   30,
   50,
   'Comandante Chefe da BatCaverna. Central de Operações de Concursos Militares.'
-) ON CONFLICT (email) DO NOTHING;
+WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.email = 'raf4biel.venafro@gmail.com' OR u.apelido = 'AdminCaverna');
 
 -- Questões Exemplo
 INSERT INTO questoes (
