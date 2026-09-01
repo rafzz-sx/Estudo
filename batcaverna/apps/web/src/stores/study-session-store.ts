@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './auth-store';
 
-export const LIMITE_MAXIMO_8H_SEGUNDOS = 8 * 3600; // 28.800s
-
 interface StudySessionState {
   isActive: boolean;
   isPaused: boolean;
@@ -12,8 +10,6 @@ interface StudySessionState {
   tempoEstudoTotal: number;
   xpGanhoNaSessao: number;
   multiplicador: number;
-  limite8hAtingido: boolean;
-  modal8hAberto: boolean;
   isInitializing: boolean;
 
   // Actions
@@ -23,7 +19,6 @@ interface StudySessionState {
   resumeSession: () => void;
   stopSession: () => Promise<void>;
   tick: () => void;
-  close8hModal: () => void;
 }
 
 export function formatarSegundosParaTimer(totalSegundos: number): string {
@@ -55,8 +50,6 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   tempoEstudoTotal: 0,
   xpGanhoNaSessao: 0,
   multiplicador: 1.0,
-  limite8hAtingido: false,
-  modal8hAberto: false,
   isInitializing: false,
 
   initSession: async () => {
@@ -64,7 +57,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     set({ isInitializing: true });
 
     try {
-      // 1. Consultar status atual
+      // 1. Consultar status atual da sessão
       const statusRes = await fetch('/api/study-sessions/status');
       if (statusRes.ok) {
         const statusData = await statusRes.json();
@@ -90,7 +83,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
         }
       }
 
-      // 2. Se não tem sessão ativa, iniciar automaticamente (sessão de até 8h)
+      // 2. Se não tem sessão ativa, iniciar nova sessão
       const startRes = await fetch('/api/study-sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,8 +111,8 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   },
 
   sendHeartbeat: async () => {
-    const { isActive, isPaused, limite8hAtingido } = get();
-    if (!isActive || isPaused || limite8hAtingido) return;
+    const { isActive, isPaused } = get();
+    if (!isActive || isPaused) return;
 
     try {
       const res = await fetch('/api/study-sessions/heartbeat', {
@@ -130,7 +123,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const { duracao_segundos, xp_ganho_total_sessao, multiplicador, limite_8h_atingido, xp_ganho_intervalo } = data.data;
+          const { duracao_segundos, xp_ganho_total_sessao, multiplicador, xp_ganho_intervalo } = data.data;
 
           set((state) => ({
             duracaoSegundos: duracao_segundos,
@@ -140,7 +133,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             tempoEstudoTotal: state.tempoEstudoTotal + (xp_ganho_intervalo ? 30 : 0),
           }));
 
-          // Se ganhou XP, atualizar auth store em tempo real
+          // Se ganhou XP na sessão, atualizar auth store imediatamente
           if (xp_ganho_intervalo > 0) {
             const authUser = useAuthStore.getState().user;
             if (authUser) {
@@ -149,18 +142,8 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
               });
             }
           }
-
-          // Se atingiu o limite de 8 horas contínuas
-          if (limite_8h_atingido) {
-            set({
-              isActive: false,
-              limite8hAtingido: true,
-              modal8hAberto: true,
-            });
-          }
         }
       } else if (res.status === 410 || res.status === 404) {
-        // Sessão expirou ou foi finalizada
         set({ isActive: false });
       }
     } catch (e) {
@@ -173,18 +156,6 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     if (!isActive || isPaused) return;
 
     const novaDuracao = duracaoSegundos + 1;
-
-    // Verificar se atingiu 8 horas (28.800s)
-    if (novaDuracao >= LIMITE_MAXIMO_8H_SEGUNDOS) {
-      set({
-        duracaoSegundos: LIMITE_MAXIMO_8H_SEGUNDOS,
-        isActive: false,
-        limite8hAtingido: true,
-        modal8hAberto: true,
-      });
-      get().sendHeartbeat();
-      return;
-    }
 
     set((state) => ({
       duracaoSegundos: novaDuracao,
@@ -204,6 +175,4 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     }
     set({ isActive: false, isPaused: false, sessionId: null });
   },
-
-  close8hModal: () => set({ modal8hAberto: false }),
 }));

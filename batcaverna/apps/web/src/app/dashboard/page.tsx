@@ -151,7 +151,7 @@ export default function DashboardPage() {
           icon="⏱️"
           label="Tempo Total"
           value={formatarTempoLegivel(tempoEstudoTotal)}
-          sub={tempoEstudoHoje > 0 ? `Hoje: ${formatarTempoLegivel(tempoEstudoHoje)}` : "Sessão automática de até 8h"}
+          sub={tempoEstudoHoje > 0 ? `Hoje: ${formatarTempoLegivel(tempoEstudoHoje)}` : "Acumule tempo estudando"}
           glowColor="gold"
         />
         <StatCard

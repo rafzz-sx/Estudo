@@ -212,12 +212,12 @@ export async function POST(req: NextRequest) {
       message: 'Conta criada com sucesso! Entrando na Caverna...',
     }, { status: 201 });
 
-    // Set cookies HTTP para o middleware do Next.js reconhecer a sessão imediatamente
+    // Set cookies HTTP para a sessão de 8 horas imediata
     response.cookies.set('bat_access_token', accessToken, {
       path: '/',
       httpOnly: false,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      maxAge: 60 * 60 * 8, // 8 horas de sessão ativa sem precisar relogar
       secure: process.env.NODE_ENV === 'production',
     });
 
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      maxAge: 60 * 60 * 24 * 30, // 30 dias para refresh de sessão
       secure: process.env.NODE_ENV === 'production',
     });
 

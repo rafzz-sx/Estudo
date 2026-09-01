@@ -4,10 +4,11 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'dev-secret-change-me'
 );
 
-const ACCESS_EXPIRATION = parseInt(process.env.JWT_ACCESS_EXPIRATION || '900');
-const REFRESH_EXPIRATION = parseInt(process.env.JWT_REFRESH_EXPIRATION || '36000');
+// ─── Sessão de Login Rápido de 8 Horas (28.800 segundos) ──────
+const ACCESS_EXPIRATION = parseInt(process.env.JWT_ACCESS_EXPIRATION || '28800'); // 8 horas
+const REFRESH_EXPIRATION = parseInt(process.env.JWT_REFRESH_EXPIRATION || '28800'); // 8 horas
 
-// ─── Gerar Access Token (15min) ──────────────────────────────
+// ─── Gerar Access Token (8 horas de sessão ativa) ──────────────
 export async function generateAccessToken(userId: string, role: string): Promise<string> {
   return new SignJWT({ sub: userId, role })
     .setProtectedHeader({ alg: 'HS256' })
@@ -55,7 +56,7 @@ export function generateEmailToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// ─── Expiração do refresh token ──────────────────────────────
+// ─── Expiração do refresh token (8 horas) ────────────────────
 export function getRefreshTokenExpiry(): Date {
   return new Date(Date.now() + REFRESH_EXPIRATION * 1000);
 }

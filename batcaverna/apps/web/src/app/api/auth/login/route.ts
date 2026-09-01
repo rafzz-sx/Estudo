@@ -75,11 +75,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Sessão rápida de 8 horas no cookie
     response.cookies.set('bat_access_token', accessToken, {
       path: '/',
       httpOnly: false,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      maxAge: 60 * 60 * 8, // 8 horas de sessão ativa sem precisar relogar
       secure: process.env.NODE_ENV === 'production',
     });
 
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      maxAge: 60 * 60 * 24 * 30, // 30 dias para persistência de refresh
       secure: process.env.NODE_ENV === 'production',
     });
 
