@@ -29,7 +29,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
           id: "p1",
           nome: "Acentuação Gráfica",
           resumo_teorico: "Regras gerais das proparoxítonas (todas acentuadas), paroxítonas (terminadas em R, X, N, L, I, IS, UM, UNS, US, PS, Ã, ÃS, ÃOS, ditongo) e oxítonas (A, E, O, EM, ENS). Regra do hiato I e U tônicos sozinhos ou com S.",
-          status: "concluido",
+          status: "nao_iniciado",
           bizu: "Proparoxítonas SEMPRE levam acento. Olhe a antepenúltima sílaba.",
           questoes_count: 42,
         },
@@ -37,7 +37,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
           id: "p2",
           nome: "Crase",
           resumo_teorico: "Fusão da preposição 'a' com o artigo feminino 'a' ou pronomes demonstrativos 'aquele(s)', 'aquela(s)', 'aquilo'. Casos proibitivos: antes de masculino, verbos, pronomes pessoais e indefinidos.",
-          status: "em_andamento",
+          status: "nao_iniciado",
           bizu: "Troque a palavra seguinte por uma masculina equivalente. Se virar 'ao', tem crase!",
           questoes_count: 58,
         },
@@ -59,7 +59,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
           id: "m1",
           nome: "Equações do 1º e 2º Grau",
           resumo_teorico: "Fórmula de Bhaskara, relações de Girard (Soma = -b/a, Produto = c/a), estudo do discriminante Delta (Delta > 0, = 0, < 0).",
-          status: "concluido",
+          status: "nao_iniciado",
           bizu: "A soma das raízes é sempre -b/a e o produto é c/a. Não precisa fazer Bhaskara em todas!",
           questoes_count: 64,
         },
@@ -67,7 +67,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
           id: "m2",
           nome: "Geometria Plana — Triângulos e Áreas",
           resumo_teorico: "Teorema de Pitágoras, Lei dos Senos e Cossenos, Áreas de figuras planas (triângulo, círculo, trapézio, losango).",
-          status: "em_andamento",
+          status: "nao_iniciado",
           bizu: "Ternas (3,4,5), (5,12,13), (8,15,17). Identifique os catetos e hipotenusa em segundos.",
           questoes_count: 75,
         },
@@ -89,7 +89,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
           id: "i1",
           nome: "Verb Tenses (Present, Past, Future)",
           resumo_teorico: "Simple Present vs Present Continuous; Simple Past vs Past Continuous; Present Perfect (have + past participle) para ações que começaram no passado com impacto no presente.",
-          status: "concluido",
+          status: "nao_iniciado",
           bizu: "Palavras-chave: 'yesterday' = Past Simple; 'since/for/already' = Present Perfect.",
           questoes_count: 50,
         },
@@ -105,6 +105,7 @@ const mockTrilhas: Record<string, MateriaTrilha[]> = {
     },
   ],
 };
+
 
 export default function TrilhaConcursoPage() {
   const params = useParams();

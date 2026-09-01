@@ -35,113 +35,14 @@ interface Conversa {
   nao_lidas: number;
 }
 
-const mockConversasIniciais: Conversa[] = [
-  {
-    id: "conv-1",
-    user_1_id: "user-1",
-    user_2_id: "user-2",
-    atualizado_em: "2026-08-29T08:30:00Z",
-    outro_usuario: {
-      id: "user-2",
-      nome: "Lucas Ferreira",
-      apelido: "FalcãoFAB",
-      avatar_url: null,
-      nivel_atual: 12,
-      online: true,
-      concurso: "EEAR",
-    },
-    ultima_mensagem: "Conseguiu resolver aquela questão de crase da EEAR 2023?",
-    nao_lidas: 1,
-  },
-  {
-    id: "conv-2",
-    user_1_id: "user-1",
-    user_2_id: "user-3",
-    atualizado_em: "2026-08-28T22:15:00Z",
-    outro_usuario: {
-      id: "user-3",
-      nome: "Mariana Costa",
-      apelido: "CadeteMari",
-      avatar_url: null,
-      nivel_atual: 14,
-      online: false,
-      concurso: "EsPCEx",
-    },
-    ultima_mensagem: "Vlw pelo bizu de física térmica! Ajudou demais no simulado.",
-    nao_lidas: 0,
-  },
-  {
-    id: "conv-3",
-    user_1_id: "user-1",
-    user_2_id: "user-4",
-    atualizado_em: "2026-08-27T18:40:00Z",
-    outro_usuario: {
-      id: "user-4",
-      nome: "Gabriel Silva",
-      apelido: "GuerreiroESA",
-      avatar_url: null,
-      nivel_atual: 9,
-      online: true,
-      concurso: "ESA",
-    },
-    ultima_mensagem: "Bora fechar um simulado junto hoje à noite?",
-    nao_lidas: 0,
-  },
-];
-
-const mockMensagensIniciais: Record<string, Mensagem[]> = {
-  "conv-1": [
-    {
-      id: "m1",
-      conversa_id: "conv-1",
-      remetente_id: "user-2",
-      conteudo: "Fala irmão! Como estão os estudos para a EEAR?",
-      enviado_em: "2026-08-29T08:20:00Z",
-      remetente: { id: "user-2", apelido: "FalcãoFAB", avatar_url: null },
-    },
-    {
-      id: "m2",
-      conversa_id: "conv-1",
-      remetente_id: "user-1",
-      conteudo: "Fala Falcão! Finalizei a bateria de questões de Português e Matemática agora!",
-      enviado_em: "2026-08-29T08:25:00Z",
-      remetente: { id: "user-1", apelido: "AdminCaverna", avatar_url: null },
-    },
-    {
-      id: "m3",
-      conversa_id: "conv-1",
-      remetente_id: "user-2",
-      conteudo: "Conseguiu resolver aquela questão de crase da EEAR 2023?",
-      enviado_em: "2026-08-29T08:30:00Z",
-      remetente: { id: "user-2", apelido: "FalcãoFAB", avatar_url: null },
-    },
-  ],
-  "conv-2": [
-    {
-      id: "m20",
-      conversa_id: "conv-2",
-      remetente_id: "user-3",
-      conteudo: "Vlw pelo bizu de física térmica! Ajudou demais no simulado.",
-      enviado_em: "2026-08-28T22:15:00Z",
-      remetente: { id: "user-3", apelido: "CadeteMari", avatar_url: null },
-    },
-  ],
-  "conv-3": [
-    {
-      id: "m30",
-      conversa_id: "conv-3",
-      remetente_id: "user-4",
-      conteudo: "Bora fechar um simulado junto hoje à noite?",
-      enviado_em: "2026-08-27T18:40:00Z",
-      remetente: { id: "user-4", apelido: "GuerreiroESA", avatar_url: null },
-    },
-  ],
-};
+// Conversas do usuário (começa vazio — sem dados falsos)
+const mockConversasIniciais: Conversa[] = [];
+const mockMensagensIniciais: Record<string, Mensagem[]> = {};
 
 export default function ChatPage() {
   const { user } = useAuthStore();
   const [conversas, setConversas] = useState<Conversa[]>(mockConversasIniciais);
-  const [conversaAtivaId, setConversaAtivaId] = useState<string>("conv-1");
+  const [conversaAtivaId, setConversaAtivaId] = useState<string>("");
   const [mensagens, setMensagens] = useState<Record<string, Mensagem[]>>(mockMensagensIniciais);
   const [textoMensagem, setTextoMensagem] = useState("");
   const [buscaUsuario, setBuscaUsuario] = useState("");

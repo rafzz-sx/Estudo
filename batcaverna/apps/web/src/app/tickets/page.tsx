@@ -2,24 +2,16 @@
 
 import { useState, useEffect } from "react";
 
-// ─── Mock de tickets ─────────────────────────────────────────
-const mockTickets = [
-  {
-    id: "t1", titulo: "Bug na contagem de tempo de estudo", motivo: "bugs" as const,
-    status: "respondido" as const, criado_em: "2026-08-25T14:30:00Z",
-    mensagens: [
-      { id: "m1", role: "usuario" as const, conteudo: "O cronômetro de estudo não está pausando quando troco de aba.", autor: "Soldado", hora: "14:30" },
-      { id: "m2", role: "admin" as const, conteudo: "Olá! Obrigado pelo reporte. Já identificamos o problema e vamos corrigir na próxima atualização.", autor: "Admin", hora: "16:45" },
-    ],
-  },
-  {
-    id: "t2", titulo: "Sugestão: modo escuro mais escuro", motivo: "ideia" as const,
-    status: "aberto" as const, criado_em: "2026-08-27T09:15:00Z",
-    mensagens: [
-      { id: "m3", role: "usuario" as const, conteudo: "Seria possível ter um modo AMOLED com fundo 100% preto? Ajudaria muito na bateria do celular.", autor: "Soldado", hora: "09:15" },
-    ],
-  },
-];
+// Tickets do usuário (começa vazio — sem dados falsos)
+const mockTickets: {
+  id: string;
+  titulo: string;
+  motivo: "bugs" | "ideia" | "outros";
+  status: "aberto" | "respondido" | "finalizado";
+  criado_em: string;
+  mensagens: { id: string; role: "usuario" | "admin"; conteudo: string; autor: string; hora: string }[];
+}[] = [];
+
 
 type MotivoCor = { bg: string; text: string; label: string };
 const motivoStyles: Record<string, MotivoCor> = {
