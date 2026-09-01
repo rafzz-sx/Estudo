@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BatLogo } from "@/components/BatLogo";
+import { useAuthStore } from "@/stores/auth-store";
 
 // ─── Dados mock (Admin) ──────────────────────────────────────
 const mockUser = {
@@ -118,10 +119,18 @@ function StatCard({
 // ═══════════════════════════════════════════════════════════════
 export default function DashboardPage() {
   const [visible, setVisible] = useState(false);
+  const storeUser = useAuthStore((state) => state.user);
 
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
   }, []);
+
+  const apelidoExibicao = storeUser?.apelido || storeUser?.nome || mockUser.apelido;
+  const roleExibicao = storeUser?.role || mockUser.role;
+  const nivelExibicao = storeUser?.nivel_atual || (storeUser ? 1 : mockUser.nivel_atual);
+  const xpExibicao = storeUser?.xp_total ?? mockUser.xp_total;
+  const xpProximo = nivelExibicao * 1000 + 500;
+  const tituloNivel = nivelExibicao >= 15 ? "Rei da Batcaverna" : nivelExibicao >= 10 ? "General Estrategista" : nivelExibicao >= 5 ? "Cabo Tático" : "Recruta da Caverna";
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -131,9 +140,9 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 mb-1">
             <BatLogo size={36} glow />
             <h1 className="heading text-2xl sm:text-3xl text-bat-text font-bold">
-              Bem-vindo à <span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {mockUser.apelido}
+              Bem-vindo à <span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {apelidoExibicao}
             </h1>
-            {mockUser.role === "admin" && (
+            {roleExibicao === "admin" && (
               <Link href="/admin" className="badge-admin no-underline">
                 ADMIN
               </Link>
@@ -145,22 +154,20 @@ export default function DashboardPage() {
         </div>
 
         {/* Sessão ativa */}
-        {mockUser.sessao_ativa && (
-          <div className="flex items-center gap-2 bg-bat-success/10 border border-bat-success/30 rounded-xl px-4 py-2">
-            <div className="live-indicator" />
-            <span className="text-bat-success text-sm font-medium">
-              Estudando agora · {formatarTempo(mockUser.tempo_estudo_hoje)}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 bg-bat-success/10 border border-bat-success/30 rounded-xl px-4 py-2">
+          <div className="live-indicator" />
+          <span className="text-bat-success text-sm font-medium">
+            Estudando agora · {formatarTempo(mockUser.tempo_estudo_hoje)}
+          </span>
+        </div>
       </div>
 
       {/* ═══ BARRA DE XP ═══ */}
       <XpBar
-        atual={mockUser.xp_total}
-        proximo={mockUser.xp_proximo_nivel}
-        nivel={mockUser.nivel_atual}
-        titulo={mockUser.titulo_nivel}
+        atual={xpExibicao}
+        proximo={xpProximo}
+        nivel={nivelExibicao}
+        titulo={tituloNivel}
       />
 
       {/* ═══ CARDS ESTATÍSTICOS ═══ */}

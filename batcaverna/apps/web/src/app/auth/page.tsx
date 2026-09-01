@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { BatLogo, BatBrand } from "@/components/BatLogo";
+import { BatBrand } from "@/components/BatLogo";
+import { useAuthStore } from "@/stores/auth-store";
+import {
+  validateNomeCompleto,
+  isStrongPassword,
+} from "@/lib/validators";
 
 // ─── Luz de fundo amarela suave que segue o cursor ────────────
 function AuthSpotlight() {
@@ -72,7 +77,12 @@ function AuthForm() {
   const [aceiteIdade, setAceiteIdade] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  // Status de Disponibilidade em Tempo Real
+  // Status de Validação em Tempo Real
+  const [nomeStatus, setNomeStatus] = useState<{
+    valid?: boolean;
+    message?: string;
+  }>({});
+
   const [apelidoStatus, setApelidoStatus] = useState<{
     checking: boolean;
     available?: boolean;
@@ -95,6 +105,27 @@ function AuthForm() {
       setTab("cadastro");
     }
   }, [searchParams]);
+
+  // ─── Validador de Nome Completo em Tempo Real (Blindado) ─────
+  useEffect(() => {
+    if (!nome.trim()) {
+      setNomeStatus({});
+      return;
+    }
+
+    const check = validateNomeCompleto(nome);
+    if (check.valid) {
+      setNomeStatus({
+        valid: true,
+        message: "✓ Nome e sobrenome válidos!",
+      });
+    } else {
+      setNomeStatus({
+        valid: false,
+        message: check.error || "Insira seu nome completo (nome e sobrenome)",
+      });
+    }
+  }, [nome]);
 
   // ─── Verificador de Apelido em Tempo Real (Debounce 350ms) ────
   useEffect(() => {
@@ -174,15 +205,15 @@ function AuthForm() {
     );
   };
 
-  const validarSenhaForte = (s: string): string[] => {
-    const erros: string[] = [];
-    if (s.length < 8) erros.push("Mínimo 8 caracteres");
-    if (!/[A-Z]/.test(s)) erros.push("Uma letra maiúscula");
-    if (!/[0-9]/.test(s)) erros.push("Um número");
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(s)) erros.push("Um caractere especial");
-    return erros;
+  const getDestinationUrl = () => {
+    const redirectParam = searchParams?.get("redirect");
+    if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("/auth")) {
+      return redirectParam;
+    }
+    return "/dashboard";
   };
 
+  // ─── Submissão de Login ─────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErros([]);
@@ -201,10 +232,20 @@ function AuthForm() {
         body: JSON.stringify({ email: loginEmail, senha: loginSenha }),
       });
       const json = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !json.success) {
         setErros([json.error || "Erro ao fazer login"]);
       } else {
-        window.location.href = "/dashboard";
+        // Salvar estado na store do cliente
+        if (json.data?.user && json.data?.access_token) {
+          useAuthStore.getState().setAuth(
+            json.data.user,
+            json.data.access_token,
+            json.data.refresh_token
+          );
+          // Garantir cookie client-side
+          document.cookie = `bat_access_token=${json.data.access_token}; path=/; max-age=604800; SameSite=Lax`;
+        }
+        window.location.href = getDestinationUrl();
       }
     } catch {
       setErros(["Falha de conexão. Tente novamente."]);
@@ -213,12 +254,18 @@ function AuthForm() {
     }
   };
 
+  // ─── Submissão de Cadastro ──────────────────────────────────
   const handleCadastro = async (e: React.FormEvent) => {
     e.preventDefault();
     setErros([]);
     const novosErros: string[] = [];
 
-    if (!nome.trim()) novosErros.push("Nome é obrigatório");
+    // Validação estrita de Nome Completo
+    const nomeCheck = validateNomeCompleto(nome);
+    if (!nomeCheck.valid) {
+      novosErros.push(nomeCheck.error || "Insira seu nome e sobrenome completo");
+    }
+
     if (!apelido.trim() || apelido.trim().length < 3)
       novosErros.push("Apelido deve ter pelo menos 3 caracteres");
     if (apelidoStatus.available === false)
@@ -228,9 +275,10 @@ function AuthForm() {
     if (emailStatus.available === false)
       novosErros.push(emailStatus.message || "E-mail inválido ou temporário detectado");
 
-    const errosSenha = validarSenhaForte(senha);
-    if (errosSenha.length > 0)
-      novosErros.push(`Senha fraca: ${errosSenha.join(", ")}`);
+    const senhaCheck = isStrongPassword(senha);
+    if (!senhaCheck.valid) {
+      novosErros.push(`Senha fraca: ${senhaCheck.errors.join(", ")}`);
+    }
     if (senha !== confirmarSenha) novosErros.push("Senhas não coincidem");
     if (concursosSelecionados.length === 0)
       novosErros.push("Selecione pelo menos um concurso");
@@ -247,9 +295,9 @@ function AuthForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          nome,
-          apelido,
-          email,
+          nome: nome.trim(),
+          apelido: apelido.trim(),
+          email: email.trim(),
           senha,
           data_nascimento: dataNascimento,
           concursos_interesse: concursosSelecionados,
@@ -257,10 +305,20 @@ function AuthForm() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !json.success) {
         setErros([json.error || "Erro ao cadastrar"]);
       } else {
-        window.location.href = "/dashboard";
+        // Salvar sessão diretamente e navegar para a Dashboard
+        if (json.data?.user && json.data?.access_token) {
+          useAuthStore.getState().setAuth(
+            json.data.user,
+            json.data.access_token,
+            json.data.refresh_token
+          );
+          // Garantir cookie client-side
+          document.cookie = `bat_access_token=${json.data.access_token}; path=/; max-age=604800; SameSite=Lax`;
+        }
+        window.location.href = getDestinationUrl();
       }
     } catch {
       setErros(["Falha de conexão. Tente novamente."]);
@@ -363,62 +421,87 @@ function AuthForm() {
         {/* ─── CADASTRO ─── */}
         {tab === "cadastro" && (
           <form onSubmit={handleCadastro} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Nome Completo</label>
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Seu nome"
-                  className="input-field"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Apelido (Nome de Guerra)</label>
-                <input
-                  type="text"
-                  value={apelido}
-                  onChange={(e) => setApelido(e.target.value)}
-                  placeholder="Ex: Falcao_FAB"
-                  className={`input-field font-mono text-xs ${
-                    apelidoStatus.available === true
-                      ? "border-emerald-500/70 focus:border-emerald-500"
-                      : apelidoStatus.available === false
-                      ? "border-bat-error/70 focus:border-bat-error"
-                      : ""
-                  }`}
-                  maxLength={20}
-                  required
-                />
-              </div>
+            {/* Campo: Nome Completo (Blindado) */}
+            <div>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">
+                Nome Completo <span className="text-bat-text-muted font-normal">(Nome e Sobrenome)</span>
+              </label>
+              <input
+                type="text"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Ex: Danilo de Oliveira"
+                className={`input-field ${
+                  nomeStatus.valid === true
+                    ? "border-emerald-500/70 focus:border-emerald-500"
+                    : nomeStatus.valid === false
+                    ? "border-bat-error/70 focus:border-bat-error"
+                    : ""
+                }`}
+                required
+              />
+              {nome.trim().length > 0 && (
+                <div className="text-[11px] px-1 mt-1">
+                  {nomeStatus.valid === true ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <span>✓</span>
+                      <span>{nomeStatus.message}</span>
+                    </span>
+                  ) : nomeStatus.valid === false ? (
+                    <span className="text-bat-error font-semibold flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{nomeStatus.message}</span>
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
 
-            {/* Micro-badge de status do Apelido */}
-            {apelido.trim().length > 0 && (
-              <div className="text-[11px] px-1 -mt-2">
-                {apelidoStatus.checking ? (
-                  <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
-                    <span>⏳</span>
-                    <span>Verificando disponibilidade do apelido...</span>
-                  </span>
-                ) : apelidoStatus.available === true ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <span>✓</span>
-                    <span>{apelidoStatus.message || "Este apelido está disponível!"}</span>
-                  </span>
-                ) : apelidoStatus.available === false ? (
-                  <span className="text-bat-error font-semibold flex items-center gap-1">
-                    <span>⚠️</span>
-                    <span>{apelidoStatus.message}</span>
-                  </span>
-                ) : null}
-              </div>
-            )}
-
+            {/* Campo: Apelido (Nome de Guerra) */}
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-1.5">E-mail Real</label>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">
+                Apelido (Nome de Guerra)
+              </label>
+              <input
+                type="text"
+                value={apelido}
+                onChange={(e) => setApelido(e.target.value)}
+                placeholder="Ex: Falcao_FAB"
+                className={`input-field font-mono text-xs ${
+                  apelidoStatus.available === true
+                    ? "border-emerald-500/70 focus:border-emerald-500"
+                    : apelidoStatus.available === false
+                    ? "border-bat-error/70 focus:border-bat-error"
+                    : ""
+                }`}
+                maxLength={20}
+                required
+              />
+              {apelido.trim().length > 0 && (
+                <div className="text-[11px] px-1 mt-1">
+                  {apelidoStatus.checking ? (
+                    <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
+                      <span>⏳</span>
+                      <span>Verificando disponibilidade do apelido...</span>
+                    </span>
+                  ) : apelidoStatus.available === true ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <span>✓</span>
+                      <span>{apelidoStatus.message || "Este apelido está disponível!"}</span>
+                    </span>
+                  ) : apelidoStatus.available === false ? (
+                    <span className="text-bat-error font-semibold flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{apelidoStatus.message}</span>
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            {/* Campo: E-mail Real */}
+            <div>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">E-mail Real</label>
               <input
                 type="email"
                 value={email}
@@ -433,32 +516,31 @@ function AuthForm() {
                 }`}
                 required
               />
+              {email.trim().length > 0 && (
+                <div className="text-[11px] px-1 mt-1">
+                  {emailStatus.checking ? (
+                    <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
+                      <span>⏳</span>
+                      <span>Verificando integridade e existência do e-mail...</span>
+                    </span>
+                  ) : emailStatus.available === true ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <span>✓</span>
+                      <span>{emailStatus.message || "E-mail válido e disponível!"}</span>
+                    </span>
+                  ) : emailStatus.available === false ? (
+                    <span className="text-bat-error font-semibold flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{emailStatus.message}</span>
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
 
-            {/* Micro-badge de status do E-mail (Anti-Fake / Duplicidade) */}
-            {email.trim().length > 0 && (
-              <div className="text-[11px] px-1 -mt-2">
-                {emailStatus.checking ? (
-                  <span className="text-bat-gold-400 flex items-center gap-1.5 animate-pulse">
-                    <span>⏳</span>
-                    <span>Verificando integridade e existência do e-mail...</span>
-                  </span>
-                ) : emailStatus.available === true ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <span>✓</span>
-                    <span>{emailStatus.message || "E-mail válido e disponível!"}</span>
-                  </span>
-                ) : emailStatus.available === false ? (
-                  <span className="text-bat-error font-semibold flex items-center gap-1">
-                    <span>⚠️</span>
-                    <span>{emailStatus.message}</span>
-                  </span>
-                ) : null}
-              </div>
-            )}
-
+            {/* Campo: Data de Nascimento */}
             <div>
-              <label className="block text-bat-text-secondary text-sm mb-1.5">Data de Nascimento</label>
+              <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Data de Nascimento</label>
               <input
                 type="date"
                 value={dataNascimento}
@@ -467,9 +549,10 @@ function AuthForm() {
               />
             </div>
 
+            {/* Senhas */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Senha</label>
+                <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Senha</label>
                 <input
                   type={mostrarSenha ? "text" : "password"}
                   value={senha}
@@ -479,7 +562,7 @@ function AuthForm() {
                 />
               </div>
               <div>
-                <label className="block text-bat-text-secondary text-sm mb-1.5">Confirmar</label>
+                <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Confirmar</label>
                 <input
                   type={mostrarSenha ? "text" : "password"}
                   value={confirmarSenha}
@@ -562,13 +645,13 @@ function AuthForm() {
               disabled={loading}
               className="w-full py-3.5 text-base font-bold text-black bg-gradient-to-r from-[#F5C518] via-[#FFD700] to-[#EAB308] hover:shadow-[0_0_25px_rgba(245,197,24,0.45)] active:scale-[0.99] rounded-xl transition-all duration-300 cursor-pointer disabled:opacity-50"
             >
-              {loading ? "Criando conta..." : "Criar minha conta"}
+              {loading ? "Entrando na Caverna..." : "Criar minha conta"}
             </button>
           </form>
         )}
       </div>
 
-      {/* Rodapé explicativo do nome (seção 2.2 item 2) */}
+      {/* Rodapé explicativo do nome */}
       <p className="mt-8 text-center text-bat-text-muted max-w-sm mx-auto" style={{ fontSize: "11px", lineHeight: 1.5, color: "#6B7280" }}>
         BatCaverna: porque é aqui, escondido do mundo e focado, que você vai se preparar em silêncio
         até o dia de sair vitorioso na prova — sua caverna pessoal de estudos.

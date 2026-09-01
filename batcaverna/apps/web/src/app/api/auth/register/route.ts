@@ -8,47 +8,15 @@ import {
   getRefreshTokenExpiry,
   getEmailTokenExpiry,
 } from '@/lib/auth';
+import {
+  validateNomeCompleto,
+  isValidEmail,
+  isStrongPassword,
+  isValidApelido,
+} from '@/lib/validators';
 
 function getSupabase() {
   return createServerSupabaseClient();
-}
-
-// ─── Lista de domínios descartáveis ──────────────────────────
-const DISPOSABLE_DOMAINS = new Set([
-  'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'temp-mail.org',
-  'throwaway.email', 'yopmail.com', 'sharklasers.com', 'guerrillamailblock.com',
-  'grr.la', 'dispostable.com', 'trashmail.com', '10minutemail.com',
-  '10minutemail.net', 'crazymailing.com', 'fakemailgenerator.com',
-  'getairmail.com', 'inboxkitten.com', 'maildrop.cc', 'mohmal.com',
-  'nada.ltd', 'tempail.com', 'tempr.email', 'generator.email',
-  'burnermail.io', 'dropmail.me', 'emailondeck.com', 'mytemp.email',
-  'temp-mail.io', 'tmpmail.net', 'tmpmail.org', 'binkmail.com',
-  'safetymail.info', 'fakemail.net', 'fakeinbox.com', 'mailcatch.com',
-  'trashmail.net', 'trashmail.org', 'tempinbox.com', 'getnada.com',
-  'abcvg.com', 'disposablemail.com', 'dropmail.me', 'armyspy.com',
-  'cuvox.de', 'dayrep.com', 'einrot.com', 'fleckens.hu', 'gustr.com',
-  'jourrapide.com', 'rhyta.com', 'superrito.com', 'teleworm.us',
-  'test.com', 'exemplo.com', 'fake.com', 'asdf.com', 'teste.com',
-  'mail.com.test', 'temp.com', '123.com', 'abc.com', 'aaa.com',
-]);
-
-function isDisposableEmail(email: string): boolean {
-  const domain = email.split('@')[1]?.toLowerCase().trim();
-  if (!domain) return false;
-  return DISPOSABLE_DOMAINS.has(domain);
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isStrongPassword(senha: string): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  if (senha.length < 8) errors.push('Mínimo de 8 caracteres');
-  if (!/[A-Z]/.test(senha)) errors.push('Pelo menos uma letra maiúscula');
-  if (!/[0-9]/.test(senha)) errors.push('Pelo menos um número');
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(senha)) errors.push('Pelo menos um caractere especial');
-  return { valid: errors.length === 0, errors };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -59,28 +27,41 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { nome, apelido, email, senha, data_nascimento, concursos_interesse, aceite_termos } = body;
 
-    // ─── Validações ───────────────────────────────────────────
+    // ─── 1. Validações Blindadas ──────────────────────────────
     if (!nome?.trim() || !apelido?.trim() || !email?.trim() || !senha) {
       return NextResponse.json(
-        { success: false, error: 'Campos obrigatórios: nome, apelido, email, senha' },
+        { success: false, error: 'Campos obrigatórios: nome completo, apelido, email e senha' },
         { status: 400 }
       );
     }
 
+    // Validação estrita de Nome Completo (Nome + Sobrenome)
+    const nomeCheck = validateNomeCompleto(nome);
+    if (!nomeCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: nomeCheck.error || 'Nome completo inválido' },
+        { status: 400 }
+      );
+    }
+
+    // Validação de Apelido (Nome de Guerra)
+    const apelidoCheck = isValidApelido(apelido);
+    if (!apelidoCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: apelidoCheck.error || 'Apelido inválido' },
+        { status: 400 }
+      );
+    }
+
+    // Validação de E-mail
     if (!isValidEmail(email)) {
       return NextResponse.json(
-        { success: false, error: 'Formato de e-mail inválido' },
+        { success: false, error: 'Formato de e-mail inválido ou domínio não permitido' },
         { status: 400 }
       );
     }
 
-    if (isDisposableEmail(email)) {
-      return NextResponse.json(
-        { success: false, error: 'E-mails descartáveis não são permitidos' },
-        { status: 400 }
-      );
-    }
-
+    // Validação de Senha Forte
     const passwordCheck = isStrongPassword(senha);
     if (!passwordCheck.valid) {
       return NextResponse.json(
@@ -89,56 +70,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (apelido.trim().length < 3 || apelido.trim().length > 20) {
-      return NextResponse.json(
-        { success: false, error: 'Apelido deve ter entre 3 e 20 caracteres' },
-        { status: 400 }
-      );
-    }
-
+    // Termos de uso
     if (!aceite_termos) {
       return NextResponse.json(
-        { success: false, error: 'É necessário aceitar os termos de uso' },
+        { success: false, error: 'É necessário aceitar os termos de uso e política de privacidade' },
         { status: 400 }
       );
     }
 
     const supabase = getSupabase();
 
-    // ─── Verificar e-mail já cadastrado ───────────────────────
+    // ─── 2. Verificar e-mail já cadastrado ────────────────────
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('email', email.toLowerCase().trim())
-      .single();
+      .maybeSingle();
 
     if (existingUser) {
       return NextResponse.json(
-        { success: false, error: 'Este e-mail já está cadastrado' },
+        { success: false, error: 'Este e-mail já está cadastrado na plataforma' },
         { status: 409 }
       );
     }
 
-    // ─── Verificar apelido já em uso ──────────────────────────
+    // ─── 3. Verificar apelido já em uso ───────────────────────
     const { data: existingApelido } = await supabase
       .from('users')
       .select('id')
-      .eq('apelido', apelido.trim())
-      .single();
+      .ilike('apelido', apelido.trim())
+      .maybeSingle();
 
     if (existingApelido) {
       return NextResponse.json(
-        { success: false, error: 'Este apelido já está em uso' },
+        { success: false, error: 'Este apelido já está em uso por outro soldado' },
         { status: 409 }
       );
     }
 
-    // ─── Hash da senha ───────────────────────────────────────
+    // ─── 4. Hash da senha ─────────────────────────────────────
     const senhaHash = await hashToken(senha);
 
     const isAdminEmail = email.toLowerCase().trim() === 'raf4biel.venafro@gmail.com';
 
-    // ─── Inserir usuário ──────────────────────────────────────
+    // ─── 5. Inserir usuário ───────────────────────────────────
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert({
@@ -165,7 +140,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── Salvar concursos de interesse ────────────────────────
+    // ─── 6. Salvar concursos de interesse ─────────────────────
     if (concursos_interesse && Array.isArray(concursos_interesse) && concursos_interesse.length > 0) {
       try {
         const { data: dbConcursos } = await supabase
@@ -200,7 +175,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── Gerar token de verificação de e-mail ─────────────────
+    // ─── 7. Gerar token de verificação de e-mail ───────────────
     try {
       const emailToken = generateEmailToken();
       await supabase.from('email_verification_tokens').insert({
@@ -213,7 +188,7 @@ export async function POST(req: NextRequest) {
       console.warn('Warning saving email token:', emailTokenErr);
     }
 
-    // ─── Gerar tokens de autenticação ─────────────────────────
+    // ─── 8. Gerar tokens de autenticação ───────────────────────
     const accessToken = await generateAccessToken(newUser.id, newUser.role);
     const refreshToken = generateRefreshToken();
     const hashedRefresh = await hashToken(refreshToken);
@@ -225,7 +200,8 @@ export async function POST(req: NextRequest) {
       expira_em: getRefreshTokenExpiry().toISOString(),
     });
 
-    return NextResponse.json({
+    // ─── 9. Retornar resposta e SETAR COOKIES DE SESSÃO ────────
+    const response = NextResponse.json({
       success: true,
       data: {
         access_token: accessToken,
@@ -233,8 +209,27 @@ export async function POST(req: NextRequest) {
         user: newUser,
         email_verification_required: true,
       },
-      message: 'Conta criada! Verifique seu e-mail para ativar.',
+      message: 'Conta criada com sucesso! Entrando na Caverna...',
     }, { status: 201 });
+
+    // Set cookies HTTP para o middleware do Next.js reconhecer a sessão imediatamente
+    response.cookies.set('bat_access_token', accessToken, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    response.cookies.set('bat_refresh_token', refreshToken, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    return response;
 
   } catch (error: any) {
     console.error('Register error:', error);

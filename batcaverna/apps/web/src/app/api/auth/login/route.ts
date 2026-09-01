@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
       expira_em: getRefreshTokenExpiry().toISOString(),
     });
 
-    // ─── Retornar dados do usuário (sem senha) ────────────────
+    // ─── Retornar dados do usuário (sem senha) e SETAR COOKIES 
     const { senha_hash: _, ...userData } = user;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         access_token: accessToken,
@@ -74,6 +74,24 @@ export async function POST(req: NextRequest) {
         user: userData,
       },
     });
+
+    response.cookies.set('bat_access_token', accessToken, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 dias
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    response.cookies.set('bat_refresh_token', refreshToken, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 dias
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    return response;
 
   } catch (error: any) {
     console.error('Login error:', error);
