@@ -12,7 +12,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "✈️",
     cor: "#3B82F6",
     forca: "Aeronáutica",
-    imagemBg: "https://images.unsplash.com/photo-1519074069444-1ba4fff16def?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/eear.jpg",
   },
   esa: {
     nome: "Escola de Sargentos das Armas",
@@ -20,7 +20,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "⭐",
     cor: "#22C55E",
     forca: "Exército",
-    imagemBg: "https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/esa.jpg",
   },
   eam: {
     nome: "Escola de Aprendizes-Marinheiros",
@@ -28,7 +28,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "⚓",
     cor: "#0EA5E9",
     forca: "Marinha",
-    imagemBg: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/eam.jpg",
   },
   cn: {
     nome: "Colégio Naval",
@@ -36,7 +36,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "🚢",
     cor: "#0EA5E9",
     forca: "Marinha",
-    imagemBg: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/cn.jpg",
   },
   epcar: {
     nome: "Escola Preparatória de Cadetes do Ar",
@@ -44,7 +44,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "🛩️",
     cor: "#3B82F6",
     forca: "Aeronáutica",
-    imagemBg: "https://images.unsplash.com/photo-1517976487507-598d98d248b6?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/epcar.jpg",
   },
   espcex: {
     nome: "Escola Preparatória de Cadetes do Exército",
@@ -52,7 +52,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "🎖️",
     cor: "#22C55E",
     forca: "Exército",
-    imagemBg: "https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/espcex.jpg",
   },
   efomm: {
     nome: "Escola de Formação de Oficiais da Marinha Mercante",
@@ -60,7 +60,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "🌊",
     cor: "#0EA5E9",
     forca: "Marinha",
-    imagemBg: "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/efomm.jpg",
   },
   ime: {
     nome: "Instituto Militar de Engenharia",
@@ -68,7 +68,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "🔬",
     cor: "#22C55E",
     forca: "Exército",
-    imagemBg: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/ime.jpg",
   },
   enem: {
     nome: "Exame Nacional do Ensino Médio",
@@ -76,7 +76,7 @@ const concursosMap: Record<string, { nome: string; sigla: string; emoji: string;
     emoji: "📚",
     cor: "#F59E0B",
     forca: "Vestibular",
-    imagemBg: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1200&q=80",
+    imagemBg: "/images/concursos/enem.jpg",
   },
 };
 
@@ -188,16 +188,16 @@ export default function ConcursoInternoPage() {
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ CABEÇALHO DO CONCURSO COM BANNER TEMÁTICO ═══ */}
       <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl min-h-[190px] flex items-center">
-        {/* Foto de Fundo da Fachada / Aviação / Força Militar */}
+        {/* Foto de Fundo Criada do Concurso */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-65 scale-105 transition-transform duration-700"
+          className="absolute inset-0 bg-cover bg-center opacity-90 scale-100 transition-transform duration-700 hover:scale-105"
           style={{
             backgroundImage: `url(${concurso.imagemBg})`,
           }}
         />
-        {/* Overlay balanceado para contraste perfeito */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0B0F] via-[#0B0B0F]/75 to-[#0B0B0F]/25" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0F]/90 via-transparent to-black/30" />
+        {/* Overlay suave focado na leitura do texto à esquerda */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
         <div className="relative w-full p-6 sm:p-8">
           <Link

@@ -4,7 +4,10 @@ import { verifyAccessToken } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 
 async function getUserFromRequest(req: NextRequest) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    token = req.cookies.get('bat_access_token')?.value;
+  }
   if (!token) return null;
   const payload = await verifyAccessToken(token);
   return payload ? { id: payload.sub, role: payload.role } : null;
