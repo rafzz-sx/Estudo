@@ -186,21 +186,20 @@ export default function ConcursoInternoPage() {
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER COMPACTO E AUTO-AJUSTÁVEL ═══ */}
-      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl h-44 sm:h-52 flex items-center">
-        {/* Foto de Fundo do Concurso — Auto-ajustada exatamente ao tamanho do banner */}
+      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER ORIGINAL AUTO-AJUSTÁVEL ═══ */}
+      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-bat-bg-card shadow-2xl">
+        {/* Foto de Fundo do Concurso — Auto-ajustada ao tamanho do banner */}
         <div
-          className="absolute inset-0 bg-no-repeat bg-center opacity-90 transition-transform duration-700 hover:scale-105"
+          className="absolute inset-0 bg-cover bg-center opacity-85 transition-transform duration-700"
           style={{
             backgroundImage: `url(${concurso.imagemBg})`,
-            backgroundSize: "100% 100%",
           }}
         />
         {/* Overlay suave focado na leitura do texto à esquerda */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/40 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative w-full p-6 sm:p-8 z-10">
+        <div className="relative p-6 sm:p-8">
           <Link
             href="/concursos"
             className="text-bat-text-muted text-xs hover:text-bat-gold-400 transition-colors no-underline mb-3 inline-flex items-center gap-1.5"
