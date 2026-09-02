@@ -186,20 +186,27 @@ export default function ConcursoInternoPage() {
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER TEMÁTICO ═══ */}
-      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl min-h-[190px] flex items-center">
-        {/* Foto de Fundo Criada do Concurso */}
+      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER TEMÁTICO AUTO-AJUSTÁVEL ═══ */}
+      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl w-full aspect-[3584/1184] min-h-[210px] max-h-[420px] flex items-end sm:items-center">
+        {/* Camada 1: Ambient Blur preenchendo as laterais suavemente */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-90 scale-100 transition-transform duration-700 hover:scale-105"
+          className="absolute inset-0 bg-cover bg-center blur-lg opacity-35 scale-105"
+          style={{
+            backgroundImage: `url(${concurso.imagemBg})`,
+          }}
+        />
+        {/* Camada 2: Imagem com auto-ajuste perfeito (100% visível, sem cortes no topo/base) */}
+        <div
+          className="absolute inset-0 bg-contain bg-center bg-no-repeat opacity-95 transition-all duration-700"
           style={{
             backgroundImage: `url(${concurso.imagemBg})`,
           }}
         />
         {/* Overlay suave focado na leitura do texto à esquerda */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/40 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative w-full p-6 sm:p-8">
+        <div className="relative w-full p-6 sm:p-8 z-10">
           <Link
             href="/concursos"
             className="text-bat-text-muted text-xs hover:text-bat-gold-400 transition-colors no-underline mb-3 inline-flex items-center gap-1.5"
@@ -209,7 +216,7 @@ export default function ConcursoInternoPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-5 mt-2">
             <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-xl border backdrop-blur-md"
+              className="w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-xl border backdrop-blur-md shrink-0"
               style={{
                 background: `${concurso.cor}20`,
                 borderColor: `${concurso.cor}50`,

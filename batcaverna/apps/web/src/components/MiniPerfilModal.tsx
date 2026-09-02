@@ -119,24 +119,41 @@ export function MiniPerfilModal({
           </div>
         ) : dados ? (
           <div>
-            {/* ═══ BANNER ═══ */}
-            <div className="h-32 bg-bat-bg-secondary relative overflow-hidden">
+            {/* ═══ BANNER AUTO-AJUSTÁVEL ═══ */}
+            <div className="aspect-[3/1] min-h-[120px] max-h-[180px] bg-bat-bg-secondary relative overflow-hidden flex items-center justify-center">
               {dados.banner_url ? (
                 isVideo ? (
-                  <video
-                    src={dados.banner_url}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <video
+                      src={dados.banner_url}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
+                    />
+                    <video
+                      src={dados.banner_url}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="relative z-10 w-full h-full object-contain"
+                    />
+                  </>
                 ) : (
-                  <img
-                    src={dados.banner_url}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img
+                      src={dados.banner_url}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover blur-md opacity-30 scale-110 pointer-events-none"
+                    />
+                    <img
+                      src={dados.banner_url}
+                      alt=""
+                      className="relative z-10 w-full h-full object-contain"
+                    />
+                  </>
                 )
               ) : (
                 <div className="w-full h-full bg-gradient-to-r from-bat-gold-400/20 via-bat-purple-900/40 to-bat-bg-card" />

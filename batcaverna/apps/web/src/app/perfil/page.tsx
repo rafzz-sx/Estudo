@@ -330,26 +330,47 @@ export default function PerfilPage() {
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ BANNER + AVATAR ═══ */}
       <div className="relative mb-16">
-        {/* Banner */}
+        {/* Banner Auto-ajustável */}
         <div
-          className="h-44 sm:h-52 rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
+          className="w-full aspect-[3/1] min-h-[170px] sm:min-h-[220px] max-h-[380px] rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
           onClick={() => bannerInputRef.current?.click()}
         >
           {bannerPreview && bannerIsVideo ? (
-            <video
-              src={bannerPreview}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+              {/* Camada Ambient Blur para preencher as bordas */}
+              <video
+                src={bannerPreview}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+              />
+              {/* Camada Principal com auto-ajuste perfeito */}
+              <video
+                src={bannerPreview}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="relative z-10 w-full h-full object-contain"
+              />
+            </div>
           ) : bannerPreview ? (
-            <img
-              src={bannerPreview}
-              alt="Banner"
-              className="w-full h-full object-cover"
-            />
+            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+              {/* Camada Ambient Blur para preencher as bordas */}
+              <img
+                src={bannerPreview}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+              />
+              {/* Camada Principal com auto-ajuste perfeito */}
+              <img
+                src={bannerPreview}
+                alt="Banner"
+                className="relative z-10 w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+              />
+            </div>
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-[#F5C518]/25 via-[#EAB308]/15 to-bat-bg-tertiary">
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,197,24,0.15),transparent_60%)]" />
@@ -357,7 +378,7 @@ export default function PerfilPage() {
           )}
 
           {/* Overlay de upload */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
             <div className="text-center">
               <span className="text-white text-2xl block mb-1">📷</span>
               <span className="text-white text-xs font-semibold">
