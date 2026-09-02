@@ -106,7 +106,7 @@ export default function ConcursoInternoPage() {
   const subCards = [
     {
       icon: "📖",
-      titulo: `Toda Dinâmica para o ${concurso.sigla}`,
+      titulo: `Começar a Estudar para ${['EEAR', 'ESA', 'EAM', 'EFOMM', 'EPCAR', 'ESPCEX'].includes(concurso.sigla.toUpperCase()) ? 'a' : 'o'} ${concurso.sigla}`,
       desc: "Trilha de estudos completa: matérias, assuntos e conteúdo organizado por edital verticalizado.",
       href: `/concursos/${sigla}/trilha`,
       bgImg: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80",

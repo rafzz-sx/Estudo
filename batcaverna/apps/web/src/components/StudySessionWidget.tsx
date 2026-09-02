@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   useStudySessionStore,
   formatarSegundosParaTimer,
@@ -56,14 +57,15 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
 
   if (!isActive && !isPaused) {
     return (
-      <button
+      <Link
+        href="/concursos"
         onClick={() => initSession()}
-        className="flex items-center gap-2 bg-bat-bg-secondary hover:bg-bat-bg-elevated border border-bat-border hover:border-bat-gold-400/40 rounded-xl px-3 py-1.5 text-xs text-bat-text transition-all cursor-pointer"
-        title="Iniciar Sessão de Estudo"
+        className="flex items-center gap-2 bg-bat-bg-secondary hover:bg-bat-bg-elevated border border-bat-border hover:border-bat-gold-400/40 rounded-xl px-3 py-1.5 text-xs text-bat-text transition-all cursor-pointer no-underline"
+        title="Ir para Concursos e Iniciar Sessão de Estudo"
       >
         <span>⚡</span>
         <span className="font-semibold text-bat-gold-400">Estudar Agora</span>
-      </button>
+      </Link>
     );
   }
 

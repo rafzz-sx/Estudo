@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/auth-store";
 import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
+import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
 
 function formatarTempo(seg: number): string {
   if (seg <= 0) return "0min";
@@ -50,6 +51,7 @@ export default function PerfilPage() {
   const [amigos, setAmigos] = useState<any[]>([]);
   const [pendentesRecebidas, setPendentesRecebidas] = useState<any[]>([]);
   const [pendentesEnviadas, setPendentesEnviadas] = useState<any[]>([]);
+  const [modalAmigoAberto, setModalAmigoAberto] = useState(false);
 
   // Concursos favoritos e categoria escrita
   const [concursosFavoritos, setConcursosFavoritos] = useState<string[]>([]);
@@ -544,6 +546,13 @@ export default function PerfilPage() {
       {/* ═══ ABA: AMIGOS ═══ */}
       {tab === "amigos" && (
         <div className="space-y-6">
+          {/* Modal de Adicionar Amigo por Apelido */}
+          <AdicionarAmigoModal
+            isOpen={modalAmigoAberto}
+            onClose={() => setModalAmigoAberto(false)}
+            onSuccess={() => carregarDadosAdicionais()}
+          />
+
           {/* Solicitações Recebidas Pendentes */}
           {pendentesRecebidas.length > 0 && (
             <div className="bg-bat-bg-card border border-bat-gold-400/40 rounded-2xl p-5 space-y-3 shadow-lg">
@@ -571,17 +580,40 @@ export default function PerfilPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleResponderAmizade(req.amizade_id, "aceitar")}
-                        className="btn-primary py-1.5 px-4 text-xs font-bold"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold hover:bg-emerald-500/30 transition-colors cursor-pointer"
                       >
                         ✓ Aceitar
                       </button>
                       <button
                         onClick={() => handleResponderAmizade(req.amizade_id, "recusar")}
-                        className="py-1.5 px-3 rounded-xl bg-bat-bg-secondary border border-bat-border text-bat-text-muted hover:text-bat-error text-xs cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-bold hover:bg-red-500/30 transition-colors cursor-pointer"
                       >
                         ✕ Recusar
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Solicitações Enviadas Pendentes */}
+          {pendentesEnviadas.length > 0 && (
+            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3">
+              <h3 className="heading text-sm font-bold text-bat-text-muted uppercase tracking-wider flex items-center gap-2">
+                <span>⏳</span>
+                <span>Solicitações Enviadas ({pendentesEnviadas.length})</span>
+              </h3>
+              <div className="divide-y divide-bat-border/50">
+                {pendentesEnviadas.map((req) => (
+                  <div key={req.amizade_id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs text-bat-text-muted">Para:</span>
+                      <span className="text-sm font-bold text-bat-text">{req.usuario?.apelido}</span>
+                    </div>
+                    <span className="text-[11px] text-bat-gold-400 bg-bat-gold-400/10 px-2 py-0.5 rounded-md border border-bat-gold-400/20">
+                      Aguardando resposta
+                    </span>
                   </div>
                 ))}
               </div>
@@ -595,15 +627,18 @@ export default function PerfilPage() {
                 <h3 className="heading text-base text-bat-text font-bold">Seu Esquadrão de Amigos</h3>
                 <p className="text-xs text-bat-text-secondary">Soldados com quem você pode trocar mensagens, áudios e bizus.</p>
               </div>
-              <Link href="/ranking" className="btn-primary py-2 px-4 text-xs font-bold no-underline">
-                + Adicionar no Ranking
-              </Link>
+              <button
+                onClick={() => setModalAmigoAberto(true)}
+                className="btn-primary py-2 px-4 text-xs font-bold cursor-pointer"
+              >
+                + Adicionar por Apelido
+              </button>
             </div>
 
             {amigos.length === 0 ? (
               <div className="p-10 text-center text-bat-text-muted text-xs">
                 <span className="text-4xl block mb-2">🦇</span>
-                Você ainda não adicionou nenhum amigo. Visite o Ranking e convide soldados para seu esquadrão!
+                Você ainda não adicionou nenhum amigo. Adicione soldados pelo apelido para formar seu esquadrão!
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

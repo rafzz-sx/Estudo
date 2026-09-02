@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/auth-store";
+import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
 
 interface Mensagem {
   id: string;
@@ -50,6 +51,7 @@ export default function ChatPage() {
   const [visible, setVisible] = useState(false);
   const [loadingConversas, setLoadingConversas] = useState(true);
   const [loadingMensagens, setLoadingMensagens] = useState(false);
+  const [modalAmigoAberto, setModalAmigoAberto] = useState(false);
 
   // Áudio: gravação
   const [gravandoAudio, setGravandoAudio] = useState(false);
@@ -291,6 +293,13 @@ export default function ChatPage() {
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+      {/* ═══ MODAL DE ADICIONAR AMIGO POR APELIDO ═══ */}
+      <AdicionarAmigoModal
+        isOpen={modalAmigoAberto}
+        onClose={() => setModalAmigoAberto(false)}
+        onSuccess={() => carregarConversas()}
+      />
+
       {/* ═══ LIGHTBOX FULLSCREEN PARA FOTOS ═══ */}
       {lightboxUrl && (
         <div
@@ -326,13 +335,13 @@ export default function ChatPage() {
           </p>
         </div>
 
-        <Link
-          href="/ranking"
-          className="btn-primary py-2.5 px-5 text-xs font-bold self-start sm:self-auto no-underline flex items-center gap-1.5"
+        <button
+          onClick={() => setModalAmigoAberto(true)}
+          className="btn-primary py-2.5 px-5 text-xs font-bold self-start sm:self-auto flex items-center gap-2 cursor-pointer shadow-lg"
         >
-          <span>🏆</span>
-          <span>Encontrar Amigos no Ranking</span>
-        </Link>
+          <span>👥</span>
+          <span>+ Adicionar Amigo por Apelido</span>
+        </button>
       </div>
 
       {/* ═══ PAINEL DO CHAT (SIDEBAR + MENSAGENS) ═══ */}
@@ -367,12 +376,12 @@ export default function ChatPage() {
                 <span className="text-3xl block mb-3">👥</span>
                 <p className="font-bold text-bat-text mb-1">Nenhuma conversa ainda</p>
                 <p className="mb-4">O chat é desbloqueado exclusivamente entre amigos confirmados.</p>
-                <Link
-                  href="/ranking"
-                  className="btn-primary inline-block py-2 px-4 text-xs no-underline font-bold"
+                <button
+                  onClick={() => setModalAmigoAberto(true)}
+                  className="btn-primary inline-block py-2.5 px-5 text-xs font-bold cursor-pointer"
                 >
-                  Adicionar Amigos no Ranking →
-                </Link>
+                  + Conectar Soldado por Apelido ⚡
+                </button>
               </div>
             ) : (
               conversasFiltradas.map((conv) => {
