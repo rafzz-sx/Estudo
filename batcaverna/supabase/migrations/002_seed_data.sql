@@ -233,3 +233,11 @@ SELECT
 FROM concursos c, materias m, assuntos a
 WHERE c.sigla = 'ESA' AND m.nome = 'Matemática' AND a.nome = 'Equações do 1º e 2º Grau'
 AND NOT EXISTS (SELECT 1 FROM questoes q WHERE q.concurso_id = c.id AND q.enunciado LIKE 'Na equação do segundo grau 3x² - 12x + 9 = 0%');
+
+-- ═══════════════════════════════════════════════════════════════
+-- APP INFO (Versão da Plataforma)
+-- ═══════════════════════════════════════════════════════════════
+
+INSERT INTO app_info (versao_atual, atualizado_em)
+SELECT '1.1.0', NOW()
+WHERE NOT EXISTS (SELECT 1 FROM app_info);

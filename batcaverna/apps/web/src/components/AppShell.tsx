@@ -7,6 +7,7 @@ import { BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore } from "@/stores/study-session-store";
 import { StudySessionBadge } from "@/components/StudySessionWidget";
+import { NotificationCenter } from "@/components/NotificationCenter";
 
 // ─── Links do menu ───────────────────────────────────────────
 const navLinksBase = [
@@ -72,9 +73,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-bat-bg flex">
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
-        {/* Logo */}
+        {/* Logo e Notificações */}
         <div className="px-5 py-5 border-b border-bat-border flex items-center justify-between">
           <BatBrand iconSize={36} textSize="text-xl" className="!items-start" />
+          <NotificationCenter />
         </div>
 
         {/* Status de Estudo na Sidebar */}
@@ -149,6 +151,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <BatBrand iconSize={22} textSize="text-sm sm:text-base" />
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <NotificationCenter />
             <StudySessionBadge />
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden shrink-0">
               {userAvatar ? (

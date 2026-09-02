@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import Link from "next/link";
+import { MiniPerfilModal } from "@/components/MiniPerfilModal";
 
 type TabTipo = "tempo_estudo" | "questoes";
 type PeriodoTipo = "semanal" | "mensal" | "geral";
@@ -17,6 +18,19 @@ interface RankingItem {
   valor: number;
   percentual_acerto: number;
 }
+
+const CONCURSOS_OPCOES = [
+  { valor: "todos", label: "Todos os Concursos" },
+  { valor: "EEAR", label: "✈️ EEAR" },
+  { valor: "ESA", label: "⭐ ESA" },
+  { valor: "EAM", label: "⚓ EAM" },
+  { valor: "CN", label: "🚢 CN" },
+  { valor: "EPCAR", label: "🛩️ EPCAR" },
+  { valor: "ESPCEX", label: "🎖️ EsPCEx" },
+  { valor: "EFOMM", label: "🌊 EFOMM" },
+  { valor: "IME", label: "🔬 IME" },
+  { valor: "ENEM", label: "📚 ENEM" },
+];
 
 function formatarTempo(seg: number): string {
   const h = Math.floor(seg / 3600);
@@ -40,16 +54,21 @@ function getMedalha(pos: number): string {
 export default function RankingPage() {
   const [tab, setTab] = useState<TabTipo>("tempo_estudo");
   const [periodo, setPeriodo] = useState<PeriodoTipo>("geral");
+  const [concursoFiltro, setConcursoFiltro] = useState("todos");
   const [visible, setVisible] = useState(false);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalUserId, setModalUserId] = useState<string | null>(null);
 
   const user = useAuthStore((state) => state.user);
 
   const carregarRanking = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ranking?tipo=${tab}&periodo=${periodo}`);
+      const url = `/api/ranking?tipo=${tab}&periodo=${periodo}${
+        concursoFiltro !== "todos" ? `&concurso=${concursoFiltro}` : ""
+      }`;
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data?.ranking)) {
@@ -69,54 +88,97 @@ export default function RankingPage() {
 
   useEffect(() => {
     carregarRanking();
-  }, [tab, periodo]);
+  }, [tab, periodo, concursoFiltro]);
 
   // Verificar posição do usuário logado
   const minhaPosicao = ranking.find((r) => r.user_id === user?.id);
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      <div className="mb-6">
-        <h1 className="heading text-3xl text-bat-text mb-2">🏆 Ranking da BatCaverna</h1>
-        <p className="text-bat-text-secondary">Os guerreiros com maior tempo de estudo dedicado e dedicação.</p>
+      {/* ═══ MODAL MINI PERFIL ═══ */}
+      {modalUserId && (
+        <MiniPerfilModal
+          userId={modalUserId}
+          onClose={() => setModalUserId(null)}
+        />
+      )}
+
+      {/* ═══ CABEÇALHO ═══ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="heading text-3xl text-bat-text mb-2">🏆 Ranking da BatCaverna</h1>
+          <p className="text-bat-text-secondary">
+            Os melhores soldados da caverna classificados por dedicação e precisão tática.
+          </p>
+        </div>
+
+        {/* Link para configurações de privacidade */}
+        <Link
+          href="/perfil"
+          className="text-xs text-bat-text-muted hover:text-bat-gold-400 transition-colors flex items-center gap-1.5 self-start sm:self-auto bg-bat-bg-card border border-bat-border px-3 py-2 rounded-xl"
+        >
+          <span>⚙️</span>
+          <span>Privacidade no Ranking</span>
+        </Link>
       </div>
 
-      {/* ═══ ABAS: Tempo de Estudo / Questões ═══ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex bg-bat-bg-card border border-bat-border rounded-xl p-1">
+      {/* ═══ FILTROS E ABAS ═══ */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+        {/* Abas: Tempo de Estudo / Questões */}
+        <div className="flex bg-bat-bg-card border border-bat-border rounded-xl p-1 w-fit">
           <button
             onClick={() => setTab("tempo_estudo")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              tab === "tempo_estudo" ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]" : "text-bat-text-muted hover:text-bat-text"
+            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+              tab === "tempo_estudo"
+                ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]"
+                : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
             ⏱️ Tempo de Estudo Real
           </button>
           <button
             onClick={() => setTab("questoes")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              tab === "questoes" ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]" : "text-bat-text-muted hover:text-bat-text"
+            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+              tab === "questoes"
+                ? "bg-bat-gold-400 text-black shadow-[0_0_15px_rgba(245,197,24,0.35)]"
+                : "text-bat-text-muted hover:text-bat-text"
             }`}
           >
-            ❓ Questões
+            ❓ Questões & Precisão
           </button>
         </div>
 
-        {/* Filtro de Período */}
-        <div className="flex gap-2">
-          {(["semanal", "mensal", "geral"] as PeriodoTipo[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriodo(p)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
-                periodo === p
-                  ? "bg-bat-gold-400/15 border-bat-gold-400/30 text-bat-gold-400 font-bold"
-                  : "bg-bat-bg-card border-bat-border text-bat-text-muted hover:text-bat-text"
-              }`}
-            >
-              {p === "semanal" ? "Semanal" : p === "mensal" ? "Mensal" : "Geral"}
-            </button>
-          ))}
+        {/* Filtros de Concurso e Período */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Seletor de Concurso */}
+          <select
+            value={concursoFiltro}
+            onChange={(e) => setConcursoFiltro(e.target.value)}
+            className="bg-bat-bg-card border border-bat-border text-bat-text text-xs rounded-xl px-3 py-2 focus:border-bat-gold-400 focus:outline-none cursor-pointer"
+          >
+            {CONCURSOS_OPCOES.map((c) => (
+              <option key={c.valor} value={c.valor} className="bg-bat-bg-card text-bat-text">
+                {c.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Período */}
+          <div className="flex gap-1 bg-bat-bg-card border border-bat-border rounded-xl p-1">
+            {(["semanal", "mensal", "geral"] as PeriodoTipo[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriodo(p)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  periodo === p
+                    ? "bg-bat-gold-400/20 text-bat-gold-400 font-bold border border-bat-gold-400/30"
+                    : "text-bat-text-muted hover:text-bat-text border border-transparent"
+                }`}
+              >
+                {p === "semanal" ? "Semanal" : p === "mensal" ? "Mensal" : "Geral"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -146,26 +208,40 @@ export default function RankingPage() {
       ) : (
         /* Tabela e Top 3 */
         <div className="space-y-6">
-          {/* Top 3 */}
+          {/* Top 3 Pódium */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {ranking.slice(0, 3).map((r) => (
               <div
                 key={r.user_id}
-                className="bg-bat-bg-card border border-bat-gold-400/30 rounded-2xl p-5 text-center shadow-lg relative"
+                onClick={() => setModalUserId(r.user_id)}
+                className="bg-bat-bg-card border border-bat-gold-400/30 rounded-2xl p-5 text-center shadow-lg relative cursor-pointer hover:border-bat-gold-400/70 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)] transition-all group"
               >
                 <span className="text-3xl mb-2 block">{getMedalha(r.posicao)}</span>
-                <div className="w-14 h-14 rounded-full bg-bat-gold-400/20 border-2 border-bat-gold-400/40 flex items-center justify-center text-bat-gold-400 text-xl font-bold mx-auto mb-2 overflow-hidden">
+                <div className="w-14 h-14 rounded-full bg-bat-gold-400/20 border-2 border-bat-gold-400/40 flex items-center justify-center text-bat-gold-400 text-xl font-bold mx-auto mb-2 overflow-hidden group-hover:scale-105 transition-transform">
                   {r.avatar_url ? (
                     <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     r.apelido[0]?.toUpperCase()
                   )}
                 </div>
-                <p className="heading text-bat-text font-bold text-base truncate">{r.apelido}</p>
+                <p className="heading text-bat-text font-bold text-base truncate group-hover:text-bat-gold-400 transition-colors">
+                  {r.apelido}
+                </p>
                 <p className="text-bat-text-muted text-xs">Nv. {r.nivel_atual} · {r.titulo_nivel}</p>
+                
                 <p className="heading text-bat-gold-400 text-lg font-bold mt-2">
                   {tab === "tempo_estudo" ? formatarTempo(r.valor) : `${r.valor} questões`}
                 </p>
+
+                {tab === "questoes" && r.percentual_acerto !== undefined && (
+                  <p className="text-[11px] text-emerald-400 font-semibold mt-0.5">
+                    🎯 {r.percentual_acerto}% de acerto
+                  </p>
+                )}
+
+                <span className="text-[10px] text-bat-text-muted mt-2 block opacity-0 group-hover:opacity-100 transition-opacity">
+                  Clique para ver Mini Perfil 👤
+                </span>
               </div>
             ))}
           </div>
@@ -178,7 +254,9 @@ export default function RankingPage() {
                   <th className="px-3 sm:px-5 py-3">Posição</th>
                   <th className="px-3 sm:px-5 py-3">Soldado</th>
                   <th className="px-2 sm:px-5 py-3 text-center">Nível</th>
-                  <th className="px-3 sm:px-5 py-3 text-right">{tab === "tempo_estudo" ? "Tempo Estudado" : "Questões"}</th>
+                  <th className="px-3 sm:px-5 py-3 text-right">
+                    {tab === "tempo_estudo" ? "Tempo Estudado" : "Questões / Acerto"}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-bat-border/50 text-xs sm:text-sm">
@@ -187,7 +265,8 @@ export default function RankingPage() {
                   return (
                     <tr
                       key={r.user_id}
-                      className={`hover:bg-bat-bg-elevated transition-colors ${
+                      onClick={() => setModalUserId(r.user_id)}
+                      className={`hover:bg-bat-bg-elevated transition-colors cursor-pointer ${
                         isMe ? "bg-bat-gold-400/10 font-semibold" : ""
                       }`}
                     >
@@ -204,7 +283,9 @@ export default function RankingPage() {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <span className="text-bat-text font-medium truncate block max-w-[100px] sm:max-w-none">{r.apelido}</span>
+                            <span className="text-bat-text font-medium truncate block max-w-[120px] sm:max-w-none hover:text-bat-gold-400">
+                              {r.apelido}
+                            </span>
                             {isMe && (
                               <span className="text-[9px] sm:text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/20 px-1 py-0.2 rounded inline-block">
                                 VOCÊ
@@ -217,7 +298,18 @@ export default function RankingPage() {
                         Nv. {r.nivel_atual}
                       </td>
                       <td className="px-3 sm:px-5 py-3 text-right heading text-bat-gold-400 text-xs sm:text-sm font-bold whitespace-nowrap">
-                        {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
+                        {tab === "tempo_estudo" ? (
+                          formatarTempo(r.valor)
+                        ) : (
+                          <div>
+                            <span>{r.valor} questões</span>
+                            {r.percentual_acerto !== undefined && (
+                              <span className="text-[10px] text-emerald-400 block font-normal font-sans">
+                                {r.percentual_acerto}% acerto
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

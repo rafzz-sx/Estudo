@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useAuthStore } from "@/stores/auth-store";
+import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
 
 function formatarTempo(seg: number): string {
   if (seg <= 0) return "0min";
@@ -16,20 +18,23 @@ function formatarTempo(seg: number): string {
   return `${m}min`;
 }
 
-function getTituloNivel(nivel: number): string {
-  if (nivel >= 15) return "Rei da Batcaverna";
-  if (nivel >= 10) return "General Estrategista";
-  if (nivel >= 7) return "Capitão Tático";
-  if (nivel >= 5) return "Cabo de Operações";
-  if (nivel >= 3) return "Soldado da Caverna";
-  return "Recruta da Caverna";
-}
-
 const BANNER_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm";
 const AVATAR_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 
-type TabPerfil = "visao_geral" | "badges" | "config";
+const TODOS_CONCURSOS = [
+  { sigla: "EEAR", emoji: "✈️", nome: "Aeronáutica" },
+  { sigla: "ESA", emoji: "⭐", nome: "Exército" },
+  { sigla: "EAM", emoji: "⚓", nome: "Marinha" },
+  { sigla: "CN", emoji: "🚢", nome: "Colégio Naval" },
+  { sigla: "EPCAR", emoji: "🛩️", nome: "Cadetes do Ar" },
+  { sigla: "ESPCEX", emoji: "🎖️", nome: "EsPCEx" },
+  { sigla: "EFOMM", emoji: "🌊", nome: "Marinha Mercante" },
+  { sigla: "IME", emoji: "🔬", nome: "Engenharia Militar" },
+  { sigla: "ENEM", emoji: "📚", nome: "Exame Nacional" },
+];
+
+type TabPerfil = "visao_geral" | "amigos" | "badges" | "config";
 
 export default function PerfilPage() {
   const [visible, setVisible] = useState(false);
@@ -40,6 +45,22 @@ export default function PerfilPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [tempoTotalEstudo, setTempoTotalEstudo] = useState(0);
+
+  // Amigos
+  const [amigos, setAmigos] = useState<any[]>([]);
+  const [pendentesRecebidas, setPendentesRecebidas] = useState<any[]>([]);
+  const [pendentesEnviadas, setPendentesEnviadas] = useState<any[]>([]);
+
+  // Concursos favoritos e categoria escrita
+  const [concursosFavoritos, setConcursosFavoritos] = useState<string[]>([]);
+  const [categoriaEscrita, setCategoriaEscrita] = useState<string>("");
+  const [ocultarRanking, setOcultarRanking] = useState(false);
+
+  // Informações de Versão do App
+  const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
+    versao_atual: "1.1.0",
+    atualizado_em: new Date().toISOString(),
+  });
 
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
@@ -54,7 +75,7 @@ export default function PerfilPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Carregar perfil atualizado diretamente do Supabase
+  // 1. Carregar perfil completo
   const carregarPerfil = async () => {
     try {
       const res = await fetch("/api/usuarios/me");
@@ -88,9 +109,50 @@ export default function PerfilPage() {
     }
   };
 
+  // 2. Carregar amigos, favoritos, categoria e versão
+  const carregarDadosAdicionais = async () => {
+    try {
+      const [resAmigos, resFav, resCat, resPriv, resApp] = await Promise.all([
+        fetch("/api/usuarios/me/amigos"),
+        fetch("/api/usuarios/me/concursos-favoritos"),
+        fetch("/api/usuarios/me/categoria-escrita"),
+        fetch("/api/usuarios/me/privacidade/ranking"),
+        fetch("/api/app-info"),
+      ]);
+
+      if (resAmigos.ok) {
+        const json = await resAmigos.json();
+        if (json.success) {
+          setAmigos(json.data.amigos || []);
+          setPendentesRecebidas(json.data.pendentes_recebidas || []);
+          setPendentesEnviadas(json.data.pendentes_enviadas || []);
+        }
+      }
+      if (resFav.ok) {
+        const json = await resFav.json();
+        if (json.success) setConcursosFavoritos(json.data || []);
+      }
+      if (resCat.ok) {
+        const json = await resCat.json();
+        if (json.success) setCategoriaEscrita(json.data || "");
+      }
+      if (resPriv.ok) {
+        const json = await resPriv.json();
+        if (json.success) setOcultarRanking(json.data.ocultar_do_ranking || false);
+      }
+      if (resApp.ok) {
+        const json = await resApp.json();
+        if (json.success) setAppInfo(json.data);
+      }
+    } catch (e) {
+      console.warn("Erro ao carregar dados complementares:", e);
+    }
+  };
+
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
     carregarPerfil();
+    carregarDadosAdicionais();
   }, []);
 
   useEffect(() => {
@@ -103,7 +165,6 @@ export default function PerfilPage() {
     }
   }, [user]);
 
-  // Detectar se banner é vídeo
   useEffect(() => {
     if (bannerPreview) {
       setBannerIsVideo(
@@ -114,7 +175,7 @@ export default function PerfilPage() {
     }
   }, [bannerPreview]);
 
-  // 2. Upload e Salvamento Instantâneo de Foto e Banner no Supabase
+  // Upload Foto e Banner
   const handleFileSelect = async (file: File, type: "avatar" | "banner") => {
     if (file.size > MAX_FILE_SIZE) {
       setMsgFeedback("⚠️ Arquivo muito grande! Máximo 15MB.");
@@ -185,27 +246,44 @@ export default function PerfilPage() {
     reader.readAsDataURL(file);
   };
 
-  // 3. Salvar Informações de Texto (Nome, Apelido, Bio)
+  // Salvar Informações de Texto
   const handleSalvarPerfil = async () => {
     setSalvando(true);
     setMsgFeedback(null);
     try {
-      const res = await fetch("/api/usuarios/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome,
-          apelido,
-          bio,
-          avatar_url: avatarPreview,
-          banner_url: bannerPreview,
+      const [resUser, resFav, resCat, resPriv] = await Promise.all([
+        fetch("/api/usuarios/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome,
+            apelido,
+            bio,
+            avatar_url: avatarPreview,
+            banner_url: bannerPreview,
+          }),
         }),
-      });
+        fetch("/api/usuarios/me/concursos-favoritos", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ concursos: concursosFavoritos }),
+        }),
+        fetch("/api/usuarios/me/categoria-escrita", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoria: categoriaEscrita }),
+        }),
+        fetch("/api/usuarios/me/privacidade/ranking", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ocultar_do_ranking: ocultarRanking }),
+        }),
+      ]);
 
-      const json = await res.json();
-      if (res.ok && json.success) {
+      const json = await resUser.json();
+      if (resUser.ok && json.success) {
         updateUser(json.data);
-        setMsgFeedback("✓ Perfil e alterações salvas com sucesso!");
+        setMsgFeedback("✓ Perfil, concursos e preferências salvas com sucesso!");
         setEditandoBio(false);
       } else {
         setMsgFeedback(`⚠️ ${json.error || "Erro ao salvar perfil"}`);
@@ -218,10 +296,31 @@ export default function PerfilPage() {
     }
   };
 
-  const nivel = user?.nivel_atual || 1;
-  const xp = user?.xp_total ?? 0;
+  // Responder Amizade (Aceitar / Recusar)
+  const handleResponderAmizade = async (amizadeId: string, acao: "aceitar" | "recusar") => {
+    try {
+      const res = await fetch(`/api/amizades/${amizadeId}/responder`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao }),
+      });
+      if (res.ok) {
+        carregarDadosAdicionais();
+      }
+    } catch {}
+  };
+
+  // Alternar Concurso Favorito
+  const toggleConcursoFavorito = (sigla: string) => {
+    setConcursosFavoritos((prev) =>
+      prev.includes(sigla) ? prev.filter((s) => s !== sigla) : [...prev, sigla]
+    );
+  };
+
+  const nivelInfo = calcularNivel(user?.xp_total ?? 0);
+  const nivel = nivelInfo.nivel;
   const streak = user?.streak_dias ?? 0;
-  const titulo = getTituloNivel(nivel);
+  const titulo = nivelInfo.titulo;
   const displayApelido = user?.apelido || apelido || "Soldado";
   const displayNome = user?.nome || nome || "";
 
@@ -229,7 +328,7 @@ export default function PerfilPage() {
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ BANNER + AVATAR ═══ */}
       <div className="relative mb-16">
-        {/* Banner (clicável para upload — suporta imagem, GIF, vídeo) */}
+        {/* Banner */}
         <div
           className="h-44 sm:h-52 rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
           onClick={() => bannerInputRef.current?.click()}
@@ -280,7 +379,7 @@ export default function PerfilPage() {
           }}
         />
 
-        {/* Avatar (clicável para upload — suporta imagem e GIF) */}
+        {/* Avatar */}
         <div className="absolute -bottom-12 left-6 flex items-end gap-4">
           <div
             className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-bat-bg-card border-4 border-bat-bg shadow-xl overflow-hidden group cursor-pointer"
@@ -298,7 +397,6 @@ export default function PerfilPage() {
               </div>
             )}
 
-            {/* Overlay de upload */}
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
               <span className="text-white text-xs font-bold text-center px-1">
                 {uploadingAvatar ? "Salvando..." : "Trocar Foto"}
@@ -336,15 +434,16 @@ export default function PerfilPage() {
       )}
 
       {/* ═══ ABAS ═══ */}
-      <div className="flex gap-1 bg-bat-bg-card border border-bat-border rounded-xl p-1 mb-6 w-fit">
-        {([
+      <div className="flex gap-1 bg-bat-bg-card border border-bat-border rounded-xl p-1 mb-6 w-fit flex-wrap">
+        {[
           { key: "visao_geral", label: "Visão Geral" },
+          { key: "amigos", label: `👥 Amigos (${amigos.length})` },
           { key: "badges", label: "Badges" },
           { key: "config", label: "Configurações" },
-        ] as { key: TabPerfil; label: string }[]).map((t) => (
+        ].map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(t.key as TabPerfil)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
               tab === t.key ? "bg-bat-gold-400 text-black font-bold shadow-[0_0_15px_rgba(245,197,24,0.3)]" : "text-bat-text-muted hover:text-bat-text"
             }`}
@@ -411,13 +510,132 @@ export default function PerfilPage() {
           {/* Concursos favoritos e categoria */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Concursos Favoritos</h3>
-              <p className="text-bat-text-muted text-sm">Nenhum concurso selecionado ainda.</p>
+              <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Concursos Alvo</h3>
+              {concursosFavoritos.length === 0 ? (
+                <p className="text-bat-text-muted text-sm">Nenhum concurso selecionado. Vá em Configurações para escolher seus alvos.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {concursosFavoritos.map((sigla) => {
+                    const c = TODOS_CONCURSOS.find((x) => x.sigla === sigla);
+                    return (
+                      <span
+                        key={sigla}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bat-bg-secondary border border-bat-border text-bat-text text-xs font-bold"
+                      >
+                        <span>{c?.emoji || "🎯"}</span>
+                        <span>{sigla}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Categoria</h3>
-              <p className="text-bat-text text-sm">Recruta da Caverna</p>
+              <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Lema / Categoria Escrita</h3>
+              <p className="text-bat-text text-sm font-mono text-bat-gold-400">
+                {categoriaEscrita || titulo}
+              </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ABA: AMIGOS ═══ */}
+      {tab === "amigos" && (
+        <div className="space-y-6">
+          {/* Solicitações Recebidas Pendentes */}
+          {pendentesRecebidas.length > 0 && (
+            <div className="bg-bat-bg-card border border-bat-gold-400/40 rounded-2xl p-5 space-y-3 shadow-lg">
+              <h3 className="heading text-sm font-bold text-bat-gold-400 uppercase tracking-wider flex items-center gap-2">
+                <span>📬</span>
+                <span>Solicitações de Amizade Recebidas ({pendentesRecebidas.length})</span>
+              </h3>
+              <div className="divide-y divide-bat-border/50">
+                {pendentesRecebidas.map((req) => (
+                  <div key={req.amizade_id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
+                        {req.usuario?.avatar_url ? (
+                          <img src={req.usuario.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          req.usuario?.apelido?.[0]?.toUpperCase() || "S"
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-bat-text">{req.usuario?.apelido}</p>
+                        <p className="text-xs text-bat-text-muted">Nível {req.usuario?.nivel_atual || 1}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleResponderAmizade(req.amizade_id, "aceitar")}
+                        className="btn-primary py-1.5 px-4 text-xs font-bold"
+                      >
+                        ✓ Aceitar
+                      </button>
+                      <button
+                        onClick={() => handleResponderAmizade(req.amizade_id, "recusar")}
+                        className="py-1.5 px-3 rounded-xl bg-bat-bg-secondary border border-bat-border text-bat-text-muted hover:text-bat-error text-xs cursor-pointer"
+                      >
+                        ✕ Recusar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Lista de Amigos Confirmados */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="heading text-base text-bat-text font-bold">Seu Esquadrão de Amigos</h3>
+                <p className="text-xs text-bat-text-secondary">Soldados com quem você pode trocar mensagens, áudios e bizus.</p>
+              </div>
+              <Link href="/ranking" className="btn-primary py-2 px-4 text-xs font-bold no-underline">
+                + Adicionar no Ranking
+              </Link>
+            </div>
+
+            {amigos.length === 0 ? (
+              <div className="p-10 text-center text-bat-text-muted text-xs">
+                <span className="text-4xl block mb-2">🦇</span>
+                Você ainda não adicionou nenhum amigo. Visite o Ranking e convide soldados para seu esquadrão!
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {amigos.map((a) => (
+                  <div
+                    key={a.amizade_id}
+                    className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden flex-shrink-0">
+                        {a.usuario?.avatar_url ? (
+                          <img src={a.usuario.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          a.usuario?.apelido?.[0]?.toUpperCase() || "S"
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-bat-text truncate">{a.usuario?.apelido}</p>
+                        <p className="text-xs text-bat-text-muted">Nível {a.usuario?.nivel_atual || 1}</p>
+                      </div>
+                    </div>
+
+                    <Link
+                      href={a.usuario?.id ? `/chat?amigo=${a.usuario.id}` : "/chat"}
+                      className="p-2 rounded-xl bg-bat-gold-400/15 border border-bat-gold-400/30 text-bat-gold-400 hover:bg-bat-gold-400/25 transition-all text-xs font-bold no-underline flex-shrink-0"
+                    >
+                      💬 Chat
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -443,33 +661,77 @@ export default function PerfilPage() {
 
       {/* ═══ CONFIGURAÇÕES ═══ */}
       {tab === "config" && (
-        <div className="space-y-4 max-w-lg">
-          {/* Upload de Foto e Banner */}
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-4">Foto & Banner</h3>
-            <div className="space-y-3">
-              <button
-                onClick={() => avatarInputRef.current?.click()}
-                className="w-full py-3 rounded-xl bg-bat-bg-secondary border border-bat-border hover:border-[#F5C518]/40 text-bat-text text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                📷 Trocar Foto de Perfil
-                <span className="text-bat-text-muted text-[10px]">(PNG, JPG, GIF)</span>
-              </button>
-              <button
-                onClick={() => bannerInputRef.current?.click()}
-                className="w-full py-3 rounded-xl bg-bat-bg-secondary border border-bat-border hover:border-[#F5C518]/40 text-bat-text text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-2"
-              >
-                🎬 Trocar Banner
-                <span className="text-bat-text-muted text-[10px]">(PNG, JPG, GIF, MP4, WebM)</span>
-              </button>
-              <p className="text-bat-text-muted text-[11px] text-center">
-                💡 Suporta GIFs animados e vídeos no banner. Todas as mídias ficam salvas permanentemente na sua conta.
-              </p>
+        <div className="space-y-6 max-w-2xl">
+          {/* Concursos Favoritos */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3">
+            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider">
+              Concursos Favoritos (Alvos de Estudo)
+            </h3>
+            <p className="text-xs text-bat-text-muted">
+              Selecione os concursos que serão destacados no seu perfil e no Mini Perfil do ranking.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+              {TODOS_CONCURSOS.map((c) => {
+                const ativo = concursosFavoritos.includes(c.sigla);
+                return (
+                  <button
+                    key={c.sigla}
+                    type="button"
+                    onClick={() => toggleConcursoFavorito(c.sigla)}
+                    className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                      ativo
+                        ? "bg-bat-gold-400/20 border-bat-gold-400 text-bat-gold-400 shadow-[0_0_10px_rgba(245,197,24,0.2)]"
+                        : "bg-bat-bg-secondary border-bat-border text-bat-text-muted hover:text-bat-text"
+                    }`}
+                  >
+                    <span className="text-lg">{c.emoji}</span>
+                    <span>{c.sigla}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-4">Dados da Conta</h3>
+          {/* Categoria / Lema Escrito */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3">
+            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider">
+              Categoria / Lema Personalizado ("Escrito")
+            </h3>
+            <input
+              type="text"
+              value={categoriaEscrita}
+              onChange={(e) => setCategoriaEscrita(e.target.value.slice(0, 100))}
+              placeholder="Ex: Focado na AFA 2026, Caveira da Infantaria..."
+              className="input-field text-sm font-mono text-bat-gold-400"
+            />
+          </div>
+
+          {/* Privacidade no Ranking */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="heading text-sm text-bat-text font-bold">Ocultar do Ranking Público</h3>
+              <p className="text-xs text-bat-text-muted mt-0.5">
+                Se ativado, seu perfil não aparecerá na classificação geral pública da BatCaverna.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOcultarRanking(!ocultarRanking)}
+              className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                ocultarRanking ? "bg-bat-gold-400" : "bg-bat-border"
+              }`}
+            >
+              <span
+                className={`w-4 h-4 rounded-full bg-black absolute top-1 transition-transform ${
+                  ocultarRanking ? "right-1" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Dados da Conta */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-4">
+            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider">Dados Pessoais</h3>
             <div className="space-y-3">
               <div>
                 <label className="text-bat-text-muted text-xs block mb-1">E-mail</label>
@@ -504,18 +766,9 @@ export default function PerfilPage() {
             </button>
           </div>
 
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-            <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-4">Alterar Senha</h3>
-            <div className="space-y-3">
-              <input type="password" placeholder="Senha atual" className="input-field text-sm" />
-              <input type="password" placeholder="Nova senha" className="input-field text-sm" />
-              <input type="password" placeholder="Confirmar nova senha" className="input-field text-sm" />
-            </div>
-            <button className="btn-primary mt-4 py-2 px-6 text-sm">Alterar senha</button>
-          </div>
-
+          {/* Rodapé Dinâmico de Versão */}
           <p className="text-center text-bat-text-muted text-xs mt-6">
-            BatCaverna v1.1.0
+            BatCaverna v{appInfo.versao_atual} · Atualizado em {formatarDataHoraVersao(appInfo.atualizado_em)}
           </p>
         </div>
       )}

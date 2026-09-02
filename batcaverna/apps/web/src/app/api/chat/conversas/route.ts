@@ -13,23 +13,61 @@ async function getUserFromRequest(req: NextRequest): Promise<{ id: string; role:
 export async function GET(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req);
-    const userId = user?.id || 'mock-user';
+    if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
     const supabase = createServerSupabaseClient();
 
     const { data: conversas, error } = await supabase
       .from('conversas')
       .select(`
-        id, user_1_id, user_2_id, atualizado_em,
-        user1:users!user_1_id (id, nome, apelido, avatar_url, nivel_atual),
-        user2:users!user_2_id (id, nome, apelido, avatar_url, nivel_atual)
+        id, amizade_id, user_id_a, user_id_b, criada_em, ultima_mensagem_em,
+        userA:users!user_id_a (id, nome, apelido, avatar_url, nivel_atual),
+        userB:users!user_id_b (id, nome, apelido, avatar_url, nivel_atual),
+        mensagens:mensagem_chat (id, conteudo_texto, midia_url, tipo, enviado_em, lida, autor_id)
       `)
-      .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
-      .order('atualizado_em', { ascending: false });
+      .or(`user_id_a.eq.${user.id},user_id_b.eq.${user.id}`)
+      .order('ultima_mensagem_em', { ascending: false });
+
+    if (error) throw error;
+
+    // Formatar conversas trazendo o outro_usuario e a ultima_mensagem
+    const formatadas = (conversas || []).map((c: any) => {
+      const outro = c.user_id_a === user.id ? c.userB : c.userA;
+      const msgs = (c.mensagens || []).sort(
+        (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
+      );
+      const ultimaMsg = msgs[0];
+      const naoLidas = msgs.filter((m: any) => !m.lida && m.autor_id !== user.id).length;
+
+      return {
+        id: c.id,
+        amizade_id: c.amizade_id,
+        user_1_id: c.user_id_a,
+        user_2_id: c.user_id_b,
+        atualizado_em: c.ultima_mensagem_em || c.criada_em,
+        outro_usuario: {
+          id: outro?.id,
+          nome: outro?.nome,
+          apelido: outro?.apelido,
+          avatar_url: outro?.avatar_url,
+          nivel_atual: outro?.nivel_atual || 1,
+          online: true,
+          concurso: 'Geral',
+        },
+        ultima_mensagem: ultimaMsg
+          ? ultimaMsg.tipo === 'audio'
+            ? '🎤 Mensagem de voz'
+            : ultimaMsg.tipo === 'imagem'
+            ? '📷 Foto'
+            : ultimaMsg.conteudo_texto
+          : 'Conversa iniciada',
+        nao_lidas: naoLidas,
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      data: conversas || [],
+      data: formatadas,
     });
   } catch (error) {
     console.error('GET /api/chat/conversas error:', error);
@@ -37,7 +75,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/chat/conversas — Inicia uma nova conversa entre dois usuários
+// POST /api/chat/conversas — Inicia ou recupera uma conversa entre dois amigos
 export async function POST(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req);
@@ -50,15 +88,33 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    // Ordenar IDs para manter unicidade
+    // 1. Verificar se são amigos aceitos
+    const { data: amizade } = await supabase
+      .from('amizades')
+      .select('id, status')
+      .or(
+        `and(user_id_solicitante.eq.${user.id},user_id_destinatario.eq.${target_user_id}),` +
+        `and(user_id_solicitante.eq.${target_user_id},user_id_destinatario.eq.${user.id})`
+      )
+      .eq('status', 'aceita')
+      .maybeSingle();
+
+    if (!amizade) {
+      return NextResponse.json(
+        { success: false, error: 'O chat só é desbloqueado entre amigos confirmados.' },
+        { status: 403 }
+      );
+    }
+
+    // 2. Ordenar IDs
     const [u1, u2] = [user.id, target_user_id].sort();
 
     const { data: existing } = await supabase
       .from('conversas')
       .select('*')
-      .eq('user_1_id', u1)
-      .eq('user_2_id', u2)
-      .single();
+      .eq('user_id_a', u1)
+      .eq('user_id_b', u2)
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json({ success: true, data: existing });
@@ -66,7 +122,11 @@ export async function POST(req: NextRequest) {
 
     const { data: novaConversa, error: cErr } = await supabase
       .from('conversas')
-      .insert({ user_1_id: u1, user_2_id: u2 })
+      .insert({
+        amizade_id: amizade.id,
+        user_id_a: u1,
+        user_id_b: u2,
+      })
       .select('*')
       .single();
 

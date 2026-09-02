@@ -6,16 +6,7 @@ import { BatLogo } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore, formatarTempoLegivel } from "@/stores/study-session-store";
 import { StudySessionBadge } from "@/components/StudySessionWidget";
-
-// ─── Título de nível ─────────────────────────────────────────
-function getTituloNivel(nivel: number): string {
-  if (nivel >= 15) return "Rei da Batcaverna";
-  if (nivel >= 10) return "General Estrategista";
-  if (nivel >= 7) return "Capitão Tático";
-  if (nivel >= 5) return "Cabo de Operações";
-  if (nivel >= 3) return "Soldado da Caverna";
-  return "Recruta da Caverna";
-}
+import { calcularNivel } from "@batcaverna/utils";
 
 // ─── Barra de progresso XP ───────────────────────────────────
 function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
@@ -113,13 +104,14 @@ export default function DashboardPage() {
     fetchStudyStats();
   }, []);
 
-  // Dados REAIS do usuário autenticado
+  // Dados REAIS do usuário autenticado com 15 níveis oficiais
   const apelido = user?.apelido || user?.nome || "Soldado";
   const role = user?.role || "user";
-  const nivel = user?.nivel_atual || 1;
   const xp = user?.xp_total ?? 0;
-  const xpProximo = nivel * 1000 + 500;
-  const titulo = getTituloNivel(nivel);
+  const nivelInfo = calcularNivel(xp);
+  const nivel = nivelInfo.nivel;
+  const xpProximo = nivelInfo.xp_necessario_proximo;
+  const titulo = nivelInfo.titulo;
   const streak = user?.streak_dias ?? 0;
   const maiorCombo = user?.maior_combo_pessoal ?? 0;
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './auth-store';
+import { calcularNivel } from '@batcaverna/utils';
 
 interface StudySessionState {
   isActive: boolean;
@@ -138,13 +139,42 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             multiplicador,
           });
 
-          // Se ganhou XP na sessão, atualizar auth store imediatamente
+          // Se ganhou XP na sessão, atualizar auth store imediatamente e disparar toast
           if (xp_ganho_intervalo > 0) {
             const authUser = useAuthStore.getState().user;
             if (authUser) {
+              const antigoXp = authUser.xp_total || 0;
+              const novoXp = antigoXp + xp_ganho_intervalo;
+              const nivelAntigo = authUser.nivel_atual || 1;
+              const nivelInfo = calcularNivel(novoXp);
+
               useAuthStore.getState().updateUser({
-                xp_total: (authUser.xp_total || 0) + xp_ganho_intervalo,
+                xp_total: novoXp,
+                nivel_atual: nivelInfo.nivel,
               });
+
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("batcaverna_xp_ganho", {
+                    detail: {
+                      xp: xp_ganho_intervalo,
+                      totalXp: novoXp,
+                      motivo: "Dedicação de estudo contínuo na BatCaverna! ⚡",
+                    },
+                  })
+                );
+
+                if (nivelInfo.nivel > nivelAntigo) {
+                  window.dispatchEvent(
+                    new CustomEvent("batcaverna_level_up", {
+                      detail: {
+                        novoNivel: nivelInfo.nivel,
+                        titulo: nivelInfo.titulo,
+                      },
+                    })
+                  );
+                }
+              }
             }
           }
         }

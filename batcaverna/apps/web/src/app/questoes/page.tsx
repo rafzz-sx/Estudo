@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuthStore } from "@/stores/auth-store";
+import { calcularNivel, calcularBonusCombo } from "@batcaverna/utils";
 
 // ─── Mock de questões ────────────────────────────────────────
 const mockQuestoes = [
@@ -64,10 +66,54 @@ export default function QuestoesPage() {
   const handleResponder = () => {
     if (!respostaSelecionada) return;
     setRespondida(true);
-    if (respostaSelecionada === q.resposta_correta) {
-      setCombo((c) => c + 1);
-    } else {
-      setCombo(0);
+
+    const correta = respostaSelecionada === q.resposta_correta;
+    const novoCombo = correta ? combo + 1 : 0;
+    setCombo(novoCombo);
+
+    // Calcular XP: Base por dificuldade + bônus de combo
+    const baseXP = q.dificuldade === "facil" ? 10 : q.dificuldade === "medio" ? 15 : 25;
+    const multiplier = calcularBonusCombo(novoCombo);
+    const xpGanho = correta ? Math.round(baseXP * multiplier) : 2;
+
+    // Atualizar usuário no store e disparar toasts de XP e Level Up
+    const authUser = useAuthStore.getState().user;
+    if (authUser) {
+      const antigoXp = authUser.xp_total || 0;
+      const novoXp = antigoXp + xpGanho;
+      const nivelAntigo = authUser.nivel_atual || 1;
+      const nivelInfo = calcularNivel(novoXp);
+
+      useAuthStore.getState().updateUser({
+        xp_total: novoXp,
+        nivel_atual: nivelInfo.nivel,
+        maior_combo_pessoal: Math.max(authUser.maior_combo_pessoal || 0, novoCombo),
+      });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("batcaverna_xp_ganho", {
+            detail: {
+              xp: xpGanho,
+              totalXp: novoXp,
+              motivo: correta
+                ? `Acertou questão de ${q.materia}! (Combo x${novoCombo})`
+                : "Tentativa de questão (+2 XP de combate)",
+            },
+          })
+        );
+
+        if (nivelInfo.nivel > nivelAntigo) {
+          window.dispatchEvent(
+            new CustomEvent("batcaverna_level_up", {
+              detail: {
+                novoNivel: nivelInfo.nivel,
+                titulo: nivelInfo.titulo,
+              },
+            })
+          );
+        }
+      }
     }
   };
 
