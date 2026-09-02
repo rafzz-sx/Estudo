@@ -171,17 +171,17 @@ export default function RankingPage() {
           </div>
 
           {/* Tabela Geral */}
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden">
-            <table className="w-full text-left">
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-left min-w-[340px] sm:min-w-full">
               <thead>
-                <tr className="border-b border-bat-border text-bat-text-muted text-xs uppercase tracking-wider bg-bat-bg-secondary/40">
-                  <th className="px-5 py-3.5">Posição</th>
-                  <th className="px-5 py-3.5">Soldado</th>
-                  <th className="px-5 py-3.5 text-center">Nível</th>
-                  <th className="px-5 py-3.5 text-right">{tab === "tempo_estudo" ? "Tempo Estudado" : "Questões"}</th>
+                <tr className="border-b border-bat-border text-bat-text-muted text-[11px] sm:text-xs uppercase tracking-wider bg-bat-bg-secondary/40">
+                  <th className="px-3 sm:px-5 py-3">Posição</th>
+                  <th className="px-3 sm:px-5 py-3">Soldado</th>
+                  <th className="px-2 sm:px-5 py-3 text-center">Nível</th>
+                  <th className="px-3 sm:px-5 py-3 text-right">{tab === "tempo_estudo" ? "Tempo Estudado" : "Questões"}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-bat-border/50 text-sm">
+              <tbody className="divide-y divide-bat-border/50 text-xs sm:text-sm">
                 {ranking.map((r) => {
                   const isMe = r.user_id === user?.id;
                   return (
@@ -191,32 +191,32 @@ export default function RankingPage() {
                         isMe ? "bg-bat-gold-400/10 font-semibold" : ""
                       }`}
                     >
-                      <td className="px-5 py-3.5 font-bold text-bat-gold-400">
+                      <td className="px-3 sm:px-5 py-3 font-bold text-bat-gold-400">
                         {getMedalha(r.posicao)}
                       </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
+                      <td className="px-3 sm:px-5 py-3">
+                        <div className="flex items-center gap-2 sm:gap-2.5">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
                             {r.avatar_url ? (
                               <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               r.apelido[0]?.toUpperCase()
                             )}
                           </div>
-                          <div>
-                            <span className="text-bat-text font-medium">{r.apelido}</span>
+                          <div className="min-w-0">
+                            <span className="text-bat-text font-medium truncate block max-w-[100px] sm:max-w-none">{r.apelido}</span>
                             {isMe && (
-                              <span className="ml-2 text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/20 px-1.5 py-0.5 rounded">
+                              <span className="text-[9px] sm:text-[10px] text-bat-gold-400 font-bold bg-bat-gold-400/20 px-1 py-0.2 rounded inline-block">
                                 VOCÊ
                               </span>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-center text-bat-text-secondary text-xs">
+                      <td className="px-2 sm:px-5 py-3 text-center text-bat-text-secondary text-xs">
                         Nv. {r.nivel_atual}
                       </td>
-                      <td className="px-5 py-3.5 text-right heading text-bat-gold-400 text-sm font-bold">
+                      <td className="px-3 sm:px-5 py-3 text-right heading text-bat-gold-400 text-xs sm:text-sm font-bold whitespace-nowrap">
                         {tab === "tempo_estudo" ? formatarTempo(r.valor) : r.valor}
                       </td>
                     </tr>

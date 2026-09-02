@@ -134,22 +134,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ═══ TOPBAR MOBILE ═══ */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-md border-b border-bat-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-md border-b border-bat-border px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2 max-w-full">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-bat-text p-1 hover:bg-bat-bg-elevated rounded-lg transition cursor-pointer"
+              className="text-bat-text p-1 hover:bg-bat-bg-elevated rounded-lg transition cursor-pointer shrink-0"
+              aria-label="Abrir Menu"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <BatBrand iconSize={28} textSize="text-base" />
+            <BatBrand iconSize={22} textSize="text-sm sm:text-base" />
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 shrink-0">
             <StudySessionBadge />
-            <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden shrink-0">
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
               ) : (

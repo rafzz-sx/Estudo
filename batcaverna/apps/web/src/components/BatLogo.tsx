@@ -18,8 +18,9 @@ export function BatLogo({
       width={size}
       style={{
         maxWidth: `${size}px`,
-        width: "100%",
+        width: "auto",
         height: "auto",
+        maxHeight: `${size}px`,
         objectFit: "contain",
         display: "inline-block",
         filter: glow
@@ -39,22 +40,22 @@ interface BatBrandProps {
 }
 
 export function BatBrand({
-  iconSize = 44,
-  textSize = "text-3xl sm:text-5xl md:text-6xl",
+  iconSize = 36,
+  textSize = "text-2xl sm:text-4xl md:text-5xl",
   className = "",
   showSub = false,
 }: BatBrandProps) {
   return (
-    <div className={`flex flex-col items-center select-none max-w-full px-2 ${className}`}>
-      <div className="flex items-center justify-center gap-2 sm:gap-4 flex-nowrap max-w-full">
+    <div className={`flex flex-col items-center select-none whitespace-nowrap shrink-0 ${className}`}>
+      <div className="flex items-center justify-center gap-2 sm:gap-3 flex-nowrap shrink-0">
         {/* Morcego oficial do Batman amarelo */}
-        <div className="w-8 sm:w-12 md:w-14 shrink-0 flex items-center justify-center">
+        <div className="shrink-0 flex items-center justify-center">
           <BatLogo size={iconSize} glow />
         </div>
 
-        {/* Tipografia BatCaverna */}
+        {/* Tipografia BatCaverna — Sempre em linha única */}
         <span
-          className={`heading font-extrabold tracking-tight leading-none ${textSize}`}
+          className={`heading font-extrabold tracking-tight leading-none whitespace-nowrap shrink-0 ${textSize}`}
           style={{
             fontFamily: "'Chakra Petch', sans-serif",
             letterSpacing: "-0.01em",
@@ -73,7 +74,7 @@ export function BatBrand({
       </div>
 
       {showSub && (
-        <span className="text-bat-text-muted text-[10px] sm:text-xs uppercase tracking-[0.2em] font-semibold mt-2 text-center">
+        <span className="text-bat-text-muted text-[10px] sm:text-xs uppercase tracking-[0.2em] font-semibold mt-1.5 text-center whitespace-nowrap">
           Central de Concursos Militares & ENEM
         </span>
       )}

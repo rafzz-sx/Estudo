@@ -32,47 +32,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val TARGET_URL = "https://estudo-tan.vercel.app"
-
-        // CSS injetado para impedir scroll horizontal no app mobile
-        // SEM afetar a plataforma web (só roda dentro do WebView)
-        private const val MOBILE_FIT_CSS = """
-            javascript:(function(){
-                var style = document.createElement('style');
-                style.textContent = '' +
-                    'html, body { ' +
-                    '  max-width: 100vw !important; ' +
-                    '  overflow-x: hidden !important; ' +
-                    '} ' +
-                    '*, *::before, *::after { ' +
-                    '  max-width: 100vw !important; ' +
-                    '  box-sizing: border-box !important; ' +
-                    '} ' +
-                    'table { ' +
-                    '  display: block !important; ' +
-                    '  overflow-x: auto !important; ' +
-                    '  max-width: 100vw !important; ' +
-                    '  -webkit-overflow-scrolling: touch !important; ' +
-                    '} ' +
-                    'main, section, div, article, aside, header, footer, nav { ' +
-                    '  max-width: 100vw !important; ' +
-                    '} ' +
-                    'h1, h2, h3, h4, h5, h6, p, span, a { ' +
-                    '  word-break: break-word !important; ' +
-                    '  overflow-wrap: break-word !important; ' +
-                    '} ' +
-                    'pre, code { ' +
-                    '  white-space: pre-wrap !important; ' +
-                    '  word-break: break-all !important; ' +
-                    '  max-width: 100vw !important; ' +
-                    '} ';
-                document.head.appendChild(style);
-
-                var viewport = document.querySelector('meta[name=viewport]');
-                if (viewport) {
-                    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-                }
-            })()
-        """
     }
 
     private lateinit var webView: WebView
@@ -152,10 +111,9 @@ class MainActivity : AppCompatActivity() {
         settings.allowFileAccess = true
         settings.allowContentAccess = true
 
-        // Viewport ajustado para mobile — NÃO usar wideViewPort
-        // Isso força o conteúdo a respeitar a largura do device
+        // Viewport padrão moderno do Android Chrome
         settings.loadWithOverviewMode = true
-        settings.useWideViewPort = false
+        settings.useWideViewPort = true
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
@@ -174,7 +132,6 @@ class MainActivity : AppCompatActivity() {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
-        // Desabilitar scroll horizontal no próprio WebView
         webView.isHorizontalScrollBarEnabled = false
         webView.isVerticalScrollBarEnabled = true
 
@@ -201,9 +158,6 @@ class MainActivity : AppCompatActivity() {
                 swipeRefreshLayout.isRefreshing = false
                 hasPageLoaded = true
 
-                // Injetar CSS que impede scroll horizontal (SÓ no app)
-                view?.loadUrl(MOBILE_FIT_CSS)
-
                 if (isFirstLoad) {
                     isFirstLoad = false
                     loadingOverlay.animate().alpha(0f).setDuration(300).withEndAction {
@@ -211,7 +165,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                // Se a error overlay estiver visível mas a página carregou com sucesso, escondê-la
                 if (errorOverlay.visibility == View.VISIBLE) {
                     hideError()
                 }
@@ -223,7 +176,6 @@ class MainActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                // SÓ mostrar erro se for a main frame e SÓ se realmente não tem internet
                 if (request?.isForMainFrame == true && !hasPageLoaded) {
                     val errorCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         error?.errorCode ?: -1
@@ -231,12 +183,6 @@ class MainActivity : AppCompatActivity() {
                         -1
                     }
 
-                    // Erros de rede reais (sem conectividade)
-                    // -2 = ERROR_HOST_LOOKUP (DNS falhou)
-                    // -6 = ERROR_CONNECT (conexão recusada)
-                    // -7 = ERROR_IO (falha de I/O)
-                    // -8 = ERROR_TIMEOUT
-                    // -1 = ERROR_UNKNOWN
                     val isRealNetworkError = errorCode in listOf(-2, -6, -7, -8) ||
                             (errorCode == -1 && !isNetworkAvailable())
 
@@ -248,8 +194,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         showError(desc)
                     }
-                    // Se tem rede disponível mas deu algum erro temporário, ignora
-                    // (pode ser latência de 4G/5G, vai recarregar automaticamente)
                 }
             }
 
@@ -259,7 +203,6 @@ class MainActivity : AppCompatActivity() {
                 errorResponse: WebResourceResponse?
             ) {
                 super.onReceivedHttpError(view, request, errorResponse)
-                // Só mostrar tela de erro para erros 5xx graves no carregamento principal
                 if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 500) {
                     if (!hasPageLoaded) {
                         showError("Erro ${errorResponse?.statusCode} no servidor.")
@@ -300,17 +243,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Verifica se o dispositivo tem conectividade de rede real
-     * (WiFi, dados móveis 4G/5G, ethernet, etc.)
-     */
     private fun isNetworkAvailable(): Boolean {
         val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val network = cm.activeNetwork ?: return false
             val caps = cm.getNetworkCapabilities(network) ?: return false
-            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                    caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         } else {
             @Suppress("DEPRECATION")
             val info = cm.activeNetworkInfo
@@ -320,7 +258,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleUrlScheme(url: String): Boolean {
-        // Esquemas de aplicativos nativos externos
         if (url.startsWith("tel:") ||
             url.startsWith("mailto:") ||
             url.startsWith("whatsapp:") ||
@@ -335,8 +272,6 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
-
-        // Navegação interna normal da web
         return false
     }
 
