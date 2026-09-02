@@ -18,7 +18,7 @@ export async function GET() {
       return NextResponse.json({
         success: true,
         data: {
-          versao_atual: '1.1.0',
+          versao_atual: '1.2.0',
           atualizado_em: new Date().toISOString(),
         },
       });

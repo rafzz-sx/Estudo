@@ -187,20 +187,22 @@ export default function ConcursoInternoPage() {
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ CABEÇALHO DO CONCURSO COM BANNER TEMÁTICO ═══ */}
-      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-bat-bg-card shadow-2xl">
-        {/* Foto de Fundo da Fachada / Academia */}
+      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl min-h-[190px] flex items-center">
+        {/* Foto de Fundo da Fachada / Aviação / Força Militar */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-35"
+          className="absolute inset-0 bg-cover bg-center opacity-65 scale-105 transition-transform duration-700"
           style={{
             backgroundImage: `url(${concurso.imagemBg})`,
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-bat-bg-card via-bat-bg-card/90 to-transparent" />
+        {/* Overlay balanceado para contraste perfeito */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0B0B0F] via-[#0B0B0F]/75 to-[#0B0B0F]/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0F]/90 via-transparent to-black/30" />
 
-        <div className="relative p-6 sm:p-8">
+        <div className="relative w-full p-6 sm:p-8">
           <Link
             href="/concursos"
-            className="text-bat-text-muted text-xs hover:text-bat-gold-400 transition-colors no-underline mb-4 inline-flex items-center gap-1.5"
+            className="text-bat-text-muted text-xs hover:text-bat-gold-400 transition-colors no-underline mb-3 inline-flex items-center gap-1.5"
           >
             ← Voltar a todos os concursos
           </Link>

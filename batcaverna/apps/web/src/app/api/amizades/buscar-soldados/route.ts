@@ -27,14 +27,13 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    // 1. Buscar soldados por apelido ou nome (excluindo a si mesmo)
+    // 1. Buscar soldados por apelido ou nome
     const { data: usuarios, error } = await supabase
       .from('users')
       .select(`
         id, nome, apelido, avatar_url, xp_total, nivel_atual,
         user_concurso_favoritos (concursos (sigla))
       `)
-      .neq('id', user.id)
       .or(`apelido.ilike.%${termo}%,nome.ilike.%${termo}%`)
       .limit(10);
 
@@ -72,6 +71,7 @@ export async function GET(req: NextRequest) {
     const resultado = usuarios.map((u) => {
       const nivelInfo = calcularNivel(u.xp_total || 0);
       const amizade = mapAmizades.get(u.id);
+      const ehVoceMesmo = u.id === user.id;
 
       return {
         id: u.id,
@@ -86,6 +86,7 @@ export async function GET(req: NextRequest) {
         amizade_status: amizade ? amizade.status : null,
         amizade_id: amizade ? amizade.id : null,
         sou_solicitante: amizade ? amizade.solicitante === user.id : false,
+        eh_voce_mesmo: ehVoceMesmo,
       };
     });
 

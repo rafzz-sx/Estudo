@@ -13,6 +13,7 @@ interface SoldadoEncontrado {
   amizade_status: "aceita" | "pendente" | "bloqueada" | null;
   amizade_id: string | null;
   sou_solicitante: boolean;
+  eh_voce_mesmo?: boolean;
 }
 
 interface Props {
@@ -208,6 +209,11 @@ export function AdicionarAmigoModal({ isOpen, onClose, onSuccess }: Props) {
                         <span className="text-sm font-bold text-bat-text truncate">
                           {soldado.apelido}
                         </span>
+                        {soldado.eh_voce_mesmo && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-bat-gold-400 text-black">
+                            Você
+                          </span>
+                        )}
                         <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/20">
                           Nv. {soldado.nivel_atual}
                         </span>
@@ -232,7 +238,11 @@ export function AdicionarAmigoModal({ isOpen, onClose, onSuccess }: Props) {
 
                   {/* Botão de Ação */}
                   <div className="flex-shrink-0">
-                    {jaEhAmigo ? (
+                    {soldado.eh_voce_mesmo ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-bat-gold-400 bg-bat-gold-400/15 border border-bat-gold-400/30 px-3 py-1.5 rounded-xl">
+                        <span>👤</span> Você mesmo
+                      </span>
+                    ) : jaEhAmigo ? (
                       <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
                         <span>✓</span> Amigos
                       </span>

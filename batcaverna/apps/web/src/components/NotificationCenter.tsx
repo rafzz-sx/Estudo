@@ -13,7 +13,11 @@ interface NotificacaoItem {
   criada_em: string;
 }
 
-export function NotificationCenter() {
+interface Props {
+  align?: "left" | "right" | "auto";
+}
+
+export function NotificationCenter({ align = "auto" }: Props) {
   const [aberto, setAberto] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
@@ -143,9 +147,13 @@ export function NotificationCenter() {
         )}
       </button>
 
-      {/* ═══ DROPDOWN PANEL ═══ */}
+      {/* ═══ DROPDOWN PANEL (Responsivo para telas mobile/APK e Desktop) ═══ */}
       {aberto && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-bat-bg-card border border-bat-border rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          className={`fixed inset-x-3 top-16 sm:absolute sm:top-full sm:mt-2 sm:w-96 max-w-[calc(100vw-24px)] bg-bat-bg-card border border-bat-border rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${
+            align === "left" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto"
+          }`}
+        >
           <div className="p-4 border-b border-bat-border flex items-center justify-between bg-bat-bg-secondary/50">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-bat-text">Central de Notificações</span>

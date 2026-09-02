@@ -76,7 +76,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Logo e Notificações */}
         <div className="px-5 py-5 border-b border-bat-border flex items-center justify-between">
           <BatBrand iconSize={36} textSize="text-xl" className="!items-start" />
-          <NotificationCenter />
+          <NotificationCenter align="left" />
         </div>
 
         {/* Status de Estudo na Sidebar */}
@@ -151,7 +151,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <BatBrand iconSize={22} textSize="text-sm sm:text-base" />
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <NotificationCenter />
+            <NotificationCenter align="right" />
             <StudySessionBadge />
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden shrink-0">
               {userAvatar ? (
