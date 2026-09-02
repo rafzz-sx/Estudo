@@ -330,47 +330,26 @@ export default function PerfilPage() {
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
       {/* ═══ BANNER + AVATAR ═══ */}
       <div className="relative mb-16">
-        {/* Banner Auto-ajustável */}
+        {/* Banner com Tamanho Padrão e Ajuste Perfeito */}
         <div
-          className="w-full aspect-[3/1] min-h-[170px] sm:min-h-[220px] max-h-[380px] rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
+          className="h-44 sm:h-52 rounded-2xl border border-bat-border overflow-hidden relative group cursor-pointer bg-bat-bg-card"
           onClick={() => bannerInputRef.current?.click()}
         >
           {bannerPreview && bannerIsVideo ? (
-            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-              {/* Camada Ambient Blur para preencher as bordas */}
-              <video
-                src={bannerPreview}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
-              />
-              {/* Camada Principal com auto-ajuste perfeito */}
-              <video
-                src={bannerPreview}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="relative z-10 w-full h-full object-contain"
-              />
-            </div>
+            <video
+              src={bannerPreview}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover object-center"
+            />
           ) : bannerPreview ? (
-            <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-              {/* Camada Ambient Blur para preencher as bordas */}
-              <img
-                src={bannerPreview}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
-              />
-              {/* Camada Principal com auto-ajuste perfeito */}
-              <img
-                src={bannerPreview}
-                alt="Banner"
-                className="relative z-10 w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.01]"
-              />
-            </div>
+            <img
+              src={bannerPreview}
+              alt="Banner"
+              className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
+            />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-[#F5C518]/25 via-[#EAB308]/15 to-bat-bg-tertiary">
               <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(245,197,24,0.15),transparent_60%)]" />

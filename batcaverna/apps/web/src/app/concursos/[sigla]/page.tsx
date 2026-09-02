@@ -186,20 +186,14 @@ export default function ConcursoInternoPage() {
 
   return (
     <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER TEMÁTICO AUTO-AJUSTÁVEL ═══ */}
-      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl w-full aspect-[3584/1184] min-h-[210px] max-h-[420px] flex items-end sm:items-center">
-        {/* Camada 1: Ambient Blur preenchendo as laterais suavemente */}
+      {/* ═══ CABEÇALHO DO CONCURSO COM BANNER COMPACTO E AUTO-AJUSTÁVEL ═══ */}
+      <div className="relative mb-8 rounded-3xl overflow-hidden border border-bat-border bg-[#0B0B0F] shadow-2xl h-44 sm:h-52 flex items-center">
+        {/* Foto de Fundo do Concurso — Auto-ajustada exatamente ao tamanho do banner */}
         <div
-          className="absolute inset-0 bg-cover bg-center blur-lg opacity-35 scale-105"
+          className="absolute inset-0 bg-no-repeat bg-center opacity-90 transition-transform duration-700 hover:scale-105"
           style={{
             backgroundImage: `url(${concurso.imagemBg})`,
-          }}
-        />
-        {/* Camada 2: Imagem com auto-ajuste perfeito (100% visível, sem cortes no topo/base) */}
-        <div
-          className="absolute inset-0 bg-contain bg-center bg-no-repeat opacity-95 transition-all duration-700"
-          style={{
-            backgroundImage: `url(${concurso.imagemBg})`,
+            backgroundSize: "100% 100%",
           }}
         />
         {/* Overlay suave focado na leitura do texto à esquerda */}
