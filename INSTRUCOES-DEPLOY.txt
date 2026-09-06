@@ -49,15 +49,18 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 8 commits que vão subir -------------------------------------------
-    1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
-    2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
-    3. feat(admin)      importador real, fila de resolução, 36 classes mudas
-    4. feat(admin)      moderação de contas + 3 bugs silenciosos
-    5. feat(questoes)   indicador de posição na leva
-    6. fix(seguranca)   código de senha vazando, 178 explicações, assuntos
-    7. docs(seeds)      migration 007 na ordem
-    8. fix(bizus)       filtro por banca de verdade
+  --- Os 11 commits que vão subir ------------------------------------------
+     1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
+     2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
+     3. feat(admin)      importador real, fila de resolução, 36 classes mudas
+     4. feat(admin)      moderação de contas + 3 bugs silenciosos
+     5. feat(questoes)   indicador de posição na leva
+     6. fix(seguranca)   código de senha vazando, 178 explicações, assuntos
+     7. docs(seeds)      migration 007 na ordem
+     8. fix(bizus)       filtro por banca de verdade
+     9. docs             contagem correta de seeds
+    10. security         RLS revisado, headers, rate limit, validação upload
+    11. docs(seguranca)  relatório de ações manuais
 
 
 ================================================================================
