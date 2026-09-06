@@ -444,6 +444,34 @@ function BancoDeQuestoes() {
                 </div>
               </div>
 
+              {/* Onde o aluno está na leva. Sem isso ele resolve sem saber
+                  se falta uma ou trinta — e é justamente essa incerteza que
+                  faz largar a sessão no meio. */}
+              <div className="mt-3">
+                <div className="mb-1.5 flex items-center justify-between text-[11px] text-bat-text-muted">
+                  <span>
+                    Questão {(pagina - 1) * 10 + indice + 1} de{" "}
+                    {total.toLocaleString("pt-BR")}
+                  </span>
+                  {sessao.respondidas > 0 && (
+                    <span>
+                      {sessao.acertos}/{sessao.respondidas} nesta sessão
+                    </span>
+                  )}
+                </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-bat-bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-bat-gold-400 transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        (((pagina - 1) * 10 + indice + 1) / Math.max(1, total)) * 100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 {questao.materias?.nome && (
                   <Etiqueta destaque>
