@@ -1,7 +1,7 @@
 -- ============================================================================
 -- BatCaverna — Seed do Banco de Questões: EPCAR
 -- Gerado automaticamente por scripts/gerar_seed_sql.py — NÃO EDITE À MÃO.
--- Questões neste arquivo: 32   |   Lote 2 de 2
+-- Questões neste arquivo: 31   |   Lote 2 de 2
 --
 -- Pré-requisitos: migrations 000 e 004 já aplicadas.
 -- Idempotente: rodar de novo não duplica (ON CONFLICT em hash_conteudo).
@@ -35,14 +35,6 @@ CREATE TEMP TABLE stg_questoes (
 ) ON COMMIT DROP;
 
 INSERT INTO stg_questoes VALUES
-('EPCAR', 'Matemática', 'Função Afim e Variação Percentual', 2026, NULL, 'EPCAR / Comando da Aeronáutica', 17, '17', NULL, 'medio', 'Considere uma certa barra de metal que possui um comprimento inicial L0, em centímetros. Essa barra, ao ser aquecida, sofre apenas um aumento em seu comprimento diretamente proporcional à temperatura (°C) de aquecimento. O comprimento da barra pode ser calculado, dependendo da temperatura, através de uma função como esboçado no gráfico abaixo.
-[DESCRIÇÃO DA IMAGEM: Gráfico cartesiano de L(cm) versus T(°C). A reta passa pelos pontos (10; 79,84) e (20; 79,88).]', 'Uma barra, estando inicialmente a 50 °C, sofre um aquecimento de 20% de sua temperatura.
-O aumento percentual correspondente de seu comprimento, em cm, é de:', '[{"letra": "A", "texto": "0,5%"}, {"letra": "B", "texto": "0,05%"}, {"letra": "C", "texto": "0,005%"}, {"letra": "D", "texto": "0,0005%"}]', 'B', '1) Taxa de variação m = (79,88 - 79,84) / (20 - 10) = 0,04 / 10 = 0,004 cm/°C.
-2) Equação da reta: L(T) = L0 + 0,004.T. Para T = 10: 79,84 = L0 + 0,04 ⇒ L0 = 79,80 cm.
-3) A 50 °C: L(50) = 79,80 + 0,004(50) = 80,00 cm.
-4) Aquecimento de 20% sobre 50 °C = 10 °C.
-5) Variação do comprimento ΔL = 0,004. 10 = 0,04 cm.
-6) Variação percentual = (0,04 / 80,00). 100% = 0,05%.', 'Gráfico cartesiano de L(cm) versus T(°C). A reta passa pelos pontos (10; 79,84) e (20; 79,88).', '[{"titulo": "Passo 1", "conteudo": "1) Taxa de variação m = (79,88 - 79,84) / (20 - 10) = 0,04 / 10 = 0,004 cm/°C.\n2) Equação da reta: L(T) = L0 + 0,004.T.", "formula": null}, {"titulo": "Conclusão", "conteudo": "Para T = 10: 79,84 = L0 + 0,04 ⇒ L0 = 79,80 cm.\n3) A 50 °C: L(50) = 79,80 + 0,004(50) = 80,00 cm.\n4) Aquecimento de 20% sobre 50 °C = 10 °C.\n5) Variação do comprimento ΔL = 0,004. 10 = 0,04 cm.\n6) Variação percentual = (0,04 / 80,00). 100% = 0,05%.", "formula": null}]', 'automatica', TRUE, FALSE, '3f1e186d774ed8dfd69348477ee5a81572ab15535707a62273c321ae163d9889', 'epcar-2026.txt'),
 ('EPCAR', 'Matemática', 'Geometria Plana — Áreas de Figuras Planas', 2026, NULL, 'EPCAR / Comando da Aeronáutica', 18, '18', NULL, 'facil', 'Um pai comprou um terreno retangular e repartiu-o em quatro terrenos também retangulares entre seus quatro filhos, conforme o croqui abaixo.
 [DESCRIÇÃO DA IMAGEM: Um retângulo subdividido em 4 retângulos menores numa grade 2x2.
 Superior esquerdo: Filho 1 | Superior direito: Filho 2

@@ -7,6 +7,8 @@ import { formatarDataHoraVersao } from "@batcaverna/utils";
 import { PainelAvisos } from "@/components/admin/PainelAvisos";
 import { PainelFeedback } from "@/components/admin/PainelFeedback";
 import { PainelSessoes } from "@/components/admin/PainelSessoes";
+import { PainelImportacao } from "@/components/admin/PainelImportacao";
+import { PainelResolucoes } from "@/components/admin/PainelResolucoes";
 
 interface UsuarioAdmin {
   id: string;
@@ -41,6 +43,7 @@ type AbaAdmin =
   | "tickets"
   | "moderacao"
   | "armazem"
+  | "resolucoes"
   | "auditoria"
   | "banners"
   | "avisos"
@@ -75,9 +78,7 @@ export default function AdminPage() {
   const [enviandoResposta, setEnviandoResposta] = useState(false);
 
   // Armazém
-  const [executandoVarredura, setExecutandoVarredura] = useState(false);
   const [logsArmazem, setLogsArmazem] = useState<any[]>([]);
-  const [mensagemArmazem, setMensagemArmazem] = useState<string | null>(null);
 
   // Moderação de Chat
   const [conversasModeracao, setConversasModeracao] = useState<any[]>([]);
@@ -196,30 +197,6 @@ export default function AdminPage() {
     }
   }, [ticketSelecionadoId]);
 
-  // Executar Armazém
-  const handleExecutarArmazem = async () => {
-    setExecutandoVarredura(true);
-    setMensagemArmazem("Executando varredura no bucket e validando hashes SHA-256...");
-    try {
-      const res = await fetchWithAuth("/api/admin/armazem/executar-agora", { method: "POST" });
-      const json = await res.json();
-      if (res.ok && json.success) {
-        setMensagemArmazem(`✓ ${json.data.mensagem} (Duração: ${json.data.duracao_segundos}s)`);
-        const logsRes = await fetchWithAuth("/api/admin/armazem/logs");
-        if (logsRes.ok) {
-          const logsJson = await logsRes.json();
-          if (logsJson.data) setLogsArmazem(logsJson.data);
-        }
-      } else {
-        setMensagemArmazem(`⚠️ Erro: ${json.error}`);
-      }
-    } catch {
-      setMensagemArmazem("⚠️ Falha de comunicação na varredura.");
-    } finally {
-      setExecutandoVarredura(false);
-    }
-  };
-
   // Responder Ticket
   const handleResponderTicket = async (ticketId: string) => {
     if (!textoResposta.trim()) return;
@@ -309,7 +286,8 @@ export default function AdminPage() {
           { key: "usuarios", label: "👥 Contas & Apelidos" },
           { key: "tickets", label: `🎫 Tickets (${tickets.filter((t) => t.status === "aberto").length} novos)` },
           { key: "moderacao", label: "🛡️ Moderação do Chat" },
-          { key: "armazem", label: "📦 Armazém de Questões" },
+          { key: "armazem", label: "📥 Importar Questões" },
+          { key: "resolucoes", label: "✍️ Fila de Resolução" },
           { key: "sessoes", label: "⏳ Sessões & Logins" },
           { key: "avisos", label: "📢 Aviso Global" },
           {
@@ -653,31 +631,14 @@ export default function AdminPage() {
 
       {/* ═══ TAB 6: ARMAZÉM DE QUESTÕES ═══ */}
       {aba === "armazem" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="heading text-xl text-bat-text">Armazém de Questões com Deduplicação SHA-256</h2>
-              <p className="text-bat-text-secondary text-xs">
-                Varredura periódica e ingestão automática de questões com hash normalizado de conteúdo para evitar duplicatas.
-              </p>
-            </div>
-            <button
-              onClick={handleExecutarArmazem}
-              disabled={executandoVarredura}
-              className="btn-primary py-2.5 px-6 text-xs font-bold disabled:opacity-50"
-            >
-              {executandoVarredura ? "Processando..." : "Executar Varredura Agora ⚡"}
-            </button>
-          </div>
+        <div className="space-y-6">
+          {/* Importador real. O que existia aqui antes era uma fachada:
+              inseria duas questoes escritas no proprio codigo, em colunas
+              que nem existem mais no schema. Nenhuma prova entrou por ali. */}
+          <PainelImportacao />
 
-          {mensagemArmazem && (
-            <div className="p-3.5 bg-bat-bg-primary border border-bat-gold-400/40 rounded-xl font-mono text-xs text-bat-gold-400">
-              {mensagemArmazem}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-bat-text-secondary uppercase tracking-wider">Histórico de Execuções</h3>
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3">
+            <h3 className="text-xs font-bold text-bat-text-secondary uppercase tracking-wider">Histórico de Importações</h3>
             <div className="overflow-x-auto rounded-xl border border-bat-border">
               <table className="w-full text-left text-xs font-mono">
                 <thead>
@@ -769,6 +730,8 @@ export default function AdminPage() {
       )}
 
       {/* ═══ TAB: SESSÕES & LOGINS ═══ */}
+      {aba === "resolucoes" && <PainelResolucoes />}
+
       {aba === "sessoes" && <PainelSessoes />}
 
       {/* ═══ TAB: AVISO GLOBAL ═══ */}

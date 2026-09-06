@@ -10,6 +10,11 @@
 @theme inline {
   /* Cores de fundo */
   --color-bat-bg: #0B0B0F;
+  /* Apelido de --color-bat-bg. 33 telas ja usavam `bg-bat-bg-primary`
+     e o token nao existia: no Tailwind v4 isso nao gera CSS nenhum e
+     falha calado — o elemento aparecia sem fundo, sem erro no console.
+     Conferido por scripts/checar_classes_tema.py. */
+  --color-bat-bg-primary: #0B0B0F;
   --color-bat-bg-secondary: #121218;
   --color-bat-bg-tertiary: #1A1A24;
   --color-bat-bg-card: #16161E;
@@ -38,6 +43,9 @@
   --color-bat-purple-700: #A16207;
   --color-bat-purple-800: #854D0E;
   --color-bat-purple-900: #713F12;
+  /* Usado em ResolucaoGabarito, MiniPerfil e Revisoes como fundo de
+     realce; a escala parava em 900. */
+  --color-bat-purple-950: #422006;
 
   /* Textos */
   --color-bat-text: #F5F5F7;

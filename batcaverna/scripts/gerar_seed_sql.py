@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 import re
 from pathlib import Path
 
@@ -58,25 +59,53 @@ CONECTIVOS_PASSO = re.compile(
 )
 
 
-def publicavel(q: dict) -> bool:
-    """Barra o que não tem como o aluno responder na tela.
+# Um enunciado abaixo disso só se sustenta se houver texto base junto.
+# "Infere-se do texto que" é um enunciado completo e legítimo — desde que
+# o texto esteja lá em cima.
+MIN_ENUNCIADO_SEM_TEXTO_BASE = 25
 
-    Sete questões do ENEM 2022 (2º dia) chegam com TODAS as alternativas
-    em branco — no PDF original elas são imagens, e o extrator só trouxe
-    as letras. Publicar isso é pior que não ter a questão: o aluno vê
-    cinco botões vazios e não tem como escolher.
+
+def publicavel(q: dict) -> tuple[bool, str]:
+    """Diz se a questão pode ir para a plataforma, e por que não, quando não.
+
+    A régua aqui é uma só: **o aluno consegue responder isso?** Questão que
+    o aluno não tem como resolver é pior que questão ausente — ela quebra a
+    confiança no banco inteiro.
     """
     if not q.get("resposta_correta"):
-        return False
+        return False, "sem gabarito"
 
     alternativas = q.get("alternativas") or []
     com_texto = [a for a in alternativas if (a.get("texto") or "").strip()]
+
+    # Sete questões do ENEM 2022 (2º dia) chegam com TODAS as alternativas
+    # em branco: no PDF original elas são imagens e o extrator só trouxe as
+    # letras. Cinco botões vazios não são uma questão.
     if len(com_texto) < 2:
-        return False
+        return False, "alternativas vazias na extração"
 
     # O gabarito precisa apontar para uma alternativa que exista de fato.
     letras = {a.get("letra") for a in com_texto}
-    return q["resposta_correta"] in letras
+    if q["resposta_correta"] not in letras:
+        return False, "gabarito aponta para letra inexistente"
+
+    # Duas alternativas com texto idêntico significam que o extrator repetiu
+    # uma e perdeu a outra. Se a repetida for a do gabarito, a questão fica
+    # sem resposta única — impossível de acertar por mérito.
+    textos = [a["texto"].strip() for a in com_texto]
+    if len(set(textos)) != len(textos):
+        return False, "alternativas duplicadas na extração"
+
+    # Enunciado curtíssimo E sem texto base: o comando de leitura ficou,
+    # o texto se perdeu. Não há o que interpretar.
+    enunciado = (q.get("enunciado") or "").strip()
+    if (
+        len(enunciado) < MIN_ENUNCIADO_SEM_TEXTO_BASE
+        and not (q.get("texto_base") or "").strip()
+    ):
+        return False, "enunciado sem o texto de apoio"
+
+    return True, ""
 
 
 def precisa_de_resolucao(q: dict) -> bool:
@@ -430,8 +459,15 @@ def main() -> int:
     pasta = Path(args.saida)
     pasta.mkdir(parents=True, exist_ok=True)
 
-    # Só entram questões utilizáveis: com gabarito e com alternativas.
-    validas = [q for q in dados if publicavel(q)]
+    # Só entram questões que o aluno consegue de fato responder.
+    validas: list[dict] = []
+    motivos: Counter[str] = Counter()
+    for q in dados:
+        ok, motivo = publicavel(q)
+        if ok:
+            validas.append(q)
+        else:
+            motivos[motivo] += 1
     descartadas = len(dados) - len(validas)
 
     por_concurso: dict[str, list[dict]] = {}
@@ -466,6 +502,8 @@ def main() -> int:
     print("-" * 32)
     print(f"Total de questoes gravadas : {len(validas)}")
     print(f"Descartadas (impublicaveis): {descartadas}")
+    for motivo, n in motivos.most_common():
+        print(f"    - {motivo}: {n}")
     print(f"Com passos derivados       : {com_passos}")
     print(f"Marcadas 'precisa_resolucao': {precisam}")
     print(f"Arquivos .sql gerados      : {total_arquivos} em {pasta}")

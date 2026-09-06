@@ -33,7 +33,9 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-# Um enunciado com menos que isso quase certamente foi cortado na extração.
+# Um enunciado com menos que isso foi cortado na extração — MAS só é
+# problema quando não há texto base junto. "Infere-se do texto que" é um
+# comando completo e legítimo quando o texto está logo acima.
 MIN_ENUNCIADO = 25
 # Abaixo disso a explicação não ensina nada além de repetir a letra.
 MIN_EXPLICACAO = 60
@@ -103,8 +105,9 @@ def auditar(questoes: list[dict]) -> dict[str, list[dict]]:
 
         # 5. Enunciado suspeito
         enunciado = q.get("enunciado") or ""
-        if len(enunciado) < MIN_ENUNCIADO:
-            problemas["enunciado_curto"].append(ref)
+        tem_texto_base = bool((q.get("texto_base") or "").strip())
+        if len(enunciado) < MIN_ENUNCIADO and not tem_texto_base:
+            problemas["enunciado_sem_texto_base"].append(ref)
         if RUIDO_PDF.search(enunciado):
             problemas["ruido_de_extracao"].append(ref)
 
@@ -164,7 +167,7 @@ GRAVIDADE = {
     "sem_gabarito": "ALTO",
     "alternativa_vazia": "ALTO",
     "poucas_alternativas": "ALTO",
-    "enunciado_curto": "ALTO",
+    "enunciado_sem_texto_base": "ALTO",
     "alternativa_repetida": "MÉDIO",
     "ruido_de_extracao": "MÉDIO",
     "sem_explicacao": "BAIXO",

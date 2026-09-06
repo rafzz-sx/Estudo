@@ -28,15 +28,20 @@ insígnias, os metadados dos 9 concursos e as tabelas de TAF preenchidas.
 
 ## 2. Banco de questões (~2 min por arquivo)
 
-São **3.260 questões oficiais** em 12 arquivos, divididos para não estourar
+São **3.247 questões oficiais** em 12 arquivos, divididos para não estourar
 o SQL Editor. Rode na ordem que preferir — cada um é independente.
 
+> 34 questões extraídas ficaram de fora de propósito: 21 sem gabarito, 7
+> com todas as alternativas em branco (no PDF original são imagens), 4
+> com alternativas duplicadas e 2 cujo texto de apoio se perdeu. Questão
+> que o aluno não consegue responder é pior que questão ausente.
+
 ```
-cn_01.sql      cn_02.sql        (434 questões — Colégio Naval / CPACN)
+cn_01.sql      cn_02.sql        (432 questões — Colégio Naval / CPACN)
 eear_01.sql                     (382 — EEAR)
-efomm_01.sql                    (198 — EFOMM)
-enem_01.sql .. enem_05.sql      (1.664 — ENEM 2016 a 2025)
-epcar_01.sql   epcar_02.sql     (432 — EPCAR/CPCAR)
+efomm_01.sql                    (196 — EFOMM)
+enem_01.sql .. enem_05.sql      (1.656 — ENEM 2016 a 2025)
+epcar_01.sql   epcar_02.sql     (431 — EPCAR/CPCAR)
 esa_01.sql                      (150 — ESA)
 ```
 
@@ -79,7 +84,30 @@ Grava a versão do rodapé com a **hora cheia**, sem minutos.
 
 ---
 
-## Como adicionar provas novas depois
+## Como adicionar provas novas — pelo painel (recomendado)
+
+A partir da 2.1.0 dá para importar uma prova inteira **sem sair da
+plataforma** e sem rodar nada no terminal:
+
+1. Entre como admin em **/admin → 📥 Importar Questões**
+2. Escolha o concurso e carregue o `.txt` da prova
+3. Clique em **Conferir antes de importar** — a tela mostra quantas
+   questões entram, quantas já estão no banco, quais são recusadas (com o
+   motivo de cada uma) e renderiza três de amostra do jeito que o aluno vai
+   ver. **Nada é gravado nesse passo.**
+4. Se a amostra estiver boa, clique em **Importar**
+
+O importador usa o mesmo SHA-256 do pipeline Python, então reimportar uma
+prova que já entrou pelo terminal não duplica nada. A paridade dos dois é
+conferida por `python scripts/checar_paridade_hash.py`.
+
+Questão que chega sem gabarito comentado entra como `pendente` e aparece em
+**/admin → ✍️ Fila de Resolução**, ordenada pelas que mais derrubam aluno,
+para alguém escrever a explicação e os passos direto na tela.
+
+---
+
+## Como adicionar provas novas — pelo terminal
 
 1. Coloque o `.txt` da prova em `C:\Users\SARA\documents\BANCO DE QUESTOES`.
 2. Gere o JSON e os novos SQL:

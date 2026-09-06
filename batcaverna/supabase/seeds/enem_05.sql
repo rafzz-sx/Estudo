@@ -1,7 +1,7 @@
 -- ============================================================================
 -- BatCaverna — Seed do Banco de Questões: ENEM
 -- Gerado automaticamente por scripts/gerar_seed_sql.py — NÃO EDITE À MÃO.
--- Questões neste arquivo: 57   |   Lote 5 de 5
+-- Questões neste arquivo: 56   |   Lote 5 de 5
 --
 -- Pré-requisitos: migrations 000 e 004 já aplicadas.
 -- Idempotente: rodar de novo não duplica (ON CONFLICT em hash_conteudo).
@@ -525,27 +525,6 @@ E) y = 3x - 16', 'QUESTÃO 153
 No plano cartesiano, os vértices de um quadrado STUV contêm o herói na posição inicial S(6, 2) e dois vilões nas posições V(8, 6) e T(2, 4). O herói movimenta-se na trajetória equidistante dos vilões V e T.
 
 Qual é a equação da trajetória em que o herói se movimentará?', '[{"letra": "A", "texto": "y = -3x + 20"}, {"letra": "B", "texto": "y = -3x + 16"}, {"letra": "C", "texto": "y = -3x - 20"}, {"letra": "D", "texto": "y = 3x + 16"}, {"letra": "E", "texto": "y = 3x - 16"}]', 'A', NULL, NULL, NULL, 'pendente', TRUE, FALSE, 'a25eafbe99d67fc11137baf6c5d3629369e897501a28a90560cf61458f58172b', 'enem-2025-dia2.txt'),
-('ENEM', 'Matemática', 'Estatística / Interpretação de Gráficos de Demanda e Estoque', 2025, '2º dia', NULL, 154, NULL, 'matematica', 'medio', 'Estoque e demanda de livros por gênero:
-- Ficção: Estoque 200 (80 BR + 120 EST) | Demanda 160
-- Autoajuda: Estoque 130 (50 BR + 80 EST) | Demanda 136
-- Romance: Estoque 145 (40 BR + 105 EST) | Demanda 140
-- Biografia: Estoque 95 (45 BR + 50 EST) | Demanda 80
-
-O gerente encomendará novos exemplares do gênero cuja quantidade em estoque seja insuficiente para atender a demanda. O gênero encomendado será
-
-A) ficção.
-B) biografia.
-C) autoajuda.
-D) biografia.
-E) romance.', 'QUESTÃO 154
-
-Estoque e demanda de livros por gênero:
-- Ficção: Estoque 200 (80 BR + 120 EST) | Demanda 160
-- Autoajuda: Estoque 130 (50 BR + 80 EST) | Demanda 136
-- Romance: Estoque 145 (40 BR + 105 EST) | Demanda 140
-- Biografia: Estoque 95 (45 BR + 50 EST) | Demanda 80
-
-O gerente encomendará novos exemplares do gênero cuja quantidade em estoque seja insuficiente para atender a demanda. O gênero encomendado será', '[{"letra": "A", "texto": "ficção."}, {"letra": "B", "texto": "biografia."}, {"letra": "C", "texto": "autoajuda."}, {"letra": "D", "texto": "biografia."}, {"letra": "E", "texto": "romance."}]', 'C', NULL, NULL, NULL, 'pendente', TRUE, FALSE, '2cedff087fd9010aaf437d619266c115fd6b7d61a7844acb972ab7f2d66bad46', 'enem-2025-dia2.txt'),
 ('ENEM', 'Matemática', 'Análise Combinatória / Princípio Fundamental da Contagem', 2025, '2º dia', NULL, 155, NULL, 'matematica', 'medio', 'Dez casais constituirão uma diretoria com três cargos: presidente, secretário e tesoureiro. No máximo uma pessoa por casal pode ocupar um cargo nessa diretoria.
 
 Quantas diretorias diferentes podem ser constituídas por esses 10 casais?
