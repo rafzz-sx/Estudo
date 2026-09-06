@@ -152,7 +152,10 @@ export async function conferirBadges(
   await supabase.from('notificacoes').insert(
     novas.map((b) => ({
       user_id: userId,
-      tipo: 'badge_conquistada',
+      // O enum `notificacao_tipo` define 'badge_conquistado' no masculino.
+      // Com 'badge_conquistada' o Postgres rejeitava o INSERT inteiro e o
+      // aluno nunca era avisado da insígnia nova.
+      tipo: 'badge_conquistado',
       titulo: `Nova insígnia: ${b.nome}`,
       mensagem: `Você desbloqueou "${b.nome}". Ela já pode ser exibida no seu mini-perfil.`,
       dados_extra: { badge_id: b.id, icone: b.icone },

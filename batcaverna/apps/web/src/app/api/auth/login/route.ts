@@ -51,6 +51,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ─── Conta bloqueada pela moderação ───────────────────────
+    // Esta checagem vem DEPOIS da senha de propósito: antes dela, um
+    // estranho descobriria quais e-mails existem só pela mensagem de erro.
+    //
+    // A suspensão temporária expira sozinha na leitura — não depende de
+    // nenhum job rodando na hora certa.
+    if (user.ativo === false) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            user.motivo_suspensao ||
+            'Esta conta está desativada. Fale com o suporte pelo canal de contato.',
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.suspenso_ate && new Date(user.suspenso_ate) > new Date()) {
+      const volta = new Date(user.suspenso_ate).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Conta suspensa até ${volta}.` +
+            (user.motivo_suspensao ? ` Motivo: ${user.motivo_suspensao}` : ''),
+        },
+        { status: 403 }
+      );
+    }
+
     // ─── Gerar tokens ─────────────────────────────────────────
     const accessToken = await generateAccessToken(user.id, user.role);
     const refreshToken = generateRefreshToken();

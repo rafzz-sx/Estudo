@@ -22,6 +22,10 @@ interface UsuarioAdmin {
   streak_dias: number;
   criado_em: string;
   avatar_url: string | null;
+  ativo?: boolean;
+  suspenso_ate?: string | null;
+  motivo_suspensao?: string | null;
+  situacao?: "ativa" | "suspensa" | "desativada";
 }
 
 interface TicketAdmin {
@@ -65,6 +69,10 @@ export default function AdminPage() {
   const [tickets, setTickets] = useState<TicketAdmin[]>([]);
   const [busca, setBusca] = useState("");
   const [filtroRole, setFiltroRole] = useState<"todos" | "admin" | "user">("todos");
+
+  // Moderação de contas
+  const [moderando, setModerando] = useState<string | null>(null);
+  const [avisoConta, setAvisoConta] = useState<string | null>(null);
 
   // Usuários Online em Tempo Real
   const [usuariosOnline, setUsuariosOnline] = useState<any[]>([]);
@@ -196,6 +204,47 @@ export default function AdminPage() {
         });
     }
   }, [ticketSelecionadoId]);
+
+  /** Promove, rebaixa, suspende, desativa ou libera uma conta. */
+  const moderarConta = async (
+    u: UsuarioAdmin,
+    acao: "promover" | "rebaixar" | "suspender" | "liberar" | "desativar"
+  ) => {
+    const rotulos: Record<string, string> = {
+      promover: `Tornar ${u.apelido} administrador?`,
+      rebaixar: `Remover o cargo de administrador de ${u.apelido}?`,
+      suspender: `Suspender ${u.apelido} por 7 dias?`,
+      desativar: `Desativar a conta de ${u.apelido}? Ela não conseguirá entrar.`,
+      liberar: `Liberar o acesso de ${u.apelido}?`,
+    };
+    if (!confirm(rotulos[acao])) return;
+
+    const motivo =
+      acao === "suspender" || acao === "desativar"
+        ? prompt("Motivo (o usuário vê isso na notificação):") ?? undefined
+        : undefined;
+
+    setModerando(u.id);
+    setAvisoConta(null);
+    try {
+      const res = await fetchWithAuth("/api/admin/usuarios", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: u.id, acao, motivo, dias: 7 }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setAvisoConta(json.error ?? "Não consegui aplicar a ação.");
+        return;
+      }
+      setAvisoConta(json.mensagem);
+      await carregarDadosIniciais();
+    } catch {
+      setAvisoConta("Falha de conexão.");
+    } finally {
+      setModerando(null);
+    }
+  };
 
   // Responder Ticket
   const handleResponderTicket = async (ticketId: string) => {
@@ -441,6 +490,12 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {avisoConta && (
+            <p className="rounded-xl border border-bat-border bg-bat-bg-secondary px-3 py-2 text-sm text-bat-text-secondary">
+              {avisoConta}
+            </p>
+          )}
+
           <div className="overflow-x-auto rounded-xl border border-bat-border">
             <table className="w-full text-left text-xs">
               <thead>
@@ -449,23 +504,97 @@ export default function AdminPage() {
                   <th className="py-3 px-4">Apelido Atual</th>
                   <th className="py-3 px-4">Nível / XP</th>
                   <th className="py-3 px-4">Cargo</th>
-                  <th className="py-3 px-4 text-right">Data de Cadastro</th>
+                  <th className="py-3 px-4">Situação</th>
+                  <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-bat-border/40">
-                {usuariosFiltrados.map((u) => (
-                  <tr key={u.id} className="hover:bg-bat-bg-tertiary/30 transition-colors">
-                    <td className="py-3 px-4 font-bold text-bat-text">{u.nome} ({u.email})</td>
-                    <td className="py-3 px-4 text-bat-gold-400 font-mono font-bold">🦇 {u.apelido}</td>
-                    <td className="py-3 px-4 font-mono">Nv. {u.nivel_atual} · {u.xp_total} XP</td>
-                    <td className="py-3 px-4 font-bold">
-                      {u.role === "admin" ? <span className="badge-admin">ADMIN</span> : "ALUNO"}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-bat-text-muted">
-                      {new Date(u.criado_em).toLocaleDateString("pt-BR")}
-                    </td>
-                  </tr>
-                ))}
+                {usuariosFiltrados.map((u) => {
+                  const situacao = u.situacao ?? "ativa";
+                  const ocupado = moderando === u.id;
+                  return (
+                    <tr key={u.id} className="hover:bg-bat-bg-tertiary/30 transition-colors">
+                      <td className="py-3 px-4 font-bold text-bat-text">
+                        {u.nome}
+                        <span className="block font-normal text-bat-text-muted">{u.email}</span>
+                        <span className="block font-mono text-[10px] text-bat-text-muted">
+                          desde {new Date(u.criado_em).toLocaleDateString("pt-BR")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-bat-gold-400 font-mono font-bold">
+                        🦇 {u.apelido}
+                        {u.apelidos_antigos?.length > 0 && (
+                          <span className="block font-normal text-[10px] text-bat-text-muted">
+                            antes: {u.apelidos_antigos.join(", ")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono">Nv. {u.nivel_atual} · {u.xp_total} XP</td>
+                      <td className="py-3 px-4 font-bold">
+                        {u.role === "admin" ? <span className="badge-admin">ADMIN</span> : "ALUNO"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`rounded-lg px-2 py-0.5 text-[10px] font-bold ${
+                            situacao === "ativa"
+                              ? "bg-bat-success/10 text-bat-success"
+                              : situacao === "suspensa"
+                              ? "bg-bat-warning/10 text-bat-warning"
+                              : "bg-bat-error/10 text-bat-error"
+                          }`}
+                        >
+                          {situacao}
+                        </span>
+                        {u.motivo_suspensao && (
+                          <span className="mt-0.5 block max-w-[160px] truncate text-[10px] text-bat-text-muted">
+                            {u.motivo_suspensao}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {u.role === "admin" ? (
+                            <AcaoConta
+                              rotulo="Rebaixar"
+                              onClick={() => moderarConta(u, "rebaixar")}
+                              ocupado={ocupado}
+                            />
+                          ) : (
+                            <AcaoConta
+                              rotulo="Promover"
+                              onClick={() => moderarConta(u, "promover")}
+                              ocupado={ocupado}
+                            />
+                          )}
+
+                          {situacao === "ativa" ? (
+                            <>
+                              <AcaoConta
+                                rotulo="Suspender 7d"
+                                tom="aviso"
+                                onClick={() => moderarConta(u, "suspender")}
+                                ocupado={ocupado}
+                              />
+                              <AcaoConta
+                                rotulo="Desativar"
+                                tom="erro"
+                                onClick={() => moderarConta(u, "desativar")}
+                                ocupado={ocupado}
+                              />
+                            </>
+                          ) : (
+                            <AcaoConta
+                              rotulo="Liberar"
+                              tom="ok"
+                              onClick={() => moderarConta(u, "liberar")}
+                              ocupado={ocupado}
+                            />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -740,5 +869,37 @@ export default function AdminPage() {
       {/* ═══ TAB: FEEDBACK DOS ALUNOS ═══ */}
       {aba === "feedback" && <PainelFeedback onResumo={setResumoFeedback} />}
     </div>
+  );
+}
+
+/** Botão de ação da tabela de contas. */
+function AcaoConta({
+  rotulo,
+  onClick,
+  ocupado,
+  tom,
+}: {
+  rotulo: string;
+  onClick: () => void;
+  ocupado: boolean;
+  tom?: "ok" | "aviso" | "erro";
+}) {
+  const cor =
+    tom === "erro"
+      ? "border-bat-error/30 text-bat-error hover:bg-bat-error/10"
+      : tom === "aviso"
+      ? "border-bat-warning/30 text-bat-warning hover:bg-bat-warning/10"
+      : tom === "ok"
+      ? "border-bat-success/30 text-bat-success hover:bg-bat-success/10"
+      : "border-bat-border text-bat-text-secondary hover:border-bat-gold-400/40 hover:text-bat-gold-400";
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={ocupado}
+      className={`cursor-pointer rounded-lg border px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-40 ${cor}`}
+    >
+      {ocupado ? "..." : rotulo}
+    </button>
   );
 }
