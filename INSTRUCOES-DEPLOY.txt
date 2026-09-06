@@ -251,7 +251,7 @@
   RESUMO DE UMA LINHA
 ================================================================================
 
-  Instale o Node → dê o push → rode as 5 migrations e os 21 seeds no
+  Instale o Node → dê o push → rode as 5 migrations e os 22 seeds no
   Supabase na ordem da PARTE 3 → teste os 5 itens da PARTE 6.
 
 ================================================================================
