@@ -54,12 +54,26 @@ export async function POST(req: NextRequest) {
     const user = storedToken.users;
     const newAccessToken = await generateAccessToken(user.id, user.role);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         access_token: newAccessToken,
       },
     });
+
+    // O proxy (antigo middleware) autoriza a navegação lendo o cookie, não o header.
+    // Sem reescrevê-lo aqui, o usuário continuava com sessão válida nas
+    // chamadas de API mas era jogado para /auth ao trocar de página.
+    const maxAge = parseInt(process.env.JWT_ACCESS_EXPIRATION || '36000');
+    response.cookies.set('bat_access_token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge,
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Refresh token error:', error);

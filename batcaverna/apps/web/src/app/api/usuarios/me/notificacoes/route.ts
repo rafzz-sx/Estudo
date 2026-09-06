@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getUserFromRequest(req: NextRequest) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload ? { id: payload.sub, role: payload.role } : null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  return getAuthUserFromRequest(req);
 }
 
 // GET /api/usuarios/me/notificacoes — Lista notificações do usuário
@@ -20,10 +18,14 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
+    const agora = new Date().toISOString();
+
     let query = supabase
       .from('notificacoes')
       .select('*')
       .eq('user_id', user.id)
+      // Avisos do admin têm prazo de validade: somem sozinhos quando expiram.
+      .or(`expira_em.is.null,expira_em.gt.${agora}`)
       .order('criada_em', { ascending: false })
       .limit(50);
 
@@ -39,7 +41,8 @@ export async function GET(req: NextRequest) {
       .from('notificacoes')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('lida', false);
+      .eq('lida', false)
+      .or(`expira_em.is.null,expira_em.gt.${agora}`);
 
     return NextResponse.json({
       success: true,
@@ -74,5 +77,35 @@ export async function PUT(req: NextRequest) {
   } catch (error) {
     console.error('PUT /api/usuarios/me/notificacoes error:', error);
     return NextResponse.json({ success: false, error: 'Erro ao marcar notificações como lidas' }, { status: 500 });
+  }
+}
+
+// DELETE /api/usuarios/me/notificacoes — Esvazia a caixa do usuário.
+// Por padrão apaga só as já lidas; ?tudo=1 apaga também as não lidas.
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const tudo = searchParams.get('tudo') === '1';
+
+    const supabase = createServerSupabaseClient();
+
+    let query = supabase.from('notificacoes').delete().eq('user_id', user.id);
+    if (!tudo) query = query.eq('lida', true);
+
+    const { error } = await query;
+    if (error) throw error;
+
+    return NextResponse.json({
+      success: true,
+      message: tudo
+        ? 'Caixa de notificações esvaziada.'
+        : 'Notificações lidas removidas.',
+    });
+  } catch (error) {
+    console.error('DELETE /api/usuarios/me/notificacoes error:', error);
+    return NextResponse.json({ success: false, error: 'Erro ao limpar notificações' }, { status: 500 });
   }
 }

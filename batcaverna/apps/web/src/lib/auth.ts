@@ -65,3 +65,37 @@ export function getRefreshTokenExpiry(): Date {
 export function getEmailTokenExpiry(): Date {
   return new Date(Date.now() + 24 * 60 * 60 * 1000);
 }
+
+/**
+ * Extrai e valida o usuário autenticado da requisição
+ * Suporta tanto o header Authorization: Bearer <token> quanto o cookie bat_access_token
+ */
+export async function getAuthUserFromRequest(req: any): Promise<{
+  id: string;
+  role: string;
+} | null> {
+  let token: string | undefined;
+
+  // 1. Tentar ler do Header Authorization
+  const authHeader = req.headers?.get?.('Authorization') || req.headers?.get?.('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.replace('Bearer ', '');
+  }
+
+  // 2. Tentar ler do Cookie bat_access_token
+  if (!token) {
+    if (typeof req.cookies?.get === 'function') {
+      token = req.cookies.get('bat_access_token')?.value;
+    }
+    if (!token && req.headers?.get) {
+      const cookieStr = req.headers.get('cookie') || '';
+      const match = cookieStr.match(/bat_access_token=([^;]+)/);
+      if (match) token = match[1];
+    }
+  }
+
+  if (!token) return null;
+
+  const payload = await verifyAccessToken(token);
+  return payload ? { id: payload.sub, role: payload.role } : null;
+}

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getAdminFromRequest(req: NextRequest) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload && payload.role === 'admin' ? { id: payload.sub, role: payload.role } : null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.role === 'admin' ? user : null;
 }
 
 // GET /api/admin/usuarios/[id]/atividade — Linha do tempo de atividades de um usuário específico

@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getUserFromRequest(req: NextRequest) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload ? { id: payload.sub, role: payload.role } : null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  return getAuthUserFromRequest(req);
 }
 
 // GET /api/usuarios/me/concursos-favoritos

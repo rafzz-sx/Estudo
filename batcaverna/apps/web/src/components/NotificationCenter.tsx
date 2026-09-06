@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { calcularNivel } from "@batcaverna/utils";
+import { fetchWithAuth } from "@/stores/auth-store";
 
 interface NotificacaoItem {
   id: string;
@@ -33,7 +34,7 @@ export function NotificationCenter({ align = "auto" }: Props) {
 
   const carregarNotificacoes = async () => {
     try {
-      const res = await fetch("/api/usuarios/me/notificacoes");
+      const res = await fetchWithAuth("/api/usuarios/me/notificacoes");
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -102,7 +103,7 @@ export function NotificationCenter({ align = "auto" }: Props) {
 
   const handleMarcarTodasLidas = async () => {
     try {
-      await fetch("/api/usuarios/me/notificacoes", { method: "PUT" });
+      await fetchWithAuth("/api/usuarios/me/notificacoes", { method: "PUT" });
       setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
       setNaoLidas(0);
     } catch {}
@@ -110,11 +111,32 @@ export function NotificationCenter({ align = "auto" }: Props) {
 
   const handleMarcarLida = async (id: string) => {
     try {
-      await fetch(`/api/usuarios/me/notificacoes/${id}/marcar-lida`, { method: "PUT" });
+      await fetchWithAuth(`/api/usuarios/me/notificacoes/${id}/marcar-lida`, { method: "PUT" });
       setNotificacoes((prev) =>
         prev.map((n) => (n.id === id ? { ...n, lida: true } : n))
       );
       setNaoLidas((prev) => Math.max(0, prev - 1));
+    } catch {}
+  };
+
+  const handleApagar = async (id: string, estavaNaoLida: boolean) => {
+    // Some da tela na hora; se o servidor falhar, o próximo refresh a traz de volta.
+    setNotificacoes((prev) => prev.filter((n) => n.id !== id));
+    if (estavaNaoLida) setNaoLidas((prev) => Math.max(0, prev - 1));
+    try {
+      await fetchWithAuth(`/api/usuarios/me/notificacoes/${id}`, {
+        method: "DELETE",
+      });
+    } catch {}
+  };
+
+  const handleLimparTudo = async () => {
+    setNotificacoes([]);
+    setNaoLidas(0);
+    try {
+      await fetchWithAuth("/api/usuarios/me/notificacoes?tudo=1", {
+        method: "DELETE",
+      });
     } catch {}
   };
 
@@ -163,14 +185,25 @@ export function NotificationCenter({ align = "auto" }: Props) {
                 </span>
               )}
             </div>
-            {naoLidas > 0 && (
-              <button
-                onClick={handleMarcarTodasLidas}
-                className="text-[11px] text-bat-gold-400 hover:underline cursor-pointer font-medium"
-              >
-                Marcar todas como lidas
-              </button>
-            )}
+            <div className="flex items-center gap-2.5">
+              {naoLidas > 0 && (
+                <button
+                  onClick={handleMarcarTodasLidas}
+                  className="text-[11px] text-bat-gold-400 hover:underline cursor-pointer font-medium"
+                >
+                  Marcar todas como lidas
+                </button>
+              )}
+              {notificacoes.length > 0 && (
+                <button
+                  onClick={handleLimparTudo}
+                  className="text-[11px] text-bat-text-muted hover:text-bat-error hover:underline cursor-pointer font-medium"
+                  title="Apagar todas as notificações"
+                >
+                  Limpar tudo
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-bat-border/40">
@@ -184,7 +217,7 @@ export function NotificationCenter({ align = "auto" }: Props) {
                 <div
                   key={n.id}
                   onClick={() => !n.lida && handleMarcarLida(n.id)}
-                  className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer ${
+                  className={`group p-3.5 flex items-start gap-3 transition-colors cursor-pointer ${
                     n.lida ? "opacity-60 hover:opacity-100" : "bg-bat-gold-400/5 hover:bg-bat-gold-400/10"
                   }`}
                 >
@@ -194,9 +227,22 @@ export function NotificationCenter({ align = "auto" }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <p className="text-xs font-bold text-bat-text truncate">{n.titulo}</p>
-                      {!n.lida && (
-                        <span className="w-2 h-2 rounded-full bg-bat-gold-400 flex-shrink-0" />
-                      )}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {!n.lida && (
+                          <span className="w-2 h-2 rounded-full bg-bat-gold-400" />
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApagar(n.id, !n.lida);
+                          }}
+                          className="text-bat-text-muted hover:text-bat-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100 text-[13px] leading-none"
+                          aria-label="Apagar notificação"
+                          title="Apagar"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-bat-text-secondary mt-0.5 leading-relaxed">{n.mensagem}</p>
                     <span className="text-[10px] text-bat-text-muted mt-1 block">

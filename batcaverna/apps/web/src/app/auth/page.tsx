@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BatBrand } from "@/components/BatLogo";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import {
   validateNomeCompleto,
   isStrongPassword,
@@ -146,8 +146,7 @@ function AuthForm() {
     setApelidoStatus({ checking: true });
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/auth/check-availability?field=apelido&value=${encodeURIComponent(apelido.trim())}`
+        const res = await fetchWithAuth(`/api/auth/check-availability?field=apelido&value=${encodeURIComponent(apelido.trim())}`
         );
         const data = await res.json();
         setApelidoStatus({
@@ -182,8 +181,7 @@ function AuthForm() {
     setEmailStatus({ checking: true });
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/auth/check-availability?field=email&value=${encodeURIComponent(email.trim())}`
+        const res = await fetchWithAuth(`/api/auth/check-availability?field=email&value=${encodeURIComponent(email.trim())}`
         );
         const data = await res.json();
         setEmailStatus({
@@ -229,7 +227,7 @@ function AuthForm() {
     }
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetchWithAuth("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -303,7 +301,7 @@ function AuthForm() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetchWithAuth("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

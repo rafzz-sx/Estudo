@@ -4,29 +4,69 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BatBrand } from "@/components/BatLogo";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore } from "@/stores/study-session-store";
 import { StudySessionBadge } from "@/components/StudySessionWidget";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { DynamicIsland } from "@/components/DynamicIsland";
+import { ConviteFeedback } from "@/components/ConviteFeedback";
 
 // ─── Links do menu ───────────────────────────────────────────
-const navLinksBase = [
+interface NavLink {
+  href: string;
+  label: string;
+  icon: string;
+  /** Nome do contador a exibir como selo. Só "revisoes" por enquanto. */
+  contador?: "revisoes";
+}
+
+const navLinksBase: NavLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/concursos", label: "Concursos", icon: "🎯" },
   { href: "/questoes", label: "Questões", icon: "❓" },
+  { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
+  { href: "/caderno", label: "Caderno de Erros", icon: "📓" },
+  { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
+  { href: "/simulado", label: "Simulado", icon: "⏱️" },
   { href: "/bizus", label: "Bizus", icon: "💡" },
   { href: "/ranking", label: "Ranking", icon: "🏆" },
   { href: "/chat", label: "Chat & Squad", icon: "💬" },
+  { href: "/musica", label: "Música", icon: "🎧" },
   { href: "/tickets", label: "Suporte", icon: "🎫" },
   { href: "/perfil", label: "Perfil", icon: "👤" },
 ];
 
 const adminLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
 
+/** Quantas revisões espaçadas venceram — vira o selo vermelho no menu. */
+function useRevisoesPendentes() {
+  const [pendentes, setPendentes] = useState(0);
+
+  useEffect(() => {
+    const buscar = async () => {
+      try {
+        const res = await fetchWithAuth("/api/revisoes?limite=1");
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.success) setPendentes(json.data.vencidas ?? 0);
+      } catch {
+        // O selo é um extra: falhar aqui não pode atrapalhar a navegação.
+      }
+    };
+    buscar();
+    // Revisão vence por data, não por minuto: 10 minutos é frequência de sobra.
+    const t = setInterval(buscar, 600_000);
+    return () => clearInterval(t);
+  }, []);
+
+  return pendentes;
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const revisoesPendentes = useRevisoesPendentes();
 
   // Dados REAIS do auth store
   const storeUser = useAuthStore((state) => state.user);
@@ -37,7 +77,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const syncProfile = async () => {
       try {
-        const res = await fetch("/api/usuarios/me");
+        const res = await fetchWithAuth("/api/usuarios/me");
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.data) {
@@ -63,7 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetchWithAuth("/api/auth/logout", { method: "POST" });
     } catch {}
     logout();
     router.push("/auth");
@@ -71,6 +111,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-bat-bg flex">
+      {/* Player global: fica fora da árvore de páginas para a música não
+          parar a cada navegação. Só aparece quando há algo tocando. */}
+      <DynamicIsland />
+
+      {/* Convite de feedback após 1h e 3h de uso acumulado */}
+      <ConviteFeedback />
+
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
         {/* Logo e Notificações */}
@@ -104,7 +151,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <span className="text-base">{link.icon}</span>
-                {link.label}
+                <span className="flex-1">{link.label}</span>
+                {link.contador === "revisoes" && revisoesPendentes > 0 && (
+                  <span className="min-w-5 rounded-full bg-bat-gold-400 px-1.5 text-center text-[10px] font-extrabold text-black">
+                    {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -204,7 +256,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     }`}
                   >
                     <span className="text-base">{link.icon}</span>
-                    {link.label}
+                    <span className="flex-1">{link.label}</span>
+                    {link.contador === "revisoes" && revisoesPendentes > 0 && (
+                      <span className="min-w-5 rounded-full bg-bat-gold-400 px-1.5 text-center text-[10px] font-extrabold text-black">
+                        {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

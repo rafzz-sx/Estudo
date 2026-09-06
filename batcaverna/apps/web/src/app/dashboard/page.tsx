@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BatLogo } from "@/components/BatLogo";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore, formatarTempoLegivel } from "@/stores/study-session-store";
 import { StudySessionBadge } from "@/components/StudySessionWidget";
+import { ComboBanner, patamarDe } from "@/components/questoes/ComboBadge";
 import { calcularNivel } from "@batcaverna/utils";
 
 // ─── Barra de progresso XP ───────────────────────────────────
@@ -72,9 +73,26 @@ function StatCard({
 // ═══════════════════════════════════════════════════════════════
 // DASHBOARD PAGE
 // ═══════════════════════════════════════════════════════════════
+interface ConcursoFavorito {
+  sigla: string;
+  nome: string;
+  emoji: string | null;
+}
+
+interface QuestaoDoDia {
+  id: string;
+  enunciado: string;
+  ano: number | null;
+  concursos: { sigla: string } | null;
+  materias: { nome: string } | null;
+  assuntos: { nome: string } | null;
+}
+
 export default function DashboardPage() {
   const [visible, setVisible] = useState(false);
   const user = useAuthStore((state) => state.user);
+  const [favoritos, setFavoritos] = useState<ConcursoFavorito[]>([]);
+  const [questaoDoDia, setQuestaoDoDia] = useState<QuestaoDoDia | null>(null);
 
   // Sessão de estudo automática (limite 8h)
   const tempoEstudoTotal = useStudySessionStore((state) => state.tempoEstudoTotal);
@@ -86,7 +104,7 @@ export default function DashboardPage() {
     // Buscar tempo total e status de estudo atualizados do Supabase
     const fetchStudyStats = async () => {
       try {
-        const res = await fetch('/api/study-sessions/status');
+        const res = await fetchWithAuth('/api/study-sessions/status');
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.data) {
@@ -102,6 +120,28 @@ export default function DashboardPage() {
     };
 
     fetchStudyStats();
+
+    // Concursos alvo do aluno
+    fetchWithAuth("/api/usuarios/me/concursos-favoritos")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.success && Array.isArray(json.data)) {
+          setFavoritos(
+            json.data
+              .map((f: any) => f.concursos ?? f)
+              .filter((c: any) => c?.sigla)
+          );
+        }
+      })
+      .catch(() => undefined);
+
+    // Questão do dia
+    fetchWithAuth("/api/questoes/do-dia")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.success && json.data) setQuestaoDoDia(json.data);
+      })
+      .catch(() => undefined);
   }, []);
 
   // Dados REAIS do usuário autenticado com 15 níveis oficiais
@@ -114,6 +154,10 @@ export default function DashboardPage() {
   const titulo = nivelInfo.titulo;
   const streak = user?.streak_dias ?? 0;
   const maiorCombo = user?.maior_combo_pessoal ?? 0;
+  const comboAtual = user?.combo_atual ?? 0;
+  const questoesRespondidas = user?.questoes_respondidas ?? 0;
+  const taxaAcerto = user?.taxa_acerto ?? 0;
+  const patamarMaior = patamarDe(maiorCombo);
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -142,6 +186,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ═══ SEQUÊNCIA ATIVA (persistida no banco) ═══ */}
+      {comboAtual >= 3 && <ComboBanner combo={comboAtual} />}
+
       {/* ═══ BARRA DE XP ═══ */}
       <XpBar
         atual={xp}
@@ -169,15 +216,25 @@ export default function DashboardPage() {
         <StatCard
           icon="❓"
           label="Questões"
-          value="0"
-          sub="Resolva sua primeira questão"
+          value={questoesRespondidas.toLocaleString("pt-BR")}
+          sub={
+            questoesRespondidas > 0
+              ? `${taxaAcerto}% de acerto`
+              : "Resolva sua primeira questão"
+          }
           glowColor="blue"
         />
         <StatCard
           icon="⚡"
           label="Maior Combo"
           value={maiorCombo > 0 ? `x${maiorCombo}` : "x0"}
-          sub={maiorCombo > 0 ? "Acertos seguidos" : "Acerte questões em sequência"}
+          sub={
+            patamarMaior
+              ? `${patamarMaior.emoji} ${patamarMaior.rotulo}`
+              : maiorCombo > 0
+              ? "Acertos seguidos"
+              : "Acerte questões em sequência"
+          }
           glowColor="green"
         />
       </div>
@@ -187,36 +244,86 @@ export default function DashboardPage() {
         {/* Concursos favoritos */}
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
           <h2 className="heading text-lg text-bat-text mb-4">Seus Concursos</h2>
-          <div className="py-6 text-center">
-            <p className="text-bat-text-muted text-sm mb-3">
-              Você ainda não iniciou nenhuma trilha de estudos.
-            </p>
-            <Link
-              href="/concursos"
-              className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-            >
-              Explorar concursos →
-            </Link>
-          </div>
+
+          {favoritos.length > 0 ? (
+            <div className="space-y-2.5">
+              {favoritos.map((c) => (
+                <Link
+                  key={c.sigla}
+                  href={`/concursos/${c.sigla.toLowerCase()}`}
+                  className="flex items-center gap-3 rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-4 py-3 no-underline transition-all hover:border-bat-gold-400/40"
+                >
+                  <span className="text-2xl">{c.emoji ?? "🎯"}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-bat-text">{c.sigla}</p>
+                    <p className="truncate text-xs text-bat-text-muted">{c.nome}</p>
+                  </div>
+                  <span className="text-bat-gold-400">→</span>
+                </Link>
+              ))}
+              <Link
+                href="/perfil"
+                className="mt-2 block text-center text-xs text-bat-text-muted no-underline hover:text-bat-gold-400"
+              >
+                Gerenciar concursos alvo
+              </Link>
+            </div>
+          ) : (
+            <div className="py-6 text-center">
+              <p className="text-bat-text-muted text-sm mb-3">
+                Você ainda não escolheu um concurso alvo.
+              </p>
+              <Link
+                href="/concursos"
+                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
+              >
+                Explorar concursos →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Questão do dia */}
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="heading text-lg text-bat-text">🎲 Questão do Dia</h2>
-            <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
-              Em breve
-            </span>
+            {questaoDoDia?.concursos?.sigla && (
+              <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
+                {questaoDoDia.concursos.sigla}
+                {questaoDoDia.ano ? ` · ${questaoDoDia.ano}` : ""}
+              </span>
+            )}
           </div>
-          <p className="text-bat-text-secondary text-sm mb-4">
-            As questões do dia serão habilitadas quando houver questões oficiais importadas na plataforma.
-          </p>
-          <Link
-            href="/questoes"
-            className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-          >
-            Ver banco de questões
-          </Link>
+
+          {questaoDoDia ? (
+            <>
+              <p className="mb-2 text-xs text-bat-text-muted">
+                {questaoDoDia.materias?.nome}
+                {questaoDoDia.assuntos?.nome ? ` · ${questaoDoDia.assuntos.nome}` : ""}
+              </p>
+              <p className="mb-4 line-clamp-4 text-sm leading-relaxed text-bat-text-secondary">
+                {questaoDoDia.enunciado}
+              </p>
+              <Link
+                href={`/questoes?concurso=${questaoDoDia.concursos?.sigla ?? "todos"}`}
+                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
+              >
+                Resolver agora →
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-bat-text-secondary text-sm mb-4">
+                Carregando uma questão oficial para você começar o dia...
+              </p>
+              <Link
+                href="/questoes"
+                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
+              >
+                Ver banco de questões
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -224,9 +331,13 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { href: "/questoes", label: "Banco de Questões", icon: "📝", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
-          { href: "/simulado", label: "Simulado Rápido", icon: "⏱️", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
+          { href: "/revisoes", label: "Revisar Erros", icon: "🔁", cor: "border-bat-purple-500/20 hover:border-bat-purple-500/50" },
+          { href: "/caderno", label: "Caderno de Erros", icon: "📓", cor: "border-bat-error/20 hover:border-bat-error/40" },
+          { href: "/cronograma", label: "Cronograma", icon: "🗓️", cor: "border-bat-info/20 hover:border-bat-info/40" },
+          { href: "/simulado", label: "Simulado", icon: "⏱️", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
           { href: "/bizus", label: "Bizus", icon: "💡", cor: "border-bat-success/20 hover:border-bat-success/40" },
           { href: "/ranking", label: "Ranking", icon: "🏆", cor: "border-bat-info/20 hover:border-bat-info/40" },
+          { href: "/musica", label: "Música", icon: "🎧", cor: "border-bat-purple-500/20 hover:border-bat-purple-500/50" },
         ].map((a) => (
           <Link
             key={a.href}

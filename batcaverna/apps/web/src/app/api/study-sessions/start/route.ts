@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 const LIMITE_MAXIMO_SESSAO_SEGUNDOS = 8 * 3600; // 8 horas = 28.800 segundos
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    token = req.cookies.get('bat_access_token')?.value;
-  }
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload?.sub || null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.id ?? null;
 }
 
 // POST /api/study-sessions/start — Iniciar sessão de estudo automática (limite 8h)

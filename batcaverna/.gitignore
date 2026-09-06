@@ -32,3 +32,14 @@ yarn-error.log*
 dist/
 web-build/
 *.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Rascunhos de diagnóstico do banco de questões (não são parte do build)
+scripts/tmp/
+
+# JSON intermediário do parser: 6 MB que mudam por inteiro a cada
+# regeneração e já estão representados nos seeds .sql.
+scripts/out/questoes.json

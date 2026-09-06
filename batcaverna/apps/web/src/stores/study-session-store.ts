@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { useAuthStore } from './auth-store';
+import { fetchWithAuth, useAuthStore } from './auth-store';
 import { calcularNivel } from '@batcaverna/utils';
 
 interface StudySessionState {
@@ -64,7 +64,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
 
     try {
       // 1. Consultar status atual da sessão no Supabase
-      const statusRes = await fetch('/api/study-sessions/status');
+      const statusRes = await fetchWithAuth('/api/study-sessions/status');
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         if (statusData.success && statusData.data) {
@@ -91,7 +91,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       }
 
       // 2. Se não tem sessão ativa, iniciar nova sessão
-      const startRes = await fetch('/api/study-sessions/start', {
+      const startRes = await fetchWithAuth('/api/study-sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dispositivo: 'web' }),
@@ -122,7 +122,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     if (!isActive) return;
 
     try {
-      const res = await fetch('/api/study-sessions/heartbeat', {
+      const res = await fetchWithAuth('/api/study-sessions/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
@@ -207,12 +207,12 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   stopSession: async () => {
     const { duracaoSegundos } = get();
     try {
-      await fetch('/api/study-sessions/heartbeat', {
+      await fetchWithAuth('/api/study-sessions/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
       });
-      await fetch('/api/study-sessions/stop', { method: 'POST' });
+      await fetchWithAuth('/api/study-sessions/stop', { method: 'POST' });
     } catch (e) {
       console.warn('Erro ao finalizar sessão:', e);
     }

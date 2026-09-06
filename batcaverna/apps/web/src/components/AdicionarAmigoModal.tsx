@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { fetchWithAuth } from "@/stores/auth-store";
 
 interface SoldadoEncontrado {
   id: string;
@@ -52,7 +53,7 @@ export function AdicionarAmigoModal({ isOpen, onClose, onSuccess }: Props) {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/amizades/buscar-soldados?apelido=${encodeURIComponent(termo)}`);
+        const res = await fetchWithAuth(`/api/amizades/buscar-soldados?apelido=${encodeURIComponent(termo)}`);
         if (res.ok) {
           const json = await res.json();
           if (json.success) {
@@ -75,7 +76,7 @@ export function AdicionarAmigoModal({ isOpen, onClose, onSuccess }: Props) {
     setMensagemSucesso(null);
 
     try {
-      const res = await fetch("/api/amizades/solicitar", {
+      const res = await fetchWithAuth("/api/amizades/solicitar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id_destinatario: soldado.id }),

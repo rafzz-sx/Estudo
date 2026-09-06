@@ -216,12 +216,42 @@ function SpotlightEffect() {
   );
 }
 
+// ─── Números reais do banco, exibidos na home ────────────────
+interface EstatisticasPublicas {
+  total_questoes: number;
+  total_concursos: number;
+  total_materias: number;
+  anos_cobertos: number;
+}
+
+function NumeroDestaque({ valor, rotulo }: { valor: string; rotulo: string }) {
+  return (
+    <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 text-center">
+      <p className="heading text-2xl sm:text-3xl font-extrabold text-bat-gold-400">
+        {valor}
+      </p>
+      <p className="text-bat-text-muted text-xs mt-1">{rotulo}</p>
+    </div>
+  );
+}
+
 // ─── Página Principal (Landing Page) ─────────────────────────
 export default function LandingPage() {
   const [heroVisible, setHeroVisible] = useState(false);
+  const [estatisticas, setEstatisticas] = useState<EstatisticasPublicas | null>(
+    null
+  );
 
   useEffect(() => {
     setTimeout(() => setHeroVisible(true), 100);
+
+    // Rota pública: a home não exige login.
+    fetch("/api/estatisticas-publicas")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.success) setEstatisticas(json.data);
+      })
+      .catch(() => undefined);
   }, []);
 
   return (
@@ -395,26 +425,77 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══ SEÇÃO: DEPOIMENTOS (placeholder) ═══ */}
+      {/* ═══ SEÇÃO: COMO A PLATAFORMA ENSINA ═══ */}
+      {/* Antes havia aqui três cartões de "depoimentos em breve" que eram
+          esqueletos de carregamento infinitos — davam a impressão de página
+          quebrada. Trocados por conteúdo real sobre o método. */}
       <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="heading text-3xl sm:text-4xl mb-4">
-            Quem estuda na <span className="text-bat-gold-400">Caverna</span>, aprova
+        <div className="max-w-5xl mx-auto">
+          <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
+            Não é só marcar alternativa. É <span className="text-bat-gold-400">entender</span>.
           </h2>
-          <p className="text-bat-text-secondary text-lg mb-14">
-            Em breve, depoimentos de quem conquistou a vaga dos sonhos.
+          <p className="text-bat-text-secondary text-center text-lg mb-14 max-w-2xl mx-auto">
+            Errar aqui vale mais do que acertar por sorte — desde que você
+            entenda o porquê antes de seguir.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
-                <div className="skeleton w-12 h-12 rounded-full mx-auto mb-4" />
-                <div className="skeleton h-3 w-24 mx-auto mb-3" />
-                <div className="skeleton h-3 w-full mb-2" />
-                <div className="skeleton h-3 w-5/6 mx-auto" />
+            {[
+              {
+                icone: "📖",
+                titulo: "Gabarito que explica",
+                texto:
+                  "Toda questão de cálculo traz a resolução quebrada em passos numerados. Você vê onde o seu raciocínio se separou do caminho certo — não só qual letra era.",
+              },
+              {
+                icone: "🎯",
+                titulo: "Provas oficiais, não simulacros",
+                texto:
+                  "Milhares de questões extraídas das provas reais das bancas, com texto base, figura e o gabarito oficial. Nada de questão inventada.",
+              },
+              {
+                icone: "📊",
+                titulo: "Seu ponto fraco, nomeado",
+                texto:
+                  "A plataforma acompanha seu acerto por matéria e aponta exatamente onde investir a próxima hora de estudo.",
+              },
+            ].map((item) => (
+              <div
+                key={item.titulo}
+                className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 hover:border-bat-gold-400/30 transition-colors"
+              >
+                <span className="text-3xl block mb-3">{item.icone}</span>
+                <h3 className="heading text-lg text-bat-text font-bold mb-2">
+                  {item.titulo}
+                </h3>
+                <p className="text-bat-text-secondary text-sm leading-relaxed">
+                  {item.texto}
+                </p>
               </div>
             ))}
           </div>
+
+          {/* Números reais do banco */}
+          {estatisticas && (
+            <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <NumeroDestaque
+                valor={estatisticas.total_questoes.toLocaleString("pt-BR")}
+                rotulo="questões oficiais"
+              />
+              <NumeroDestaque
+                valor={String(estatisticas.total_concursos)}
+                rotulo="concursos"
+              />
+              <NumeroDestaque
+                valor={String(estatisticas.total_materias)}
+                rotulo="matérias"
+              />
+              <NumeroDestaque
+                valor={String(estatisticas.anos_cobertos)}
+                rotulo="anos de prova"
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -458,8 +539,9 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm text-bat-text-muted">
                 <li><Link href="/auth" className="hover:text-bat-gold-400 transition-colors">Entrar</Link></li>
                 <li><Link href="/auth?tab=cadastro" className="hover:text-bat-gold-400 transition-colors">Criar conta</Link></li>
-                <li><span className="opacity-50">Banco de Questões</span></li>
-                <li><span className="opacity-50">Ranking</span></li>
+                <li><Link href="/questoes" className="hover:text-bat-gold-400 transition-colors">Banco de Questões</Link></li>
+                <li><Link href="/simulado" className="hover:text-bat-gold-400 transition-colors">Simulados</Link></li>
+                <li><Link href="/ranking" className="hover:text-bat-gold-400 transition-colors">Ranking</Link></li>
               </ul>
             </div>
 

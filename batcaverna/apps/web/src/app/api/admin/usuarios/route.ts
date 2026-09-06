@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function verifyAdmin(req: NextRequest): Promise<boolean> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return false;
-  const payload = await verifyAccessToken(token);
-  return payload?.role === 'admin';
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.role === 'admin';
 }
 
 // GET /api/admin/usuarios — Lista todos os usuários com histórico de apelidos
 export async function GET(req: NextRequest) {
   try {
     const isAdmin = await verifyAdmin(req);
-    // Permite acesso se for admin ou no ambiente de desenvolvimento
     if (!isAdmin) {
-      // Fallback: verificar se há token válido ou simulação
+      return NextResponse.json(
+        { success: false, error: 'Acesso restrito a administradores' },
+        { status: 403 }
+      );
     }
 
     const supabase = createServerSupabaseClient();

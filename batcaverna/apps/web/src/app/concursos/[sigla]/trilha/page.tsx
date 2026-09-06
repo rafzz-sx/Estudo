@@ -1,455 +1,376 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  useStudySessionStore,
-  formatarSegundosParaTimer,
-} from "@/stores/study-session-store";
+import { fetchWithAuth } from "@/stores/auth-store";
+import { Markdown } from "@/components/Markdown";
+import { VideoAulaPlayer, type VideoAula } from "@/components/VideoAulaPlayer";
 
-interface AssuntoItem {
+// ─── Contratos ───────────────────────────────────────────────
+interface TeoriaResumo {
   id: string;
-  nome: string;
-  resumo_teorico: string;
-  status: "nao_iniciado" | "em_andamento" | "concluido";
-  bizu?: string;
-  questoes_count: number;
+  tema: string;
+  titulo: string;
+  resumo: string | null;
+  nivel: string;
+  tempo_leitura_min: number;
+  concluido: boolean;
+}
+
+interface Tema {
+  tema: string;
+  teoria: TeoriaResumo[];
+  videos: VideoAula[];
 }
 
 interface MateriaTrilha {
+  id: string;
   nome: string;
-  emoji: string;
-  assuntos: AssuntoItem[];
+  descricao: string | null;
+  icone_emoji: string | null;
+  total_questoes: number;
+  progresso: { respondidas: number; taxa: number };
+  temas: Tema[];
+  assuntos_mais_cobrados: { id: string; nome: string; total_questoes: number }[];
 }
 
-const mockTrilhas: Record<string, MateriaTrilha[]> = {
-  eear: [
-    {
-      nome: "Português",
-      emoji: "📝",
-      assuntos: [
-        {
-          id: "p1",
-          nome: "Acentuação Gráfica",
-          resumo_teorico: "Regras gerais das proparoxítonas (todas acentuadas), paroxítonas (terminadas em R, X, N, L, I, IS, UM, UNS, US, PS, Ã, ÃS, ÃOS, ditongo) e oxítonas (A, E, O, EM, ENS). Regra do hiato I e U tônicos sozinhos ou com S.",
-          status: "nao_iniciado",
-          bizu: "Proparoxítonas SEMPRE levam acento. Olhe a antepenúltima sílaba.",
-          questoes_count: 42,
-        },
-        {
-          id: "p2",
-          nome: "Crase",
-          resumo_teorico: "Fusão da preposição 'a' com o artigo feminino 'a' ou pronomes demonstrativos 'aquele(s)', 'aquela(s)', 'aquilo'. Casos proibitivos: antes de masculino, verbos, pronomes pessoais e indefinidos.",
-          status: "nao_iniciado",
-          bizu: "Troque a palavra seguinte por uma masculina equivalente. Se virar 'ao', tem crase!",
-          questoes_count: 58,
-        },
-        {
-          id: "p3",
-          nome: "Concordância Verbal e Nominal",
-          resumo_teorico: "Regra geral: o verbo concorda com o sujeito em número e pessoa. Casos especiais com sujeito composto, porcentagem, coletivos e partitivos.",
-          status: "nao_iniciado",
-          bizu: "Sujeito composto antes = verbo no plural. Sujeito composto depois = concorda com o mais próximo ou plural.",
-          questoes_count: 36,
-        },
-      ],
-    },
-    {
-      nome: "Matemática",
-      emoji: "📐",
-      assuntos: [
-        {
-          id: "m1",
-          nome: "Equações do 1º e 2º Grau",
-          resumo_teorico: "Fórmula de Bhaskara, relações de Girard (Soma = -b/a, Produto = c/a), estudo do discriminante Delta (Delta > 0, = 0, < 0).",
-          status: "nao_iniciado",
-          bizu: "A soma das raízes é sempre -b/a e o produto é c/a. Não precisa fazer Bhaskara em todas!",
-          questoes_count: 64,
-        },
-        {
-          id: "m2",
-          nome: "Geometria Plana — Triângulos e Áreas",
-          resumo_teorico: "Teorema de Pitágoras, Lei dos Senos e Cossenos, Áreas de figuras planas (triângulo, círculo, trapézio, losango).",
-          status: "nao_iniciado",
-          bizu: "Ternas (3,4,5), (5,12,13), (8,15,17). Identifique os catetos e hipotenusa em segundos.",
-          questoes_count: 75,
-        },
-        {
-          id: "m3",
-          nome: "Progressões (PA e PG)",
-          resumo_teorico: "Termo geral da PA (an = a1 + (n-1)r), soma dos termos da PA. Termo geral da PG (an = a1 * q^(n-1)), soma da PG finita e infinita.",
-          status: "nao_iniciado",
-          bizu: "Para 3 termos em PA: use (x-r, x, x+r). Facilita o cálculo da soma!",
-          questoes_count: 48,
-        },
-      ],
-    },
-    {
-      nome: "Inglês",
-      emoji: "🇬🇧",
-      assuntos: [
-        {
-          id: "i1",
-          nome: "Verb Tenses (Present, Past, Future)",
-          resumo_teorico: "Simple Present vs Present Continuous; Simple Past vs Past Continuous; Present Perfect (have + past participle) para ações que começaram no passado com impacto no presente.",
-          status: "nao_iniciado",
-          bizu: "Palavras-chave: 'yesterday' = Past Simple; 'since/for/already' = Present Perfect.",
-          questoes_count: 50,
-        },
-        {
-          id: "i2",
-          nome: "Prepositions of Time and Place",
-          resumo_teorico: "IN (meses, anos, estações, países, cidades), ON (dias da semana, datas específicas, superfícies), AT (horas exatas, locais pontuais).",
-          status: "nao_iniciado",
-          bizu: "AT 5pm, ON Friday, IN 2026. Lembre-se: 'at night' é exceção!",
-          questoes_count: 32,
-        },
-      ],
-    },
-  ],
-};
+interface Trilha {
+  concurso: { sigla: string; nome: string; emoji: string | null; cor_tema: string | null };
+  materias: MateriaTrilha[];
+  total_questoes: number;
+}
 
-export default function TrilhaConcursoPage() {
+export default function TrilhaPage() {
   const params = useParams();
-  const siglaParam = (params?.sigla as string)?.toLowerCase() || "eear";
-  const siglaUpper = siglaParam.toUpperCase();
+  const sigla = String(params?.sigla ?? "").toUpperCase();
 
-  const trilhaData = mockTrilhas[siglaParam] || mockTrilhas["eear"];
-  const [materias, setMaterias] = useState<MateriaTrilha[]>(trilhaData);
-  const [assuntoAberto, setAssuntoAberto] = useState<string | null>("p1");
-  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  const [trilha, setTrilha] = useState<Trilha | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [materiaAberta, setMateriaAberta] = useState<string | null>(null);
+  const [teoriaAberta, setTeoriaAberta] = useState<{
+    id: string;
+    titulo: string;
+    corpo_markdown: string;
+    tempo_leitura_min: number;
+  } | null>(null);
+  const [carregandoTeoria, setCarregandoTeoria] = useState(false);
 
-  // ═══ TEMPORIZADOR DE ESTUDO EXCLUSIVO DA TRILHA ═══
-  const {
-    isActive,
-    isPaused,
-    duracaoSegundos,
-    multiplicador,
-    xpGanhoNaSessao,
-    initSession,
-    sendHeartbeat,
-    tick,
-    pauseSession,
-    resumeSession,
-    stopSession,
-  } = useStudySessionStore();
-
-  // 1. Iniciar sessão de estudo ao entrar na trilha
   useEffect(() => {
-    initSession();
+    fetchWithAuth(`/api/concursos/${sigla}/trilha`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setTrilha(json.data);
+          setMateriaAberta(json.data.materias[0]?.id ?? null);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setCarregando(false));
+  }, [sigla]);
 
-    // Cronômetro ativo na trilha (1 segundo)
-    const timerInterval = setInterval(() => {
-      tick();
-    }, 1000);
-
-    // Heartbeat a cada 30 segundos
-    const heartbeatInterval = setInterval(() => {
-      sendHeartbeat();
-    }, 30000);
-
-    // 2. Ao sair da trilha: salvar e pausar sessão para não contar tempo fora da trilha
-    return () => {
-      clearInterval(timerInterval);
-      clearInterval(heartbeatInterval);
-      sendHeartbeat();
-      pauseSession();
-    };
-  }, [initSession, sendHeartbeat, tick, pauseSession]);
-
-  // Estatísticas de progresso
-  const todosAssuntos = materias.flatMap((m) => m.assuntos);
-  const concluidos = todosAssuntos.filter((a) => a.status === "concluido").length;
-  const emAndamento = todosAssuntos.filter((a) => a.status === "em_andamento").length;
-  const percentualTotal = Math.round((concluidos / todosAssuntos.length) * 100);
-
-  const toggleStatus = (assuntoId: string) => {
-    setMaterias((prev) =>
-      prev.map((mat) => ({
-        ...mat,
-        assuntos: mat.assuntos.map((ass) => {
-          if (ass.id !== assuntoId) return ass;
-          const nextStatus =
-            ass.status === "nao_iniciado"
-              ? "em_andamento"
-              : ass.status === "em_andamento"
-              ? "concluido"
-              : "nao_iniciado";
-          return { ...ass, status: nextStatus };
-        }),
-      }))
-    );
+  const abrirTeoria = async (id: string) => {
+    setCarregandoTeoria(true);
+    try {
+      const res = await fetchWithAuth(`/api/teoria/${id}`);
+      const json = await res.json();
+      if (json.success) setTeoriaAberta(json.data);
+    } catch {
+      /* silencioso: o modal simplesmente não abre */
+    } finally {
+      setCarregandoTeoria(false);
+    }
   };
 
+  const marcarLida = async (id: string) => {
+    await fetchWithAuth(`/api/teoria/${id}/concluir`, { method: "POST" }).catch(
+      () => undefined
+    );
+    setTrilha((t) =>
+      t
+        ? {
+            ...t,
+            materias: t.materias.map((m) => ({
+              ...m,
+              temas: m.temas.map((tm) => ({
+                ...tm,
+                teoria: tm.teoria.map((te) =>
+                  te.id === id ? { ...te, concluido: true } : te
+                ),
+              })),
+            })),
+          }
+        : t
+    );
+    setTeoriaAberta(null);
+  };
+
+  if (carregando) return <div className="skeleton h-96 w-full rounded-3xl" />;
+
+  if (!trilha || trilha.materias.length === 0) {
+    return (
+      <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-10 text-center">
+        <span className="mb-3 block text-4xl">📖</span>
+        <h1 className="heading mb-2 text-lg text-bat-text">
+          Trilha de {sigla} em construção
+        </h1>
+        <p className="mx-auto mb-5 max-w-md text-sm text-bat-text-secondary">
+          Ainda não há questões nem conteúdo cadastrados para este concurso.
+        </p>
+        <Link
+          href={`/concursos/${sigla.toLowerCase()}`}
+          className="btn-secondary inline-block px-5 py-2.5 no-underline"
+        >
+          ← Voltar ao concurso
+        </Link>
+      </div>
+    );
+  }
+
+  const cor = trilha.concurso.cor_tema ?? "#F5C518";
+
   return (
-    <div className="space-y-6">
-      {/* ═══ BARRA DE ESTUDO ATIVO NA TRILHA (TEMPORIZADOR REAL) ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className={`w-3.5 h-3.5 rounded-full ${isPaused ? "bg-amber-400" : "bg-bat-success animate-pulse"}`} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-bat-text-secondary">
-                {isPaused ? "Estudo Pausado" : `Estudando Trilha ${siglaUpper}`}
-              </span>
-              {multiplicador > 1 && (
-                <span className="text-[10px] font-bold bg-bat-gold-400 text-black px-1.5 py-0.5 rounded shadow-sm">
-                  {multiplicador}x XP BÔNUS
-                </span>
-              )}
-            </div>
-            <p className="heading text-2xl font-mono font-bold text-bat-gold-400">
-              {formatarSegundosParaTimer(duracaoSegundos)}
-            </p>
-          </div>
-        </div>
+    <div>
+      <Link
+        href={`/concursos/${sigla.toLowerCase()}`}
+        className="mb-4 inline-flex items-center gap-1.5 text-xs text-bat-text-muted no-underline hover:text-bat-gold-400"
+      >
+        ← Voltar ao {trilha.concurso.sigla}
+      </Link>
 
-        {/* Informações de Bônus e Ações */}
-        <div className="flex items-center gap-3 self-end md:self-center">
-          <div className="text-right hidden sm:block">
-            <p className="text-[11px] text-bat-text-muted">XP Acumulado na Trilha</p>
-            <p className="text-sm font-bold text-bat-text">+{xpGanhoNaSessao} XP</p>
-          </div>
+      <header className="mb-6">
+        <h1 className="heading flex items-center gap-3 text-2xl font-bold text-bat-text sm:text-3xl">
+          <span>{trilha.concurso.emoji ?? "📖"}</span>
+          Trilha de estudos — {trilha.concurso.sigla}
+        </h1>
+        <p className="mt-1 text-sm text-bat-text-secondary">
+          Matérias ordenadas pelo peso real na prova, medido pelas{" "}
+          {trilha.total_questoes.toLocaleString("pt-BR")} questões oficiais
+          catalogadas deste concurso.
+        </p>
+      </header>
 
-          <div className="flex gap-2">
-            {isPaused ? (
-              <button
-                onClick={() => resumeSession()}
-                className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5"
-              >
-                ▶️ Retomar
-              </button>
-            ) : (
-              <button
-                onClick={() => pauseSession()}
-                className="py-2 px-4 rounded-xl text-xs font-semibold bg-bat-bg-secondary border border-bat-border hover:bg-bat-bg-elevated text-bat-text transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                ⏸️ Pausar
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ CABEÇALHO & PROGRESSO ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <div>
-            <Link
-              href={`/concursos/${siglaParam}`}
-              className="text-bat-text-muted text-xs hover:text-bat-purple-400 no-underline mb-2 inline-block"
-            >
-              ← Voltar para {siglaUpper}
-            </Link>
-            <h1 className="heading text-2xl sm:text-3xl text-bat-text">
-              Trilha de Estudos — <span className="text-bat-purple-400">{siglaUpper}</span>
-            </h1>
-            <p className="text-bat-text-secondary text-sm">
-              Complete os tópicos do edital na ordem recomendada para maximizar sua retenção.
-            </p>
-          </div>
-
-          {/* Badge de Conclusão */}
-          <div className="flex items-center gap-4 bg-bat-bg-secondary border border-bat-border px-5 py-3 rounded-xl">
-            <div className="text-right">
-              <p className="heading text-2xl font-bold text-bat-purple-400">{percentualTotal}%</p>
-              <p className="text-bat-text-muted text-xs">{concluidos}/{todosAssuntos.length} tópicos</p>
-            </div>
-            <div className="w-12 h-12 rounded-full border-4 border-bat-border flex items-center justify-center relative">
-              <div
-                className="absolute inset-0 rounded-full border-4 border-bat-purple-500"
-                style={{
-                  clipPath: `polygon(50% 50%, 50% 0%, ${percentualTotal >= 25 ? "100% 0%" : "50% 0%"}, ${percentualTotal >= 50 ? "100% 100%" : "50% 0%"}, ${percentualTotal >= 75 ? "0% 100%" : "50% 0%"}, ${percentualTotal === 100 ? "0% 0%" : "50% 0%"})`,
-                }}
-              />
-              <span className="text-sm">🎯</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Barra de progresso */}
-        <div className="w-full h-2.5 bg-bat-bg-secondary rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
-            style={{
-              width: `${percentualTotal}%`,
-              background: "linear-gradient(90deg, #7C3AED, #A855F7, #F5C518)",
-              boxShadow: "0 0 12px rgba(124, 58, 237, 0.4)",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ═══ FILTROS DE STATUS ═══ */}
-      <div className="flex gap-2">
-        {[
-          { key: "todos", label: "Todos os Tópicos" },
-          { key: "concluido", label: "✅ Concluídos" },
-          { key: "em_andamento", label: "⏳ Em Andamento" },
-          { key: "nao_iniciado", label: "🔒 Pendentes" },
-        ].map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFiltroStatus(f.key)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-              filtroStatus === f.key
-                ? "bg-bat-purple-500/20 border-bat-purple-500 text-bat-purple-300 shadow-sm"
-                : "bg-bat-bg-card border-bat-border text-bat-text-muted hover:text-bat-text"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ═══ ÁRVORE DE MATÉRIAS E ASSUNTOS ═══ */}
-      <div className="space-y-6">
-        {materias.map((mat) => {
-          const assuntosFiltrados = mat.assuntos.filter(
-            (a) => filtroStatus === "todos" || a.status === filtroStatus
-          );
-
-          if (assuntosFiltrados.length === 0) return null;
+      {/* ═══ MATÉRIAS ═══ */}
+      <div className="space-y-3">
+        {trilha.materias.map((m) => {
+          const aberta = materiaAberta === m.id;
+          const temTeoria = m.temas.some((t) => t.teoria.length > 0);
+          const temVideo = m.temas.some((t) => t.videos.length > 0);
 
           return (
-            <div key={mat.nome} className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
-              {/* Header da Matéria */}
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-bat-border">
-                <span className="text-2xl">{mat.emoji}</span>
-                <h2 className="heading text-xl text-bat-text">{mat.nome}</h2>
-                <span className="text-xs text-bat-text-muted ml-auto">
-                  {mat.assuntos.filter((a) => a.status === "concluido").length}/{mat.assuntos.length} concluídos
-                </span>
+            <section
+              key={m.id}
+              className="overflow-hidden rounded-2xl border border-bat-border bg-bat-bg-card"
+            >
+              {/* Cabeçalho da matéria */}
+              <button
+                onClick={() => setMateriaAberta(aberta ? null : m.id)}
+                className="flex w-full cursor-pointer items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-bat-bg-elevated"
+                aria-expanded={aberta}
+              >
+                <span className="text-2xl">{m.icone_emoji ?? "📚"}</span>
+
+                <div className="min-w-0 flex-1">
+                  <h2 className="heading text-base font-bold text-bat-text">
+                    {m.nome}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-bat-text-muted">
+                    {m.total_questoes.toLocaleString("pt-BR")} questões
+                    {m.progresso.respondidas > 0 && (
+                      <>
+                        {" · "}
+                        <span className="text-bat-text-secondary">
+                          você já fez {m.progresso.respondidas} ({m.progresso.taxa}%
+                          de acerto)
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  {temTeoria && (
+                    <span className="rounded-md bg-bat-bg-secondary px-2 py-1 text-[10px] text-bat-text-muted">
+                      📖 teoria
+                    </span>
+                  )}
+                  {temVideo && (
+                    <span className="rounded-md bg-bat-bg-secondary px-2 py-1 text-[10px] text-bat-text-muted">
+                      🎬 vídeo
+                    </span>
+                  )}
+                  <span
+                    className={`text-bat-text-muted transition-transform ${
+                      aberta ? "rotate-180" : ""
+                    }`}
+                  >
+                    ▾
+                  </span>
+                </div>
+              </button>
+
+              {/* Barra de progresso da matéria */}
+              <div className="h-1 w-full bg-bat-bg-secondary">
+                <div
+                  className="h-full transition-all duration-700"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      m.total_questoes
+                        ? (m.progresso.respondidas / m.total_questoes) * 100
+                        : 0
+                    )}%`,
+                    background: cor,
+                  }}
+                />
               </div>
 
-              {/* Lista de Assuntos */}
-              <div className="space-y-3">
-                {assuntosFiltrados.map((ass) => {
-                  const isAberto = assuntoAberto === ass.id;
+              {aberta && (
+                <div className="space-y-5 border-t border-bat-border px-5 py-5">
+                  {/* ─── Teoria e vídeos por tema ─── */}
+                  {m.temas.length > 0 ? (
+                    m.temas.map((t) => (
+                      <div key={t.tema}>
+                        <h3 className="heading mb-2.5 text-sm font-bold uppercase tracking-wider text-bat-gold-400">
+                          {t.tema}
+                        </h3>
 
-                  return (
-                    <div
-                      key={ass.id}
-                      className={`border rounded-xl transition-all duration-200 overflow-hidden ${
-                        ass.status === "concluido"
-                          ? "bg-bat-success/5 border-bat-success/20"
-                          : ass.status === "em_andamento"
-                          ? "bg-bat-purple-500/5 border-bat-purple-500/25"
-                          : "bg-bat-bg-secondary/40 border-bat-border"
-                      }`}
-                    >
-                      {/* Linha do Assunto (Click para expandir) */}
-                      <div className="p-4 flex items-center justify-between gap-3">
-                        <div
-                          className="flex items-center gap-3 flex-1 cursor-pointer"
-                          onClick={() => setAssuntoAberto(isAberto ? null : ass.id)}
-                        >
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleStatus(ass.id);
-                            }}
-                            className="text-lg transition-transform hover:scale-110 cursor-pointer"
-                            title="Clique para alternar status"
-                          >
-                            {ass.status === "concluido"
-                              ? "✅"
-                              : ass.status === "em_andamento"
-                              ? "⏳"
-                              : "⚪"}
-                          </button>
-
-                          <div>
-                            <p className="text-bat-text text-sm font-semibold hover:text-bat-purple-300 transition-colors">
-                              {ass.nome}
-                            </p>
-                            <span className="text-bat-text-muted text-xs">
-                              {ass.questoes_count} questões disponíveis
-                            </span>
+                        {t.teoria.length > 0 && (
+                          <div className="mb-3 space-y-2">
+                            {t.teoria.map((te) => (
+                              <button
+                                key={te.id}
+                                onClick={() => abrirTeoria(te.id)}
+                                disabled={carregandoTeoria}
+                                className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-4 py-3 text-left transition-all hover:border-bat-gold-400/40"
+                              >
+                                <span className="text-lg">
+                                  {te.concluido ? "✅" : "📖"}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-bat-text">
+                                    {te.titulo}
+                                  </p>
+                                  {te.resumo && (
+                                    <p className="mt-0.5 line-clamp-1 text-xs text-bat-text-muted">
+                                      {te.resumo}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="shrink-0 text-[11px] text-bat-text-muted">
+                                  {te.tempo_leitura_min} min
+                                </span>
+                              </button>
+                            ))}
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => toggleStatus(ass.id)}
-                            className={`text-xs px-2.5 py-1 rounded-full border cursor-pointer font-medium ${
-                              ass.status === "concluido"
-                                ? "bg-bat-success/15 border-bat-success/30 text-bat-success"
-                                : ass.status === "em_andamento"
-                                ? "bg-bat-purple-500/15 border-bat-purple-500/30 text-bat-purple-300"
-                                : "bg-bat-bg-card border-bat-border text-bat-text-muted"
-                            }`}
-                          >
-                            {ass.status === "concluido"
-                              ? "Concluído"
-                              : ass.status === "em_andamento"
-                              ? "Em Andamento"
-                              : "Não Iniciado"}
-                          </button>
-
-                          <button
-                            onClick={() => setAssuntoAberto(isAberto ? null : ass.id)}
-                            className="text-bat-text-muted p-1 hover:text-bat-text transition cursor-pointer"
-                          >
-                            {isAberto ? "▲" : "▼"}
-                          </button>
-                        </div>
+                        {t.videos.length > 0 && (
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {t.videos.map((v) => (
+                              <VideoAulaPlayer key={v.id} video={v} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-
-                      {/* Conteúdo Expandido do Assunto */}
-                      {isAberto && (
-                        <div className="px-5 pb-5 pt-2 border-t border-bat-border/50 bg-bat-bg-card/50 space-y-4">
-                          {/* Resumo Teórico */}
-                          <div>
-                            <h4 className="heading text-xs uppercase tracking-wider text-bat-text-secondary mb-1">
-                              📖 Resumo Teórico
-                            </h4>
-                            <p className="text-bat-text-secondary text-sm leading-relaxed">
-                              {ass.resumo_teorico}
-                            </p>
-                          </div>
-
-                          {/* Bizu Vinculado */}
-                          {ass.bizu && (
-                            <div className="bg-bat-gold-400/10 border border-bat-gold-400/25 rounded-xl p-3.5 flex items-start gap-3">
-                              <span className="text-lg">💡</span>
-                              <div>
-                                <p className="text-xs font-bold text-bat-gold-400 uppercase tracking-wider">
-                                  Bizu da Caverna
-                                </p>
-                                <p className="text-bat-text text-sm leading-relaxed mt-0.5">
-                                  {ass.bizu}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Ações do Tópico */}
-                          <div className="flex gap-3 pt-1">
-                            <Link
-                              href={`/questoes?concurso_id=${siglaParam}&assunto_id=${ass.id}`}
-                              className="btn-primary text-xs py-2 px-4 no-underline inline-block"
-                            >
-                              Resolver {ass.questoes_count} Questões →
-                            </Link>
-                            <Link
-                              href={`/bizus?assunto_id=${ass.id}`}
-                              className="btn-secondary text-xs py-2 px-4 no-underline inline-block"
-                            >
-                              Ver Bizus Deste Assunto
-                            </Link>
-                          </div>
-                        </div>
-                      )}
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/40 px-4 py-3.5">
+                      <p className="text-xs leading-relaxed text-bat-text-secondary">
+                        📝 O material teórico de <strong>{m.nome}</strong> para
+                        este concurso ainda está sendo escrito. Enquanto isso, a
+                        prática vale muito: são{" "}
+                        {m.total_questoes.toLocaleString("pt-BR")} questões
+                        oficiais com gabarito comentado.
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  )}
+
+                  {/* ─── Assuntos mais cobrados ─── */}
+                  {m.assuntos_mais_cobrados.length > 0 && (
+                    <div>
+                      <h3 className="heading mb-2.5 text-sm font-bold uppercase tracking-wider text-bat-text-secondary">
+                        Assuntos que mais caem
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {m.assuntos_mais_cobrados.slice(0, 12).map((a) => (
+                          <Link
+                            key={a.id}
+                            href={`/questoes?concurso=${sigla}&materia=${encodeURIComponent(m.nome)}`}
+                            className="rounded-lg border border-bat-border bg-bat-bg-secondary px-3 py-1.5 text-xs text-bat-text-secondary no-underline transition-colors hover:border-bat-gold-400/40 hover:text-bat-gold-400"
+                          >
+                            {a.nome}
+                            <span className="ml-1.5 text-bat-text-muted">
+                              {a.total_questoes}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <Link
+                    href={`/questoes?concurso=${sigla}&materia=${encodeURIComponent(m.nome)}`}
+                    className="btn-primary inline-block px-6 py-2.5 text-sm no-underline"
+                  >
+                    Praticar {m.nome} →
+                  </Link>
+                </div>
+              )}
+            </section>
           );
         })}
       </div>
+
+      {/* ═══ MODAL DE TEORIA ═══ */}
+      {teoriaAberta && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setTeoriaAberta(null)}
+        >
+          <div
+            className="my-8 w-full max-w-3xl rounded-3xl border border-bat-gold-400/30 bg-bat-bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-bat-border bg-bat-bg-card px-6 py-4">
+              <div>
+                <h2 className="heading text-lg font-bold text-bat-text">
+                  {teoriaAberta.titulo}
+                </h2>
+                <p className="mt-0.5 text-xs text-bat-text-muted">
+                  Leitura de {teoriaAberta.tempo_leitura_min} minutos
+                </p>
+              </div>
+              <button
+                onClick={() => setTeoriaAberta(null)}
+                className="shrink-0 cursor-pointer text-bat-text-muted transition-colors hover:text-bat-text"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </header>
+
+            <div className="px-6 py-5">
+              <Markdown>{teoriaAberta.corpo_markdown}</Markdown>
+            </div>
+
+            <footer className="flex flex-wrap gap-3 border-t border-bat-border px-6 py-4">
+              <button
+                onClick={() => marcarLida(teoriaAberta.id)}
+                className="btn-primary px-6 py-2.5 text-sm"
+              >
+                ✅ Marcar como estudado
+              </button>
+              <button
+                onClick={() => setTeoriaAberta(null)}
+                className="btn-secondary px-6 py-2.5 text-sm"
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

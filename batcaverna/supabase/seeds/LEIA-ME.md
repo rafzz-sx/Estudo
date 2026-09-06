@@ -1,0 +1,143 @@
+# Ordem de execução no Supabase — versão 2.1.0
+
+Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
+Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
+
+> Se você já rodou a 2.0, **rode tudo de novo assim mesmo**. As questões
+> mudaram (a régua de PDF saiu de 3.102 alternativas) e a migration 004
+> ganhou colunas novas. O `ON CONFLICT` cuida de não duplicar.
+
+---
+
+## 1. Estrutura (obrigatório)
+
+| Ordem | Arquivo | O que faz |
+| --- | --- | --- |
+| 1 | `../migrations/000_setup_completo_batcaverna.sql` | Schema base (**só se o banco for novo**) |
+| 2 | `../migrations/004_plataforma_completa.sql` | Tudo que a 2.0 acrescentou |
+| 3 | `../migrations/005_estudo_inteligente.sql` | Revisão espaçada, caderno de erros e planos de estudo |
+
+A migration 004 já traz os patamares de combo, 70 frases motivacionais, 16
+insígnias, os metadados dos 9 concursos e as tabelas de TAF preenchidas.
+
+> **Atenção na 004:** ela agora começa apagando os patamares de combo
+> antigos (pisos 10/20/30/…) para reinstalar os novos (11/21/31/…). Sem
+> isso o aluno veria "INSANO x10" e "INSANO x11" alternando.
+
+---
+
+## 2. Banco de questões (~2 min por arquivo)
+
+São **3.260 questões oficiais** em 12 arquivos, divididos para não estourar
+o SQL Editor. Rode na ordem que preferir — cada um é independente.
+
+```
+cn_01.sql      cn_02.sql        (434 questões — Colégio Naval / CPACN)
+eear_01.sql                     (382 — EEAR)
+efomm_01.sql                    (198 — EFOMM)
+enem_01.sql .. enem_05.sql      (1.664 — ENEM 2016 a 2025)
+epcar_01.sql   epcar_02.sql     (432 — EPCAR/CPCAR)
+esa_01.sql                      (150 — ESA)
+```
+
+Cada arquivo cria as matérias e assuntos que faltarem, vincula a matéria ao
+concurso (o que alimenta os filtros da tela) e insere as questões com
+`ON CONFLICT (hash_conteudo) DO NOTHING`.
+
+---
+
+## 3. Conteúdo didático
+
+| Arquivo | Conteúdo |
+| --- | --- |
+| `teoria_01_matematica.sql` | 8 temas de Matemática |
+| `teoria_02_linguagens.sql` | 3 de Português + 2 de Inglês |
+| `teoria_03_natureza.sql` | 2 de Física, 1 de Química, 1 de Biologia |
+| `teoria_04_humanas.sql` | 2 de História, 2 de Geografia, 1 de Filosofia, 1 de Sociologia |
+| `teoria_05_redacao_literatura.sql` | 2 de Redação + 1 de Literatura |
+| `teoria_06_gramatica.sql` | Crase, concordância e regência |
+| `bizus_01.sql` | 31 bizus táticos ancorados nos mesmos temas |
+| `videoaulas_01.sql` | 72 vídeo-aulas, todas conferidas no YouTube |
+| `musicas_01.sql` | 46 faixas em domínio público para estudar |
+
+> `teoria_05` cria a matéria **Redação** se ela ainda não existir — nenhuma
+> prova importada tem questão de múltipla escolha dessa matéria.
+
+**Rode `videoaulas_01.sql` depois dos seeds de teoria.** Os dois casam pelo
+campo `tema`; é isso que faz a trilha mostrar o texto e o vídeo do mesmo
+assunto lado a lado.
+
+---
+
+## 4. Versão (por último)
+
+```
+versao_2_1_0.sql
+```
+
+Grava a versão do rodapé com a **hora cheia**, sem minutos.
+
+---
+
+## Como adicionar provas novas depois
+
+1. Coloque o `.txt` da prova em `C:\Users\SARA\documents\BANCO DE QUESTOES`.
+2. Gere o JSON e os novos SQL:
+
+```bash
+python scripts/parse_questoes.py            # lê os .txt -> scripts/out/questoes.json
+python scripts/auditar_gabaritos.py         # aponta o que cheira a erro de extração
+python scripts/gerar_seed_sql.py            # gera supabase/seeds/*.sql
+python scripts/checar_seeds.py              # confere os .sql antes de colar
+```
+
+3. Rode no Supabase apenas os arquivos que mudaram.
+
+O parser aceita os seis formatos de prova já presentes na pasta. Se você
+trouxer um layout novo, ele avisa no relatório (`variante=nenhum`) em vez de
+importar errado. O SHA-256 do enunciado garante que rodar de novo não
+duplica questão já cadastrada.
+
+## Como revalidar as vídeo-aulas
+
+Vídeo do YouTube sai do ar. Para conferir todos e regerar o seed só com os
+que continuam no ar:
+
+```bash
+python scripts/gerar_videoaulas.py
+```
+
+Ele consulta o oEmbed do YouTube um por um e descarta o que não responder.
+
+---
+
+## Conferindo o que entrou
+
+```sql
+-- Questões por concurso e ano
+SELECT c.sigla, q.ano, COUNT(*) AS questoes
+FROM questoes q
+JOIN concursos c ON c.id = q.concurso_id
+GROUP BY c.sigla, q.ano
+ORDER BY c.sigla, q.ano DESC;
+
+-- Saúde do gabarito comentado
+SELECT resolucao_status, COUNT(*)
+FROM questoes GROUP BY resolucao_status;
+
+-- Teoria e vídeo por matéria
+SELECT m.nome,
+       COUNT(DISTINCT t.id) AS temas_teoria,
+       COUNT(DISTINCT v.id) AS videoaulas
+FROM materias m
+LEFT JOIN teoria_conteudo t ON t.materia_id = m.id
+LEFT JOIN videoaulas      v ON v.materia_id = m.id
+GROUP BY m.nome
+HAVING COUNT(DISTINCT t.id) + COUNT(DISTINCT v.id) > 0
+ORDER BY m.nome;
+
+-- Nenhuma alternativa deve voltar aqui: é a checagem da régua de PDF
+SELECT COUNT(*) AS alternativas_sujas
+FROM questoes
+WHERE alternativas::text ~ '-{6,}';
+```

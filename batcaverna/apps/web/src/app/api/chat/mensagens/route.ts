@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
-async function getUserFromRequest(req: NextRequest): Promise<{ id: string; role: string } | null> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload ? { id: payload.sub, role: payload.role } : null;
+async function getUserFromRequest(req: NextRequest): Promise<string | null> {
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.id ?? null;
 }
 
 // Termos ofensivos para flag automática de moderação (Seção 15)

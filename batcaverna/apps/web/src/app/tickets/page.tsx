@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 
 interface TicketMensagem {
   id: string;
@@ -61,7 +61,7 @@ export default function TicketsPage() {
   const carregarTickets = async () => {
     setLoadingTickets(true);
     try {
-      const res = await fetch("/api/tickets");
+      const res = await fetchWithAuth("/api/tickets");
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -82,7 +82,7 @@ export default function TicketsPage() {
   const carregarDetalhesTicket = async (id: string) => {
     setLoadingDetalhe(true);
     try {
-      const res = await fetch(`/api/tickets/${id}`);
+      const res = await fetchWithAuth(`/api/tickets/${id}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -114,7 +114,7 @@ export default function TicketsPage() {
 
     setEnviandoTicket(true);
     try {
-      const res = await fetch("/api/tickets", {
+      const res = await fetchWithAuth("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -148,7 +148,7 @@ export default function TicketsPage() {
 
     setEnviandoMensagem(true);
     try {
-      const res = await fetch(`/api/tickets/${ticketAbertoId}/mensagens`, {
+      const res = await fetchWithAuth(`/api/tickets/${ticketAbertoId}/mensagens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

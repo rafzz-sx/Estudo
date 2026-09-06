@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { formatarDataHoraVersao } from "@batcaverna/utils";
+import { PainelAvisos } from "@/components/admin/PainelAvisos";
+import { PainelFeedback } from "@/components/admin/PainelFeedback";
+import { PainelSessoes } from "@/components/admin/PainelSessoes";
 
 interface UsuarioAdmin {
   id: string;
@@ -39,11 +42,22 @@ type AbaAdmin =
   | "moderacao"
   | "armazem"
   | "auditoria"
-  | "banners";
+  | "banners"
+  | "avisos"
+  | "feedback"
+  | "sessoes";
+
+interface ResumoFeedback {
+  total: number;
+  nao_lidos: number;
+  nota_media: number | null;
+  por_tipo: { opiniao: number; bug: number; ideia: number };
+}
 
 export default function AdminPage() {
   const { user } = useAuthStore();
   const [aba, setAba] = useState<AbaAdmin>("visao_geral");
+  const [resumoFeedback, setResumoFeedback] = useState<ResumoFeedback | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [tickets, setTickets] = useState<TicketAdmin[]>([]);
   const [busca, setBusca] = useState("");
@@ -83,10 +97,10 @@ export default function AdminPage() {
   const carregarDadosIniciais = async () => {
     try {
       const [resUsers, resTickets, resInfo, resLogs] = await Promise.all([
-        fetch("/api/admin/usuarios"),
-        fetch("/api/tickets"),
-        fetch("/api/app-info"),
-        fetch("/api/admin/armazem/logs"),
+        fetchWithAuth("/api/admin/usuarios"),
+        fetchWithAuth("/api/tickets"),
+        fetchWithAuth("/api/app-info"),
+        fetchWithAuth("/api/admin/armazem/logs"),
       ]);
 
       if (resUsers.ok) {
@@ -114,7 +128,7 @@ export default function AdminPage() {
   const carregarOnline = async () => {
     setLoadingOnline(true);
     try {
-      const res = await fetch("/api/admin/atividade-usuarios");
+      const res = await fetchWithAuth("/api/admin/atividade-usuarios");
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
@@ -131,7 +145,7 @@ export default function AdminPage() {
   // 3. Carregar Auditoria
   const carregarAuditoria = async () => {
     try {
-      const res = await fetch("/api/admin/auditoria");
+      const res = await fetchWithAuth("/api/admin/auditoria");
       if (res.ok) {
         const json = await res.json();
         if (json.success) setLogsAuditoria(json.data || []);
@@ -142,7 +156,7 @@ export default function AdminPage() {
   // 4. Carregar Conversas para Moderação
   const carregarModeracao = async () => {
     try {
-      const res = await fetch("/api/admin/conversas");
+      const res = await fetchWithAuth("/api/admin/conversas");
       if (res.ok) {
         const json = await res.json();
         if (json.success) setConversasModeracao(json.data || []);
@@ -163,7 +177,7 @@ export default function AdminPage() {
   // Carregar mensagens de moderação
   useEffect(() => {
     if (conversaModeracaoAtivaId) {
-      fetch(`/api/admin/conversas/${conversaModeracaoAtivaId}/mensagens`)
+      fetchWithAuth(`/api/admin/conversas/${conversaModeracaoAtivaId}/mensagens`)
         .then((r) => r.json())
         .then((j) => {
           if (j.success) setMensagensModeracao(j.data || []);
@@ -174,7 +188,7 @@ export default function AdminPage() {
   // Carregar detalhe do ticket
   useEffect(() => {
     if (ticketSelecionadoId) {
-      fetch(`/api/tickets/${ticketSelecionadoId}`)
+      fetchWithAuth(`/api/tickets/${ticketSelecionadoId}`)
         .then((r) => r.json())
         .then((j) => {
           if (j.success) setTicketDetalhe(j.data);
@@ -187,11 +201,11 @@ export default function AdminPage() {
     setExecutandoVarredura(true);
     setMensagemArmazem("Executando varredura no bucket e validando hashes SHA-256...");
     try {
-      const res = await fetch("/api/admin/armazem/executar-agora", { method: "POST" });
+      const res = await fetchWithAuth("/api/admin/armazem/executar-agora", { method: "POST" });
       const json = await res.json();
       if (res.ok && json.success) {
         setMensagemArmazem(`✓ ${json.data.mensagem} (Duração: ${json.data.duracao_segundos}s)`);
-        const logsRes = await fetch("/api/admin/armazem/logs");
+        const logsRes = await fetchWithAuth("/api/admin/armazem/logs");
         if (logsRes.ok) {
           const logsJson = await logsRes.json();
           if (logsJson.data) setLogsArmazem(logsJson.data);
@@ -211,7 +225,7 @@ export default function AdminPage() {
     if (!textoResposta.trim()) return;
     setEnviandoResposta(true);
     try {
-      const res = await fetch(`/api/tickets/${ticketId}/mensagens`, {
+      const res = await fetchWithAuth(`/api/tickets/${ticketId}/mensagens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conteudo: textoResposta.trim() }),
@@ -220,13 +234,13 @@ export default function AdminPage() {
       if (res.ok) {
         setTextoResposta("");
         // Recarregar ticket
-        const detRes = await fetch(`/api/tickets/${ticketId}`);
+        const detRes = await fetchWithAuth(`/api/tickets/${ticketId}`);
         if (detRes.ok) {
           const detJson = await detRes.json();
           if (detJson.data) setTicketDetalhe(detJson.data);
         }
         // Recarregar lista
-        const tRes = await fetch("/api/tickets");
+        const tRes = await fetchWithAuth("/api/tickets");
         if (tRes.ok) {
           const tJson = await tRes.json();
           if (tJson.data) setTickets(tJson.data);
@@ -241,7 +255,7 @@ export default function AdminPage() {
   // Alternar Flag de Moderação
   const handleToggleFlagMensagem = async (msgId: string, flagAtual: boolean) => {
     try {
-      await fetch(`/api/admin/mensagens/${msgId}/sinalizar`, {
+      await fetchWithAuth(`/api/admin/mensagens/${msgId}/sinalizar`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sinalizada: !flagAtual }),
@@ -296,6 +310,14 @@ export default function AdminPage() {
           { key: "tickets", label: `🎫 Tickets (${tickets.filter((t) => t.status === "aberto").length} novos)` },
           { key: "moderacao", label: "🛡️ Moderação do Chat" },
           { key: "armazem", label: "📦 Armazém de Questões" },
+          { key: "sessoes", label: "⏳ Sessões & Logins" },
+          { key: "avisos", label: "📢 Aviso Global" },
+          {
+            key: "feedback",
+            label: `💬 Feedback${
+              resumoFeedback?.nao_lidos ? ` (${resumoFeedback.nao_lidos})` : ""
+            }`,
+          },
           { key: "auditoria", label: "📝 Log de Auditoria" },
           { key: "banners", label: "🖼️ Banners & Temas" },
         ].map((item) => (
@@ -738,8 +760,22 @@ export default function AdminPage() {
               <p className="text-xs text-bat-text-muted">Reprodução automática silenciosa (autoplay muted).</p>
             </div>
           </div>
+          <p className="text-bat-text-muted text-xs">
+            Todos os banners da plataforma usam <code className="text-bat-gold-400">object-fit: cover</code>,
+            então qualquer proporção de imagem preenche a faixa sem esticar nem
+            vazar — não é preciso recortar antes de enviar.
+          </p>
         </div>
       )}
+
+      {/* ═══ TAB: SESSÕES & LOGINS ═══ */}
+      {aba === "sessoes" && <PainelSessoes />}
+
+      {/* ═══ TAB: AVISO GLOBAL ═══ */}
+      {aba === "avisos" && <PainelAvisos />}
+
+      {/* ═══ TAB: FEEDBACK DOS ALUNOS ═══ */}
+      {aba === "feedback" && <PainelFeedback onResumo={setResumoFeedback} />}
     </div>
   );
 }

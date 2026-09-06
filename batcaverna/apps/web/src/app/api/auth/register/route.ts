@@ -212,12 +212,12 @@ export async function POST(req: NextRequest) {
       message: 'Conta criada com sucesso! Entrando na Caverna...',
     }, { status: 201 });
 
-    // Set cookies HTTP para a sessão de 8 horas imediata
+    // Cookie com a mesma duração do JWT (mesmo ajuste feito no login).
     response.cookies.set('bat_access_token', accessToken, {
       path: '/',
-      httpOnly: false,
+      httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 horas de sessão ativa sem precisar relogar
+      maxAge: parseInt(process.env.JWT_ACCESS_EXPIRATION || '36000'),
       secure: process.env.NODE_ENV === 'production',
     });
 

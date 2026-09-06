@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
 
 interface Mensagem {
@@ -71,7 +71,7 @@ export default function ChatPage() {
   // 1. Carregar conversas do backend real e verificar parâmetro ?amigo=
   const carregarConversas = async () => {
     try {
-      const res = await fetch("/api/chat/conversas");
+      const res = await fetchWithAuth("/api/chat/conversas");
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -89,7 +89,7 @@ export default function ChatPage() {
             } else {
               // Criar conversa com o amigo se ainda não existir
               try {
-                const cRes = await fetch("/api/chat/conversas", {
+                const cRes = await fetchWithAuth("/api/chat/conversas", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ target_user_id: amigoTarget }),
@@ -99,7 +99,7 @@ export default function ChatPage() {
                   if (cJson.success && cJson.data) {
                     setConversaAtivaId(cJson.data.id);
                     // Recarregar lista para incluir dados do outro usuário
-                    const recarregarRes = await fetch("/api/chat/conversas");
+                    const recarregarRes = await fetchWithAuth("/api/chat/conversas");
                     if (recarregarRes.ok) {
                       const recJson = await recarregarRes.json();
                       if (recJson.success) setConversas(recJson.data || []);
@@ -121,21 +121,32 @@ export default function ChatPage() {
   };
 
   // 2. Carregar mensagens da conversa ativa
-  const carregarMensagens = async (convId: string) => {
+  //    `silencioso` é usado pelo polling: recarrega sem piscar o spinner.
+  const carregarMensagens = async (convId: string, silencioso = false) => {
     if (!convId) return;
-    setLoadingMensagens(true);
+    if (!silencioso) setLoadingMensagens(true);
     try {
-      const res = await fetch(`/api/chat/mensagens?conversa_id=${convId}`);
+      const res = await fetchWithAuth(`/api/chat/mensagens?conversa_id=${convId}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
-          setMensagens(json.data);
+          setMensagens((atuais) => {
+            // Evita re-render (e scroll indesejado) quando nada mudou.
+            if (
+              silencioso &&
+              atuais.length === json.data.length &&
+              atuais[atuais.length - 1]?.id === json.data[json.data.length - 1]?.id
+            ) {
+              return atuais;
+            }
+            return json.data;
+          });
         }
       }
     } catch (e) {
       console.warn("Erro ao carregar mensagens:", e);
     } finally {
-      setLoadingMensagens(false);
+      if (!silencioso) setLoadingMensagens(false);
     }
   };
 
@@ -145,10 +156,30 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (conversaAtivaId) {
-      carregarMensagens(conversaAtivaId);
-    }
+    if (!conversaAtivaId) return;
+
+    carregarMensagens(conversaAtivaId);
+
+    // Não há WebSocket na plataforma: o chat se mantém atualizado com uma
+    // consulta a cada 5 segundos. A aba em segundo plano não consulta, para
+    // não gastar requisição de quem deixou a página aberta.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        carregarMensagens(conversaAtivaId, true);
+      }
+    }, 5000);
+
+    return () => clearInterval(timer);
   }, [conversaAtivaId]);
+
+  // Lista de conversas: atualiza com menos frequência (só muda quando chega
+  // mensagem numa conversa que não está aberta).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") carregarConversas();
+    }, 20000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -247,7 +278,7 @@ export default function ChatPage() {
     }
 
     try {
-      const res = await fetch("/api/chat/mensagens", {
+      const res = await fetchWithAuth("/api/chat/mensagens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

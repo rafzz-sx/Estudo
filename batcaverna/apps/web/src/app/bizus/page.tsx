@@ -1,229 +1,263 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { fetchWithAuth } from "@/stores/auth-store";
 
-// ─── Mock de bizus ───────────────────────────────────────────
-const mockBizus = [
-  {
-    id: "b1", materia: "Português", assunto: "Crase", impacto: "alto" as const,
-    titulo: "Regra do MNEMÔNICO para Crase",
-    conteudo: "NUNCA crase antes de: verbo, masculino, pronomes pessoais/indefinidos, palavras repetidas. Se trocar \"a\" por \"para a\" e funcionar → tem crase!",
-    exemplo: "Fui à escola (para a escola ✓) vs. Fui a pé (para a pé ✗)",
-    favoritado: true,
-  },
-  {
-    id: "b2", materia: "Matemática", assunto: "Triângulo Retângulo", impacto: "alto" as const,
-    titulo: "Ternas Pitagóricas — decore apenas 4",
-    conteudo: "Decore: (3,4,5), (5,12,13), (8,15,17), (7,24,25). 90% das questões usam múltiplos dessas ternas.",
-    exemplo: "(6,8,10) = 2×(3,4,5); (10,24,26) = 2×(5,12,13)",
-    favoritado: false,
-  },
-  {
-    id: "b3", materia: "Física", assunto: "Cinemática", impacto: "util" as const,
-    titulo: "MRU vs MRUV — Identifique em 3 segundos",
-    conteudo: "Velocidade constante → MRU (S = S₀ + vt). Tem aceleração → MRUV (S = S₀ + v₀t + at²/2). Olhe se o enunciado menciona aceleração.",
-    exemplo: "\"Um carro a 60 km/h\" = MRU. \"Um carro parte do repouso e acelera\" = MRUV.",
-    favoritado: true,
-  },
-  {
-    id: "b4", materia: "Química", assunto: "Balanceamento", impacto: "util" as const,
-    titulo: "Balanceamento por TENTATIVA — Atalho",
-    conteudo: "Ordem: metais → não-metais → hidrogênio → oxigênio. Funciona em 80% dos casos sem método algébrico.",
-    exemplo: "Fe + O₂ → Fe₂O₃ → Comece pelo Fe: 2Fe, depois O: 3/2 O₂, multiplique tudo por 2.",
-    favoritado: false,
-  },
-  {
-    id: "b5", materia: "Português", assunto: "Concordância Verbal", impacto: "alto" as const,
-    titulo: "Sujeito Composto — Regra de Ouro",
-    conteudo: "Sujeito composto ANTES do verbo → verbo no PLURAL. Sujeito composto DEPOIS do verbo → verbo concorda com o mais próximo ou vai ao plural.",
-    exemplo: "\"Pedro e Maria foram\" (antes). \"Foi Pedro e Maria\" ou \"Foram Pedro e Maria\" (depois).",
-    favoritado: false,
-  },
-  {
-    id: "b6", materia: "Inglês", assunto: "Prepositions", impacto: "util" as const,
-    titulo: "IN / ON / AT — Quando usar cada um",
-    conteudo: "AT → horários e endereços específicos. ON → dias e datas. IN → meses, anos, estações e períodos do dia (exceto 'at night').",
-    exemplo: "at 3 PM, on Monday, in January, in the morning, AT night",
-    favoritado: false,
-  },
-  {
-    id: "b7", materia: "Matemática", assunto: "Porcentagem", impacto: "alto" as const,
-    titulo: "Fator Multiplicativo — Acabou a dor de cabeça",
-    conteudo: "Aumento de X% → multiplique por (1 + X/100). Desconto de X% → multiplique por (1 - X/100). Encadeie para aumentos/descontos sucessivos.",
-    exemplo: "Aumento de 20% + desconto de 10% = 1,20 × 0,90 = 1,08 → aumento real de 8%.",
-    favoritado: true,
-  },
-  {
-    id: "b8", materia: "História do Brasil", assunto: "Era Vargas", impacto: "avancado" as const,
-    titulo: "3 Fases de Vargas — Mnemônico",
-    conteudo: "Gov. Provisório (1930-34) → Era Constitucional (34-37) → Estado Novo (37-45). Lembre: P-C-N (Provisório, Constitucional, Novo).",
-    exemplo: "A CLT foi criada no Estado Novo (1943).",
-    favoritado: false,
-  },
-];
-
-const materiasFilter = ["Todas", "Português", "Matemática", "Física", "Química", "Inglês", "História do Brasil"];
-const impactoFilter = [
-  { value: "todos", label: "Todos", emoji: "" },
-  { value: "alto", label: "Alto impacto", emoji: "🔥" },
-  { value: "util", label: "Útil", emoji: "⚡" },
-  { value: "avancado", label: "Avançado", emoji: "🎓" },
-];
-
-function getImpactoStyle(impacto: string) {
-  switch (impacto) {
-    case "alto": return { bg: "bg-bat-error/10", text: "text-bat-error", label: "🔥 Alto impacto" };
-    case "util": return { bg: "bg-bat-gold-400/10", text: "text-bat-gold-400", label: "⚡ Útil" };
-    case "avancado": return { bg: "bg-bat-info/10", text: "text-bat-info", label: "🎓 Avançado" };
-    default: return { bg: "bg-bat-bg-secondary", text: "text-bat-text-muted", label: impacto };
-  }
+interface Bizu {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  nivel_impacto: string;
+  exemplo_pratico: string | null;
+  favoritado: boolean;
+  assuntos: {
+    id: string;
+    nome: string;
+    materias: { id: string; nome: string; icone_emoji: string | null } | null;
+  } | null;
 }
 
-export default function BizusPage() {
-  const [visible, setVisible] = useState(false);
-  const [busca, setBusca] = useState("");
-  const [materia, setMateria] = useState("Todas");
-  const [impacto, setImpacto] = useState("todos");
-  const [apenasMinhas, setApenasMinhas] = useState(false);
-  const [expandido, setExpandido] = useState<string | null>(null);
-  const [favoritos, setFavoritos] = useState<Set<string>>(
-    new Set(mockBizus.filter((b) => b.favoritado).map((b) => b.id))
-  );
+const IMPACTOS = [
+  { valor: "todos", rotulo: "Todos" },
+  { valor: "alto", rotulo: "🔥 Alto impacto" },
+  { valor: "util", rotulo: "💡 Útil" },
+  { valor: "avancado", rotulo: "🎓 Avançado" },
+];
 
-  useEffect(() => { setTimeout(() => setVisible(true), 100); }, []);
+const CORES_IMPACTO: Record<string, { cor: string; rotulo: string }> = {
+  alto: { cor: "#EF4444", rotulo: "Alto impacto" },
+  util: { cor: "#F5C518", rotulo: "Útil" },
+  avancado: { cor: "#A855F7", rotulo: "Avançado" },
+};
 
-  const toggleFavorito = (id: string) => {
-    setFavoritos((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+function Bizus() {
+  const params = useSearchParams();
 
-  const bizusFiltrados = mockBizus.filter((b) => {
-    if (materia !== "Todas" && b.materia !== materia) return false;
-    if (impacto !== "todos" && b.impacto !== impacto) return false;
-    if (apenasMinhas && !favoritos.has(b.id)) return false;
-    if (busca && !b.titulo.toLowerCase().includes(busca.toLowerCase()) &&
-        !b.conteudo.toLowerCase().includes(busca.toLowerCase())) return false;
-    return true;
+  const [filtros, setFiltros] = useState({
+    concurso: params.get("concurso") ?? "todos",
+    materia: params.get("materia") ?? "todas",
+    impacto: "todos",
+    busca: "",
+    favoritos: false,
   });
 
+  const [bizus, setBizus] = useState<Bizu[]>([]);
+  const [materias, setMaterias] = useState<{ id: string; nome: string; icone_emoji: string | null }[]>([]);
+  const [total, setTotal] = useState(0);
+  const [carregando, setCarregando] = useState(true);
+
+  // Matérias disponíveis (reaproveita a rota de filtros das questões)
+  useEffect(() => {
+    fetchWithAuth(
+      `/api/questoes/filtros?concurso=${encodeURIComponent(filtros.concurso)}`
+    )
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) setMaterias(json.data.materias);
+      })
+      .catch(() => undefined);
+  }, [filtros.concurso]);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const qs = new URLSearchParams({
+        concurso: filtros.concurso,
+        materia: filtros.materia,
+        impacto: filtros.impacto,
+        per_page: "50",
+      });
+      if (filtros.busca.trim().length >= 3) qs.set("busca", filtros.busca.trim());
+      if (filtros.favoritos) qs.set("favoritos", "1");
+
+      const res = await fetchWithAuth(`/api/bizus?${qs}`);
+      const json = await res.json();
+      if (json.success) {
+        setBizus(json.data.items);
+        setTotal(json.data.total);
+      }
+    } catch {
+      /* estado vazio cobre o erro */
+    } finally {
+      setCarregando(false);
+    }
+  }, [filtros]);
+
+  useEffect(() => {
+    const t = setTimeout(carregar, 250);
+    return () => clearTimeout(t);
+  }, [carregar]);
+
+  const favoritar = async (b: Bizu) => {
+    setBizus((atual) =>
+      atual.map((x) =>
+        x.id === b.id ? { ...x, favoritado: !x.favoritado } : x
+      )
+    );
+    await fetchWithAuth(`/api/bizus/${b.id}/favoritar`, {
+      method: "POST",
+    }).catch(() => undefined);
+  };
+
   return (
-    <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      <div className="mb-6">
-        <h1 className="heading text-3xl text-bat-text mb-2">💡 Banco de Bizus</h1>
-        <p className="text-bat-text-secondary">Macetes, atalhos e dicas que economizam tempo na prova.</p>
-      </div>
+    <div>
+      <header className="mb-6">
+        <h1 className="heading flex items-center gap-3 text-2xl font-bold text-bat-text sm:text-3xl">
+          <span>💡</span> Bizus
+        </h1>
+        <p className="mt-1 text-sm text-bat-text-secondary">
+          Macetes, atalhos e armadilhas recorrentes das bancas — o que economiza
+          tempo na hora da prova.
+          {total > 0 && ` ${total} bizu${total !== 1 ? "s" : ""} disponível(is).`}
+        </p>
+      </header>
 
       {/* ═══ FILTROS ═══ */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Buscar bizu por título ou conteúdo..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="input-field text-sm"
-          />
-        </div>
+      <div className="mb-5 flex flex-wrap gap-3">
+        <input
+          value={filtros.busca}
+          onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
+          placeholder="Buscar bizu..."
+          className="input-field min-w-0 flex-1 text-sm"
+        />
         <select
-          value={materia}
-          onChange={(e) => setMateria(e.target.value)}
-          className="input-field text-sm w-full sm:w-44"
+          value={filtros.materia}
+          onChange={(e) => setFiltros({ ...filtros, materia: e.target.value })}
+          className="input-field shrink-0 text-sm"
         >
-          {materiasFilter.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select
-          value={impacto}
-          onChange={(e) => setImpacto(e.target.value)}
-          className="input-field text-sm w-full sm:w-40"
-        >
-          {impactoFilter.map((i) => (
-            <option key={i.value} value={i.value}>{i.emoji} {i.label}</option>
+          <option value="todas">Todas as matérias</option>
+          {materias.map((m) => (
+            <option key={m.id} value={m.nome}>
+              {m.icone_emoji} {m.nome}
+            </option>
           ))}
         </select>
-        <button
-          onClick={() => setApenasMinhas(!apenasMinhas)}
-          className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer whitespace-nowrap ${
-            apenasMinhas
-              ? "bg-bat-gold-400/15 border-bat-gold-400/30 text-bat-gold-400"
-              : "bg-bat-bg-card border-bat-border text-bat-text-muted hover:text-bat-text"
-          }`}
+        <select
+          value={filtros.impacto}
+          onChange={(e) => setFiltros({ ...filtros, impacto: e.target.value })}
+          className="input-field shrink-0 text-sm"
         >
-          ⭐ Meus Bizus
-        </button>
+          {IMPACTOS.map((i) => (
+            <option key={i.valor} value={i.valor}>
+              {i.rotulo}
+            </option>
+          ))}
+        </select>
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-bat-border bg-bat-bg-card px-3.5 py-2">
+          <input
+            type="checkbox"
+            checked={filtros.favoritos}
+            onChange={(e) =>
+              setFiltros({ ...filtros, favoritos: e.target.checked })
+            }
+            className="accent-bat-gold-400"
+          />
+          <span className="text-xs text-bat-text-secondary">⭐ Favoritos</span>
+        </label>
       </div>
 
-      {/* ═══ CONTAGEM ═══ */}
-      <p className="text-bat-text-muted text-sm mb-4">{bizusFiltrados.length} bizu{bizusFiltrados.length !== 1 ? "s" : ""} encontrado{bizusFiltrados.length !== 1 ? "s" : ""}</p>
-
-      {/* ═══ CARDS DE BIZUS ═══ */}
-      {bizusFiltrados.length === 0 ? (
-        <div className="text-center py-16 bg-bat-bg-card border border-bat-border rounded-2xl">
-          <span className="text-4xl mb-3 block">🔍</span>
-          <p className="text-bat-text-secondary">Nenhum bizu encontrado com esses filtros.</p>
+      {/* ═══ LISTA ═══ */}
+      {carregando ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-40 rounded-2xl" />
+          ))}
+        </div>
+      ) : bizus.length === 0 ? (
+        <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-10 text-center">
+          <span className="mb-3 block text-4xl">💡</span>
+          <h2 className="heading mb-2 text-lg text-bat-text">
+            {filtros.favoritos
+              ? "Você ainda não favoritou nenhum bizu"
+              : "Nenhum bizu com esses filtros"}
+          </h2>
+          <p className="mx-auto mb-5 max-w-md text-sm text-bat-text-secondary">
+            {filtros.favoritos
+              ? "Toque na estrela de um bizu para guardá-lo aqui e revisar antes da prova."
+              : "Afrouxe os filtros ou explore outra matéria. Novos bizus entram junto com o conteúdo teórico de cada tema."}
+          </p>
+          <Link
+            href="/questoes"
+            className="btn-secondary inline-block px-5 py-2.5 no-underline"
+          >
+            Ir para as questões
+          </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {bizusFiltrados.map((bizu) => {
-            const imp = getImpactoStyle(bizu.impacto);
-            const isExpanded = expandido === bizu.id;
-
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {bizus.map((b) => {
+            const impacto = CORES_IMPACTO[b.nivel_impacto] ?? CORES_IMPACTO.util;
             return (
-              <div
-                key={bizu.id}
-                className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5 hover:border-bat-purple-500/30 transition-all"
+              <article
+                key={b.id}
+                className="rounded-2xl border border-bat-border bg-bat-bg-card p-5 transition-colors hover:border-bat-gold-400/30"
               >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${imp.bg} ${imp.text}`}>
-                      {imp.label}
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        color: impacto.cor,
+                        borderColor: `${impacto.cor}44`,
+                        background: `${impacto.cor}15`,
+                      }}
+                    >
+                      {impacto.rotulo}
                     </span>
-                    <span className="text-xs text-bat-purple-400 bg-bat-purple-500/10 px-2.5 py-1 rounded-full">
-                      {bizu.materia}
-                    </span>
-                    <span className="text-xs text-bat-text-muted bg-bat-bg-secondary px-2.5 py-1 rounded-full">
-                      {bizu.assunto}
-                    </span>
+                    {b.assuntos?.materias?.nome && (
+                      <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-0.5 text-[11px] text-bat-text-muted">
+                        {b.assuntos.materias.icone_emoji} {b.assuntos.materias.nome}
+                      </span>
+                    )}
                   </div>
+
                   <button
-                    onClick={() => toggleFavorito(bizu.id)}
-                    className="text-lg transition-transform hover:scale-125 cursor-pointer"
-                    title={favoritos.has(bizu.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                    onClick={() => favoritar(b)}
+                    className="shrink-0 cursor-pointer text-lg transition-transform hover:scale-110"
+                    aria-label={b.favoritado ? "Desfavoritar" : "Favoritar"}
                   >
-                    {favoritos.has(bizu.id) ? "⭐" : "☆"}
+                    {b.favoritado ? "⭐" : "☆"}
                   </button>
                 </div>
 
-                {/* Título */}
-                <h3 className="heading text-base text-bat-text font-bold mb-2">{bizu.titulo}</h3>
+                <h3 className="heading mb-2 text-base font-bold text-bat-text">
+                  {b.titulo}
+                </h3>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
+                  {b.conteudo}
+                </p>
 
-                {/* Conteúdo */}
-                <p className="text-bat-text-secondary text-sm leading-relaxed mb-3">{bizu.conteudo}</p>
-
-                {/* Exemplo (expandível) */}
-                {bizu.exemplo && (
-                  <div>
-                    <button
-                      onClick={() => setExpandido(isExpanded ? null : bizu.id)}
-                      className="text-bat-purple-400 text-xs hover:underline cursor-pointer mb-2"
-                    >
-                      {isExpanded ? "▾ Ocultar exemplo" : "▸ Ver exemplo prático"}
-                    </button>
-                    {isExpanded && (
-                      <div className="bg-bat-bg-secondary border border-bat-border rounded-xl p-3 mt-1">
-                        <p className="text-bat-text text-sm font-mono leading-relaxed">{bizu.exemplo}</p>
-                      </div>
-                    )}
+                {b.exemplo_pratico && (
+                  <div className="mt-3 rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-3.5 py-2.5">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
+                      Na prática
+                    </p>
+                    <p className="whitespace-pre-line font-mono text-xs leading-relaxed text-bat-gold-400">
+                      {b.exemplo_pratico}
+                    </p>
                   </div>
                 )}
-              </div>
+
+                {b.assuntos?.nome && (
+                  <p className="mt-3 text-[11px] text-bat-text-muted">
+                    {b.assuntos.nome}
+                  </p>
+                )}
+              </article>
             );
           })}
         </div>
       )}
     </div>
+  );
+}
+
+export default function BizusPage() {
+  return (
+    <Suspense fallback={<div className="skeleton h-96 w-full rounded-2xl" />}>
+      <Bizus />
+    </Suspense>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BatBrand } from "@/components/BatLogo";
+import { fetchWithAuth } from "@/stores/auth-store";
 
 // ─── Luz de fundo amarela suave que segue o cursor ────────────
 function AuthSpotlight() {
@@ -63,7 +64,7 @@ export default function RecuperarSenhaPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/recuperar", {
+      const res = await fetchWithAuth("/api/auth/recuperar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -118,7 +119,7 @@ export default function RecuperarSenhaPage() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/recuperar", {
+      const res = await fetchWithAuth("/api/auth/recuperar", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code: code.trim(), nova_senha: novaSenha }),

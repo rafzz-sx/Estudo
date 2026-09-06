@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    token = req.cookies.get('bat_access_token')?.value;
-  }
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload?.sub || null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.id ?? null;
 }
 
 // POST /api/study-sessions/stop — Finalizar sessão de estudo ativa

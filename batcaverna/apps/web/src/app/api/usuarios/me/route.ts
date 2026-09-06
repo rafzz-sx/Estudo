@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  let token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    token = req.cookies.get('bat_access_token')?.value;
-  }
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload?.sub || null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  const user = await getAuthUserFromRequest(req);
+  return user?.id ?? null;
 }
 
 // GET /api/usuarios/me — Retorna perfil completo do usuário autenticado
@@ -28,7 +24,10 @@ export async function GET(req: NextRequest) {
         id, nome, apelido, email, email_verified,
         avatar_url, banner_url, banner_tipo, bio,
         data_nascimento, role, xp_total, nivel_atual,
-        maior_combo_pessoal, streak_dias, ultimo_dia_estudado, criado_em
+        maior_combo_pessoal, combo_atual, combo_atualizado_em,
+        streak_dias, maior_streak, ultimo_dia_estudado, criado_em,
+        total_questoes_respondidas, total_acertos,
+        tempo_estudo_total_segundos, ultimo_login_em, sessao_expira_em
       `)
       .eq('id', userId)
       .single();
@@ -40,23 +39,69 @@ export async function GET(req: NextRequest) {
     // 2. Calcular nível exato e progresso de XP
     const nivelCalculado = calcularNivel(user.xp_total || 0);
 
-    // 3. Buscar tempo total de estudo real
+    // 3. Tempo total de estudo
     const { data: sessions } = await supabase
       .from('study_sessions')
       .select('duracao_segundos')
       .eq('user_id', userId);
 
-    const tempoTotalEstudo = (sessions || []).reduce((acc, s) => acc + (s.duracao_segundos || 0), 0);
+    const tempoTotalEstudo = (sessions || []).reduce(
+      (acc, s) => acc + (s.duracao_segundos || 0),
+      0
+    );
 
-    // 4. Buscar total de respostas e precisão
-    const { data: respostas } = await supabase
-      .from('user_questao_respostas')
-      .select('correta')
-      .eq('user_id', userId);
+    // 4. Questões e precisão — usa os contadores persistidos (migration 004)
+    //    e só varre a tabela de respostas se eles ainda não existirem.
+    let totalQuestoes = user.total_questoes_respondidas ?? 0;
+    let acertos = user.total_acertos ?? 0;
 
-    const totalQuestoes = (respostas || []).length;
-    const acertos = (respostas || []).filter(r => r.correta).length;
-    const taxaAcerto = totalQuestoes > 0 ? Number(((acertos / totalQuestoes) * 100).toFixed(1)) : 0;
+    if (totalQuestoes === 0) {
+      const { count } = await supabase
+        .from('user_questao_respostas')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (count && count > 0) {
+        const { count: countAcertos } = await supabase
+          .from('user_questao_respostas')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('correta', true);
+
+        totalQuestoes = count;
+        acertos = countAcertos ?? 0;
+
+        // Reconcilia o contador para as próximas leituras saírem diretas.
+        await supabase
+          .from('users')
+          .update({
+            total_questoes_respondidas: totalQuestoes,
+            total_acertos: acertos,
+          })
+          .eq('id', userId);
+      }
+    }
+
+    const taxaAcerto =
+      totalQuestoes > 0
+        ? Number(((acertos / totalQuestoes) * 100).toFixed(1))
+        : 0;
+
+    // 5. Matéria mais estudada — alimenta o mini-perfil
+    const { data: statsMateria } = await supabase
+      .from('user_materia_stats')
+      .select('questoes_respondidas, acertos, materias (nome, icone_emoji)')
+      .eq('user_id', userId)
+      .order('questoes_respondidas', { ascending: false })
+      .limit(1);
+
+    const materiaTop = statsMateria?.[0]
+      ? {
+          nome: (statsMateria[0] as any).materias?.nome ?? null,
+          emoji: (statsMateria[0] as any).materias?.icone_emoji ?? null,
+          questoes: statsMateria[0].questoes_respondidas,
+        }
+      : null;
 
     return NextResponse.json({
       success: true,
@@ -65,7 +110,9 @@ export async function GET(req: NextRequest) {
         nivel_info: nivelCalculado,
         tempo_total_estudo: tempoTotalEstudo,
         questoes_respondidas: totalQuestoes,
+        total_acertos: acertos,
         taxa_acerto: taxaAcerto,
+        materia_mais_estudada: materiaTop,
       },
     });
   } catch (error) {

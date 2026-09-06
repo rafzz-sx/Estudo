@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { calcularNivel } from "@batcaverna/utils";
+import { fetchWithAuth } from "@/stores/auth-store";
 
 interface MiniPerfilData {
   id: string;
@@ -19,6 +20,31 @@ interface MiniPerfilData {
   categoria_escrita?: string | null;
   amizade_status?: string | null;
   amizade_id?: string | null;
+  badges?: {
+    nome: string;
+    icone: string | null;
+    cor_hex: string | null;
+    raridade: string | null;
+    descricao: string | null;
+  }[];
+  materia_mais_estudada?: {
+    nome: string | null;
+    emoji: string | null;
+    questoes: number;
+  } | null;
+  tempo_total_estudo?: number;
+}
+
+/** Formata segundos como "12h 30min" — o mesmo formato do resto da plataforma. */
+function tempoLegivel(segundos: number): string {
+  if (!segundos) return "0min";
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
+  return h > 0 ? (m > 0 ? `${h}h ${m}min` : `${h}h`) : `${m}min`;
 }
 
 const BRASOES_CONCURSOS: Record<string, string> = {
@@ -50,7 +76,7 @@ export function MiniPerfilModal({
     const carregar = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/usuarios/${userId}/mini-perfil`);
+        const res = await fetchWithAuth(`/api/usuarios/${userId}/mini-perfil`);
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.data) {
@@ -71,7 +97,7 @@ export function MiniPerfilModal({
     if (!dados) return;
     setSolicitando(true);
     try {
-      const res = await fetch("/api/amizades/solicitar", {
+      const res = await fetchWithAuth("/api/amizades/solicitar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id_destinatario: dados.id }),
@@ -225,6 +251,48 @@ export function MiniPerfilModal({
                 </div>
               )}
 
+              {/* Insígnias escolhidas pelo próprio usuário */}
+              {dados.badges && dados.badges.length > 0 && (
+                <div className="mb-4">
+                  <span className="text-[10px] uppercase font-bold text-bat-text-muted tracking-wider block mb-1.5">
+                    Insígnias
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dados.badges.map((b) => (
+                      <span
+                        key={b.nome}
+                        title={b.descricao ?? b.nome}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold"
+                        style={{
+                          color: b.cor_hex ?? "#F5C518",
+                          borderColor: `${b.cor_hex ?? "#F5C518"}55`,
+                          background: `${b.cor_hex ?? "#F5C518"}18`,
+                        }}
+                      >
+                        <span>{b.icone ?? "🏅"}</span>
+                        <span>{b.nome}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* O que essa pessoa mais estuda */}
+              {dados.materia_mais_estudada?.nome && (
+                <div className="mb-4">
+                  <span className="text-[10px] uppercase font-bold text-bat-text-muted tracking-wider block mb-1.5">
+                    Mais estuda
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bat-bg-secondary border border-bat-border text-bat-text text-xs">
+                    <span>{dados.materia_mais_estudada.emoji ?? "📚"}</span>
+                    <span className="font-bold">{dados.materia_mais_estudada.nome}</span>
+                    <span className="text-bat-text-muted">
+                      · {dados.materia_mais_estudada.questoes} questões
+                    </span>
+                  </span>
+                </div>
+              )}
+
               {/* Categoria Personalizada ("Escrito") */}
               {dados.categoria_escrita && (
                 <div className="mb-4">
@@ -238,14 +306,22 @@ export function MiniPerfilModal({
               )}
 
               {/* Estatísticas */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-bat-border/50 text-center">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-bat-border/50 text-center">
                 <div className="p-2.5 rounded-xl bg-bat-bg-secondary/40 border border-bat-border">
-                  <p className="heading text-base font-bold text-bat-gold-400">{dados.streak_dias || 0} dias</p>
-                  <p className="text-[10px] text-bat-text-muted">Streak Contínuo</p>
+                  <p className="heading text-base font-bold text-bat-gold-400">{dados.streak_dias || 0}</p>
+                  <p className="text-[10px] text-bat-text-muted">dias de streak</p>
                 </div>
                 <div className="p-2.5 rounded-xl bg-bat-bg-secondary/40 border border-bat-border">
-                  <p className="heading text-base font-bold text-bat-text">{dados.xp_total.toLocaleString("pt-BR")} XP</p>
-                  <p className="text-[10px] text-bat-text-muted">Experiência Total</p>
+                  <p className="heading text-base font-bold text-bat-text">
+                    {dados.xp_total.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="text-[10px] text-bat-text-muted">XP total</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-bat-bg-secondary/40 border border-bat-border">
+                  <p className="heading text-base font-bold text-bat-text">
+                    {tempoLegivel(dados.tempo_total_estudo ?? 0)}
+                  </p>
+                  <p className="text-[10px] text-bat-text-muted">estudando</p>
                 </div>
               </div>
             </div>

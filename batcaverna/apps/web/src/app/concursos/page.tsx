@@ -1,214 +1,196 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { fetchWithAuth } from "@/stores/auth-store";
 
-// ─── Dados dos 9 concursos com suporte a fotos de fachada e brasão ────────
-const concursos = [
-  {
-    sigla: "EEAR",
-    nome: "Escola de Especialistas de Aeronáutica",
-    forca: "Aeronáutica",
-    emoji: "✈️",
-    cor: "#3B82F6",
-    frase: "Sargentos Especialistas · Português, Matemática e Inglês",
-    descricao: "Formação de sargentos especialistas da Força Aérea Brasileira.",
-    gradientFrom: "#1E3A5F",
-    gradientTo: "#0B1B2E",
-    imagem: "/images/concursos/eear.jpg",
-  },
-  {
-    sigla: "ESA",
-    nome: "Escola de Sargentos das Armas",
-    forca: "Exército",
-    emoji: "⭐",
-    cor: "#22C55E",
-    frase: "Praças do Exército · Português, Matemática, História e Geografia",
-    descricao: "Formação de sargentos combatentes do Exército Brasileiro.",
-    gradientFrom: "#1A3D1A",
-    gradientTo: "#0B1F0B",
-    imagem: "/images/concursos/esa.jpg",
-  },
-  {
-    sigla: "EAM",
-    nome: "Escola de Aprendizes-Marinheiros",
-    forca: "Marinha",
-    emoji: "⚓",
-    cor: "#0EA5E9",
-    frase: "Praças da Marinha · Nível Fundamental/Médio",
-    descricao: "Ingresso na Marinha do Brasil como Praça.",
-    gradientFrom: "#0C3B5E",
-    gradientTo: "#061C2E",
-    imagem: "/images/concursos/eam.jpg",
-  },
-  {
-    sigla: "CN",
-    nome: "Colégio Naval",
-    forca: "Marinha",
-    emoji: "🚢",
-    cor: "#0EA5E9",
-    frase: "9º ano → Ensino Médio · Marinha do Brasil",
-    descricao: "Ensino médio na Marinha. Ingresso pelo 9º ano.",
-    gradientFrom: "#0C3B5E",
-    gradientTo: "#061C2E",
-    imagem: "/images/concursos/cn.jpg",
-  },
-  {
-    sigla: "EPCAR",
-    nome: "Escola Preparatória de Cadetes do Ar",
-    forca: "Aeronáutica",
-    emoji: "🛩️",
-    cor: "#3B82F6",
-    frase: "9º ano → Ensino Médio · Força Aérea Brasileira",
-    descricao: "Ensino médio da FAB. Ingresso pelo 9º ano.",
-    gradientFrom: "#1E3A5F",
-    gradientTo: "#0B1B2E",
-    imagem: "/images/concursos/epcar.jpg",
-  },
-  {
-    sigla: "EsPCEx",
-    nome: "Escola Preparatória de Cadetes do Exército",
-    forca: "Exército",
-    emoji: "🎖️",
-    cor: "#22C55E",
-    frase: "Oficial do Exército · Todas as disciplinas",
-    descricao: "Formação de oficiais combatentes do Exército.",
-    gradientFrom: "#1A3D1A",
-    gradientTo: "#0B1F0B",
-    imagem: "/images/concursos/espcex.jpg",
-  },
-  {
-    sigla: "EFOMM",
-    nome: "Escola de Formação de Oficiais da Marinha Mercante",
-    forca: "Marinha",
-    emoji: "🌊",
-    cor: "#0EA5E9",
-    frase: "Oficial da Marinha Mercante · Banca própria",
-    descricao: "Oficial da Marinha Mercante com banca própria.",
-    gradientFrom: "#0C3B5E",
-    gradientTo: "#061C2E",
-    imagem: "/images/concursos/efomm.jpg",
-  },
-  {
-    sigla: "IME",
-    nome: "Instituto Militar de Engenharia",
-    forca: "Exército",
-    emoji: "🔬",
-    cor: "#22C55E",
-    frase: "Oficial de Engenharia · Nível avançado",
-    descricao: "Engenharia militar de alto nível.",
-    gradientFrom: "#1A3D1A",
-    gradientTo: "#0B1F0B",
-    imagem: "/images/concursos/ime.jpg",
-  },
-  {
-    sigla: "ENEM",
-    nome: "Exame Nacional do Ensino Médio",
-    forca: "Vestibular",
-    emoji: "📚",
-    cor: "#F59E0B",
-    frase: "4 áreas + Redação · Questões contextualizadas",
-    descricao: "Exame para ingresso em universidades.",
-    gradientFrom: "#3D2E0B",
-    gradientTo: "#1F1706",
-    imagem: "/images/concursos/enem.jpg",
-  },
+interface Concurso {
+  id: string;
+  sigla: string;
+  nome: string;
+  forca: string;
+  emoji: string | null;
+  cor_tema: string | null;
+  frase_curta_card: string | null;
+  imagem_fundo_url: string | null;
+  escolaridade: string | null;
+  tem_taf: boolean;
+  total_questoes: number;
+}
+
+const NOME_FORCA: Record<string, string> = {
+  aeronautica: "Aeronáutica",
+  marinha: "Marinha",
+  exercito: "Exército",
+  enem: "Vestibular",
+};
+
+const FILTROS_FORCA = [
+  { valor: "todas", rotulo: "Todos" },
+  { valor: "aeronautica", rotulo: "✈️ Aeronáutica" },
+  { valor: "marinha", rotulo: "⚓ Marinha" },
+  { valor: "exercito", rotulo: "⭐ Exército" },
+  { valor: "enem", rotulo: "📚 ENEM" },
 ];
 
 export default function ConcursosPage() {
-  const [visible, setVisible] = useState(false);
+  const [concursos, setConcursos] = useState<Concurso[]>([]);
+  const [forca, setForca] = useState("todas");
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    setTimeout(() => setVisible(true), 100);
+    fetchWithAuth("/api/concursos")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) setConcursos(json.data);
+      })
+      .catch(() => undefined)
+      .finally(() => setCarregando(false));
   }, []);
 
+  const visiveis =
+    forca === "todas" ? concursos : concursos.filter((c) => c.forca === forca);
+
+  const totalQuestoes = concursos.reduce((a, c) => a + c.total_questoes, 0);
+
   return (
-    <div className={`transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      <div className="mb-8">
-        <h1 className="heading text-3xl text-bat-text mb-2">Escolha seu Concurso</h1>
+    <div>
+      <header className="mb-6">
+        <h1 className="heading mb-2 text-3xl text-bat-text">Escolha seu Concurso</h1>
         <p className="text-bat-text-secondary">
-          Conteúdo organizado por edital com fotos e brasões oficiais. Selecione para acessar a trilha, questões, bizus e simulados.
+          Cada concurso tem trilha teórica, banco de questões oficiais, bizus,
+          simulado e — nos militares — a tabela do TAF.
+          {totalQuestoes > 0 && (
+            <>
+              {" "}
+              São{" "}
+              <strong className="text-bat-gold-400">
+                {totalQuestoes.toLocaleString("pt-BR")} questões oficiais
+              </strong>{" "}
+              catalogadas.
+            </>
+          )}
         </p>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-        {concursos.map((c, index) => (
-          <Link
-            key={c.sigla}
-            href={`/concursos/${c.sigla.toLowerCase()}`}
-            className="group relative card-glow no-underline rounded-2xl overflow-hidden border border-bat-border hover:border-bat-purple-500/50 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl"
-            style={{
-              animationDelay: `${index * 80}ms`,
-            }}
+      {/* ═══ Filtro por força ═══ */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {FILTROS_FORCA.map((f) => (
+          <button
+            key={f.valor}
+            onClick={() => setForca(f.valor)}
+            className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+              forca === f.valor
+                ? "border-bat-gold-400/40 bg-bat-gold-400/15 text-bat-gold-400"
+                : "border-bat-border bg-bat-bg-card text-bat-text-secondary hover:border-bat-gold-400/25"
+            }`}
           >
-            {/* Foto de Fundo Militar / Fachada */}
-            <div
-              className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-              style={{
-                backgroundImage: `url(${c.imagem})`,
-                backgroundColor: c.gradientTo,
-              }}
-            />
-
-            {/* Gradiente escuro sobre a foto para garantir contraste e leitura impecável */}
-            <div
-              className="absolute inset-0 transition-opacity duration-300"
-              style={{
-                background: `linear-gradient(180deg, rgba(11,11,15,0.75) 0%, rgba(18,18,24,0.88) 60%, rgba(11,11,15,0.98) 100%)`,
-              }}
-            />
-
-            {/* Brilho lateral com a cor da Força Militar */}
-            <div
-              className="absolute top-0 bottom-0 left-0 w-1.5 transition-all duration-300 group-hover:w-2"
-              style={{ background: c.cor }}
-            />
-
-            {/* Conteúdo do Card */}
-            <div className="relative p-6 min-h-[220px] flex flex-col justify-between z-10">
-              <div>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-3xl filter drop-shadow-md group-hover:scale-110 transition-transform duration-300">
-                      {c.emoji}
-                    </span>
-                    <span
-                      className="text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border shadow-sm backdrop-blur-sm"
-                      style={{
-                        background: `${c.cor}25`,
-                        color: c.cor,
-                        borderColor: `${c.cor}40`,
-                      }}
-                    >
-                      {c.forca}
-                    </span>
-                  </div>
-
-                  <span className="text-xs text-bat-text-muted bg-black/40 px-2 py-1 rounded-md border border-white/10">
-                    Edital Atualizado
-                  </span>
-                </div>
-
-                <h2 className="heading text-2xl text-bat-text font-bold mb-1 group-hover:text-bat-gold-400 transition-colors drop-shadow-md">
-                  {c.sigla}
-                </h2>
-                <p className="text-bat-text-secondary text-sm leading-snug line-clamp-2">
-                  {c.nome}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                <p className="text-bat-text-muted text-xs truncate max-w-[85%]">{c.frase}</p>
-                <div className="text-bat-gold-400 group-hover:translate-x-1 transition-transform duration-300">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </Link>
+            {f.rotulo}
+          </button>
         ))}
       </div>
+
+      {carregando ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="skeleton h-56 rounded-2xl" />
+          ))}
+        </div>
+      ) : visiveis.length === 0 ? (
+        <p className="py-16 text-center text-bat-text-muted">
+          Nenhum concurso nesta categoria.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          {visiveis.map((c) => {
+            const cor = c.cor_tema ?? "#F5C518";
+            return (
+              <Link
+                key={c.id}
+                href={`/concursos/${c.sigla.toLowerCase()}`}
+                className="group relative overflow-hidden rounded-2xl border border-bat-border no-underline transition-all duration-300 hover:-translate-y-1 hover:border-bat-gold-400/50 hover:shadow-2xl"
+              >
+                {/* Foto de fundo: `object-fit: cover` via bg-cover garante que
+                    qualquer proporção de imagem preencha o card sem distorcer. */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                  style={{
+                    backgroundImage: c.imagem_fundo_url
+                      ? `url(${c.imagem_fundo_url})`
+                      : undefined,
+                    backgroundColor: "#0B0B0F",
+                  }}
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(11,11,15,0.72) 0%, rgba(18,18,24,0.9) 60%, rgba(11,11,15,0.98) 100%)",
+                  }}
+                />
+                <div
+                  className="absolute bottom-0 left-0 top-0 w-1.5 transition-all duration-300 group-hover:w-2"
+                  style={{ background: cor }}
+                />
+
+                <div className="relative z-10 flex min-h-[220px] flex-col justify-between p-6">
+                  <div>
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-3xl drop-shadow-md transition-transform duration-300 group-hover:scale-110">
+                          {c.emoji ?? "🎯"}
+                        </span>
+                        <span
+                          className="rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm"
+                          style={{
+                            background: `${cor}25`,
+                            color: cor,
+                            borderColor: `${cor}40`,
+                          }}
+                        >
+                          {NOME_FORCA[c.forca] ?? c.forca}
+                        </span>
+                      </div>
+
+                      {c.tem_taf && (
+                        <span
+                          className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px] text-bat-text-muted"
+                          title="Este concurso tem Teste de Aptidão Física"
+                        >
+                          🏃 TAF
+                        </span>
+                      )}
+                    </div>
+
+                    <h2 className="heading mb-1 text-2xl font-bold text-bat-text drop-shadow-md transition-colors group-hover:text-bat-gold-400">
+                      {c.sigla}
+                    </h2>
+                    <p className="line-clamp-2 text-sm leading-snug text-bat-text-secondary">
+                      {c.nome}
+                    </p>
+                    {c.escolaridade && (
+                      <p className="mt-1.5 text-[11px] text-bat-text-muted">
+                        🎓 {c.escolaridade}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+                    <p className="truncate text-xs text-bat-text-muted">
+                      {c.total_questoes > 0
+                        ? `${c.total_questoes.toLocaleString("pt-BR")} questões oficiais`
+                        : c.frase_curta_card ?? "Conteúdo em construção"}
+                    </p>
+                    <span className="text-bat-gold-400 transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

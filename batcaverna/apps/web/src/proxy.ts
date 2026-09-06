@@ -1,4 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+/**
+ * Proxy de autenticação.
+ *
+ * Era `middleware.ts`. O Next.js 16 depreciou esse nome de arquivo e a
+ * função exportada, renomeando ambos para `proxy` — a funcionalidade é
+ * idêntica. Mantido aqui já no nome novo para não depender de um
+ * convenção marcada como deprecated.
+ */
 import { verifyAccessToken } from '@/lib/auth';
 
 // Rotas que requerem autenticação
@@ -18,7 +27,7 @@ const PROTECTED_ROUTES = [
 // Rotas que NÃO devem ser acessadas se já logado
 const AUTH_ROUTES = ['/auth'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ─── Ignorar API routes, assets estáticos, etc. ─────────────

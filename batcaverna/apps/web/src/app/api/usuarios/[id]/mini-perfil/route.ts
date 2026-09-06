@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { calcularNivel } from '@batcaverna/utils';
-import { verifyAccessToken } from '@/lib/auth';
+import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getUserFromRequest(req: NextRequest) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const payload = await verifyAccessToken(token);
-  return payload ? { id: payload.sub, role: payload.role } : null;
+  // Aceita cookie (navegador) e header Bearer (app/mobile).
+  return getAuthUserFromRequest(req);
 }
 
 // GET /api/usuarios/[id]/mini-perfil — Dados públicos para modal do ranking
@@ -62,6 +60,45 @@ export async function GET(
       .map((cf: any) => cf.concursos?.sigla)
       .filter(Boolean);
 
+    // ─── Insígnias escolhidas pelo dono do perfil ────────────
+    const { data: badges } = await supabase
+      .from('user_badges')
+      .select('ordem_exibicao, badges (nome, icone, cor_hex, raridade, descricao)')
+      .eq('user_id', id)
+      .eq('exibir_no_perfil', true)
+      .order('ordem_exibicao');
+
+    const badgesExibidas = (badges ?? [])
+      .map((b: any) => b.badges)
+      .filter(Boolean);
+
+    // ─── O que essa pessoa mais estuda na plataforma ─────────
+    const { data: statsMateria } = await supabase
+      .from('user_materia_stats')
+      .select('questoes_respondidas, acertos, materias (nome, icone_emoji)')
+      .eq('user_id', id)
+      .order('questoes_respondidas', { ascending: false })
+      .limit(1);
+
+    const materiaTop = statsMateria?.[0]
+      ? {
+          nome: (statsMateria[0] as any).materias?.nome ?? null,
+          emoji: (statsMateria[0] as any).materias?.icone_emoji ?? null,
+          questoes: statsMateria[0].questoes_respondidas,
+        }
+      : null;
+
+    // ─── Tempo total de estudo (dado público do perfil) ──────
+    const { data: sessoes } = await supabase
+      .from('study_sessions')
+      .select('duracao_segundos')
+      .eq('user_id', id);
+
+    const tempoTotal = (sessoes ?? []).reduce(
+      (a, s) => a + (s.duracao_segundos ?? 0),
+      0
+    );
+
     return NextResponse.json({
       success: true,
       data: {
@@ -79,6 +116,10 @@ export async function GET(
         maior_combo_pessoal: user.maior_combo_pessoal || 0,
         concursos_favoritos: siglasFavoritas,
         categoria_escrita: user.user_categoria_escrita?.[0]?.texto || null,
+        badges: badgesExibidas,
+        materia_mais_estudada: materiaTop,
+        tempo_total_estudo: tempoTotal,
+        membro_desde: user.criado_em,
         amizade_status,
         amizade_id,
       },

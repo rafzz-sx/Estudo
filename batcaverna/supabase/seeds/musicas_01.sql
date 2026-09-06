@@ -1,0 +1,72 @@
+-- ============================================================================
+-- BatCaverna — Acervo de música para estudo
+-- ============================================================================
+-- Todas as faixas vêm da Musopen Collection no Internet Archive: gravações
+-- em DOMÍNIO PÚBLICO, liberadas para qualquer uso. Não entra aqui nenhum
+-- re-upload de lo-fi comercial — aquilo continua protegido por direito
+-- autoral, mesmo hospedado no archive.org.
+--
+-- O aluno também pode acrescentar faixas próprias pela tela /musica
+-- (POST /api/musicas), então este seed é um ponto de partida, não um teto.
+--
+-- Idempotente: a chave é a audio_url.
+-- ============================================================================
+
+BEGIN;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_musicas_audio_url ON musicas(audio_url);
+
+INSERT INTO musicas (titulo, artista, album, audio_url, genero, cor_primaria, cor_secundaria)
+VALUES
+  ('Variações Goldberg — Aria', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-01-GoldbergVariationsBwv.988-Aria.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 1', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-02-GoldbergVariationsBwv.988-Variation1.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 2', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-03-GoldbergVariationsBwv.988-Variation2.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 3 — Cânone em Uníssono', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-04-GoldbergVariationsBwv.988-Variation3.CanonOnTheUnison.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 4', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-05-GoldbergVariationsBwv.988-Variation4.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 5', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-06-GoldbergVariationsBwv.988-Variation5.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 6 — Cânone na Segunda', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-07-GoldbergVariationsBwv.988-Variation6.CanonOnTheSecond.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 7', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-08-GoldbergVariationsBwv.988-Variation7.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 8', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-09-GoldbergVariationsBwv.988-Variation8.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 9 — Cânone na Terça', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-10-GoldbergVariationsBwv.988-Variation9.CanonOnTheThird.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 10 — Fughetta', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-11-GoldbergVariationsBwv.988-Variation10.Fughetta.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 11', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-12-GoldbergVariationsBwv.988-Variation11.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 12 — Cânone na Quarta', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-13-GoldbergVariationsBwv.988-Variation12.CanonOnTheFourth.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 13', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-14-GoldbergVariationsBwv.988-Variation13.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 14', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-15-GoldbergVariationsBwv.988-Variation14.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 15 — Cânone na Quinta', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-16-GoldbergVariationsBwv.988-Variation15.CanonOnTheFifth.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 16 — Abertura', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-17-GoldbergVariationsBwv.988-Variation16.Overture.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 17', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-18-GoldbergVariationsBwv.988-Variation17.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 18 — Cânone na Sexta', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-19-GoldbergVariationsBwv.988-Variation18.CanonOnTheSixth.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 19', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-20-GoldbergVariationsBwv.988-Variation19.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 20', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-21-GoldbergVariationsBwv.988-Variation20.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 21 — Cânone na Sétima', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-22-GoldbergVariationsBwv.988-Variation21.CanonOnTheSeventh.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 22', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-23-GoldbergVariationsBwv.988-Variation22.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 23', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-24-GoldbergVariationsBwv.988-Variation23.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 24 — Cânone na Oitava', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-25-GoldbergVariationsBwv.988-Variation24.CanonOnTheOctave.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 25', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-26-GoldbergVariationsBwv.988-Variation25.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 26', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-27-GoldbergVariationsBwv.988-Variation26.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 27 — Cânone na Nona', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-28-GoldbergVariationsBwv.988-Variation27.CanonOnTheNinth.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 28', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-29-GoldbergVariationsBwv.988-Variation28.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 29', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-30-GoldbergVariationsBwv.988-Variation29.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Variação 30 — Quodlibet', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-31-GoldbergVariationsBwv.988-Variation30.Quodlibet.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Variações Goldberg — Aria da Capo', 'Johann Sebastian Bach', 'Variações Goldberg, BWV 988', 'https://archive.org/download/MusopenCollectionAsFlac/Bach_GoldbergVariations/JohannSebastianBach-32-GoldbergVariationsBwv.988-AriaDaCapo.mp3', 'Foco profundo', '#C9A227', '#1A1206'),
+  ('Abertura Coriolano, Op. 62', 'Ludwig van Beethoven', 'Abertura Coriolano', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_CoriolanOverture/LudwigVanBeethoven-CoriolanOverture.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Abertura Egmont, Op. 84', 'Ludwig van Beethoven', 'Abertura Egmont', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_EgmontOvertureOp.84/LudwigVanBeethoven-EgmontOvertureOp.84.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Sinfonia nº 3 “Eroica” — I. Allegro con brio', 'Ludwig van Beethoven', 'Sinfonia nº 3 “Eroica”, Op. 55', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_SymphonyNo.3Eroica/LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-01-AllegroConBrio.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Sinfonia nº 3 “Eroica” — II. Marcia funebre', 'Ludwig van Beethoven', 'Sinfonia nº 3 “Eroica”, Op. 55', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_SymphonyNo.3Eroica/LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-02-MarciaFunebreAdagioAssai.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Sinfonia nº 3 “Eroica” — III. Scherzo', 'Ludwig van Beethoven', 'Sinfonia nº 3 “Eroica”, Op. 55', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_SymphonyNo.3Eroica/LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-03-ScherzoAllegroVivace.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Sinfonia nº 3 “Eroica” — IV. Finale', 'Ludwig van Beethoven', 'Sinfonia nº 3 “Eroica”, Op. 55', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_SymphonyNo.3Eroica/LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-04-FinaleAllegroMolto.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Quarteto de Cordas nº 6 — I. Allegro con brio', 'Ludwig van Beethoven', 'Quarteto nº 6, Op. 18', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_StringQuartetNo.6inBFlatMajorOp.18/LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-01-AllegroConBrio.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Quarteto de Cordas nº 6 — II. Adagio', 'Ludwig van Beethoven', 'Quarteto nº 6, Op. 18', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_StringQuartetNo.6inBFlatMajorOp.18/LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-02-AdagioMaNonTroppo.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Quarteto de Cordas nº 6 — III. Scherzo', 'Ludwig van Beethoven', 'Quarteto nº 6, Op. 18', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_StringQuartetNo.6inBFlatMajorOp.18/LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-03-ScherzoAllegro.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Quarteto de Cordas nº 6 — IV. La Malinconia', 'Ludwig van Beethoven', 'Quarteto nº 6, Op. 18', 'https://archive.org/download/MusopenCollectionAsFlac/Beethoven_StringQuartetNo.6inBFlatMajorOp.18/LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-04-adagioLaMalinconia.mp3', 'Revisão pesada', '#B45309', '#140A02'),
+  ('Nas Estepes da Ásia Central', 'Alexander Borodin', 'Poema Sinfônico', 'https://archive.org/download/MusopenCollectionAsFlac/Borodin_InTheSteppesOfCentralAsia/AlexanderBorodin-InTheSteppesOfCentralAsia.mp3', 'Leitura de teoria', '#0E7490', '#04141A'),
+  ('Quarteto nº 1 — I. Moderato / Allegro', 'Alexander Borodin', 'Quarteto de Cordas nº 1', 'https://archive.org/download/MusopenCollectionAsFlac/Borodin_StringQuartetNo.1inAMajor/AlexanderBorodin-StringQuartetNo.1InAMajor-01-Moderato-Allegro.mp3', 'Leitura de teoria', '#0E7490', '#04141A'),
+  ('Quarteto nº 1 — II. Andante con moto', 'Alexander Borodin', 'Quarteto de Cordas nº 1', 'https://archive.org/download/MusopenCollectionAsFlac/Borodin_StringQuartetNo.1inAMajor/AlexanderBorodin-StringQuartetNo.1InAMajor-02-AndanteConMoto.mp3', 'Leitura de teoria', '#0E7490', '#04141A'),
+  ('Quarteto nº 1 — III. Scherzo prestissimo', 'Alexander Borodin', 'Quarteto de Cordas nº 1', 'https://archive.org/download/MusopenCollectionAsFlac/Borodin_StringQuartetNo.1inAMajor/AlexanderBorodin-StringQuartetNo.1InAMajor-03-ScherzoPrestissimo.mp3', 'Leitura de teoria', '#0E7490', '#04141A')
+
+ON CONFLICT (audio_url) DO NOTHING;
+
+COMMIT;
+
+SELECT COUNT(*) AS faixas_no_acervo FROM musicas;

@@ -63,7 +63,21 @@ export async function POST(req: NextRequest) {
       expira_em: getRefreshTokenExpiry().toISOString(),
     });
 
-    // ─── Retornar dados do usuário (sem senha) e SETAR COOKIES 
+    // ─── Registrar o login e quando a sessão automática expira ──
+    // O painel admin mostra quanto tempo falta para cada usuário precisar
+    // relogar; sem gravar isso, não havia como saber.
+    const duracaoAcesso = parseInt(process.env.JWT_ACCESS_EXPIRATION || '36000');
+    const expiraEm = new Date(Date.now() + duracaoAcesso * 1000);
+
+    await supabase
+      .from('users')
+      .update({
+        ultimo_login_em: new Date().toISOString(),
+        sessao_expira_em: expiraEm.toISOString(),
+      })
+      .eq('id', user.id);
+
+    // ─── Retornar dados do usuário (sem senha) e SETAR COOKIES
     const { senha_hash: _, ...userData } = user;
 
     const response = NextResponse.json({
@@ -75,12 +89,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Sessão rápida de 8 horas no cookie
+    // O cookie precisa durar o mesmo que o JWT. Antes eram 8h de cookie
+    // para um token de 10h: a sessão "morria" duas horas antes da hora.
+    // httpOnly porque nenhum código do navegador lê este cookie — o token
+    // que o front usa fica no store, e deixá-lo acessível a JS só ampliaria
+    // o estrago de um eventual XSS.
     response.cookies.set('bat_access_token', accessToken, {
       path: '/',
-      httpOnly: false,
+      httpOnly: true,
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 horas de sessão ativa sem precisar relogar
+      maxAge: duracaoAcesso,
       secure: process.env.NODE_ENV === 'production',
     });
 

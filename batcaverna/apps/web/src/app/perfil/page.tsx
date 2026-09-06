@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
+import { SeletorBadges } from "@/components/SeletorBadges";
 
 function formatarTempo(seg: number): string {
   if (seg <= 0) return "0min";
@@ -80,7 +81,7 @@ export default function PerfilPage() {
   // 1. Carregar perfil completo
   const carregarPerfil = async () => {
     try {
-      const res = await fetch("/api/usuarios/me");
+      const res = await fetchWithAuth("/api/usuarios/me");
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -115,11 +116,11 @@ export default function PerfilPage() {
   const carregarDadosAdicionais = async () => {
     try {
       const [resAmigos, resFav, resCat, resPriv, resApp] = await Promise.all([
-        fetch("/api/usuarios/me/amigos"),
-        fetch("/api/usuarios/me/concursos-favoritos"),
-        fetch("/api/usuarios/me/categoria-escrita"),
-        fetch("/api/usuarios/me/privacidade/ranking"),
-        fetch("/api/app-info"),
+        fetchWithAuth("/api/usuarios/me/amigos"),
+        fetchWithAuth("/api/usuarios/me/concursos-favoritos"),
+        fetchWithAuth("/api/usuarios/me/categoria-escrita"),
+        fetchWithAuth("/api/usuarios/me/privacidade/ranking"),
+        fetchWithAuth("/api/app-info"),
       ]);
 
       if (resAmigos.ok) {
@@ -196,7 +197,7 @@ export default function PerfilPage() {
         setMsgFeedback("⏳ Salvando foto de perfil no banco de dados...");
 
         try {
-          const res = await fetch("/api/usuarios/me", {
+          const res = await fetchWithAuth("/api/usuarios/me", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ avatar_url: dataUrl }),
@@ -225,7 +226,7 @@ export default function PerfilPage() {
         setMsgFeedback("⏳ Salvando banner no banco de dados...");
 
         try {
-          const res = await fetch("/api/usuarios/me", {
+          const res = await fetchWithAuth("/api/usuarios/me", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ banner_url: dataUrl, banner_tipo: tipo }),
@@ -254,7 +255,7 @@ export default function PerfilPage() {
     setMsgFeedback(null);
     try {
       const [resUser, resFav, resCat, resPriv] = await Promise.all([
-        fetch("/api/usuarios/me", {
+        fetchWithAuth("/api/usuarios/me", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -265,17 +266,17 @@ export default function PerfilPage() {
             banner_url: bannerPreview,
           }),
         }),
-        fetch("/api/usuarios/me/concursos-favoritos", {
+        fetchWithAuth("/api/usuarios/me/concursos-favoritos", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ concursos: concursosFavoritos }),
         }),
-        fetch("/api/usuarios/me/categoria-escrita", {
+        fetchWithAuth("/api/usuarios/me/categoria-escrita", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ categoria: categoriaEscrita }),
         }),
-        fetch("/api/usuarios/me/privacidade/ranking", {
+        fetchWithAuth("/api/usuarios/me/privacidade/ranking", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ocultar_do_ranking: ocultarRanking }),
@@ -301,7 +302,7 @@ export default function PerfilPage() {
   // Responder Amizade (Aceitar / Recusar)
   const handleResponderAmizade = async (amizadeId: string, acao: "aceitar" | "recusar") => {
     try {
-      const res = await fetch(`/api/amizades/${amizadeId}/responder`, {
+      const res = await fetchWithAuth(`/api/amizades/${amizadeId}/responder`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ acao }),
@@ -538,6 +539,17 @@ export default function PerfilPage() {
               <p className="text-bat-text text-sm font-mono text-bat-gold-400">
                 {categoriaEscrita || titulo}
               </p>
+            </div>
+
+            {/* ═══ INSÍGNIAS DO MINI-PERFIL (com prévia) ═══ */}
+            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 lg:col-span-2">
+              <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-1">
+                Insígnias no mini-perfil
+              </h3>
+              <p className="text-xs text-bat-text-muted mb-4">
+                Escolha quais aparecem quando alguém clica no seu nome no ranking.
+              </p>
+              <SeletorBadges />
             </div>
           </div>
         </div>
