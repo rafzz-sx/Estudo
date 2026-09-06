@@ -17,6 +17,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 2 | `../migrations/004_plataforma_completa.sql` | Tudo que a 2.0 acrescentou |
 | 3 | `../migrations/005_estudo_inteligente.sql` | Revisão espaçada, caderno de erros e planos de estudo |
 | 4 | `../migrations/006_moderacao_contas.sql` | Suspender/desativar conta e promover admin pelo painel |
+| 5 | `../migrations/007_editais_e_assuntos.sql` | Link do edital de cada concurso, TAF da EsPCEx e a lista de assuntos cobrados |
 
 A migration 004 já traz os patamares de combo, 70 frases motivacionais, 16
 insígnias, os metadados dos 9 concursos e as tabelas de TAF preenchidas.
