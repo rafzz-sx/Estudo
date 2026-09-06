@@ -1,0 +1,318 @@
+================================================================================
+  BATCAVERNA — AUDITORIA DE SEGURANÇA · AÇÕES QUE SÓ VOCÊ PODE FAZER
+  Gerado em 06/09/2026
+================================================================================
+
+  Este arquivo tem só o que EU não consigo fazer por código. O que já foi
+  implementado está no relatório da conversa e nos commits.
+
+  ATENÇÃO: o item 0 é uma emergência. Faça ele antes de qualquer coisa,
+  antes até de subir o código.
+
+
+================================================================================
+  🚨 0. URGENTE — CHAVE MESTRA DO BANCO EXPOSTA NA INTERNET
+================================================================================
+
+  O QUE ACONTECEU
+  ---------------
+  A chave `service_role` do Supabase está escrita direto no código, no
+  arquivo:
+
+      batcaverna/apps/web/src/lib/supabase.ts   (linha 9)
+
+  Esse arquivo está commitado no repositório
+  https://github.com/rafzz-sx/Estudo
+  e eu confirmei pela API do GitHub que ele é **PÚBLICO**:
+
+      private: False        visibility: public
+
+  POR QUE ISSO É GRAVE
+  --------------------
+  A `service_role` ignora TODAS as regras de segurança do banco. Quem tem
+  essa chave pode, de qualquer lugar do mundo, sem senha:
+
+    • ler todos os e-mails, senhas em hash e dados pessoais dos alunos
+    • ler todas as conversas privadas do chat
+    • baixar o banco de questões inteiro com os gabaritos
+    • APAGAR qualquer tabela ou o banco todo
+    • criar uma conta de administrador para si
+
+  A chave é válida até 2036. Não expira sozinha.
+
+  ⚠ Uma coisa importante: eu verifiquei e a chave NÃO está sendo enviada
+    para o navegador dos visitantes (a função que a usaria nunca é chamada).
+    O vazamento é pelo GitHub público, não pelo site.
+
+  O QUE FAZER — na ordem, sem pular
+  ---------------------------------
+
+  PASSO 1 — Tornar o repositório privado (2 minutos, faça agora)
+
+     1. Abra https://github.com/rafzz-sx/Estudo
+     2. Aba "Settings" (no topo, à direita)
+     3. Role até o fim, seção "Danger Zone"
+     4. Clique "Change repository visibility" → "Make private"
+     5. Digite o nome do repositório para confirmar
+
+     Isso estanca o sangramento. Mas NÃO resolve: quem já copiou a chave
+     continua com ela. Por isso o passo 2.
+
+  PASSO 2 — Trocar as chaves do Supabase (10 minutos)
+
+     1. Abra https://supabase.com/dashboard
+     2. Escolha o projeto  bzrrbbaqzlfmertirbak
+     3. Menu lateral: "Project Settings" (engrenagem no rodapé)
+     4. Clique em "API Keys"
+     5. Na linha da `service_role`, clique nos três pontinhos → "Reveal"
+     6. Procure o botão de rotacionar / gerar nova chave
+        (em alguns planos aparece como "Generate new JWT secret" na aba
+         "JWT Keys" — atenção: isso invalida TODAS as chaves de uma vez,
+         inclusive a anon)
+     7. COPIE a nova chave `service_role` e a nova `anon` num bloco de notas
+
+     Se não encontrar o botão de rotacionar no seu plano, abra um ticket
+     no suporte do Supabase pedindo a rotação — é procedimento comum.
+
+  PASSO 3 — Colocar as chaves novas na Vercel (5 minutos)
+
+     1. Abra https://vercel.com/dashboard
+     2. Escolha o projeto da BatCaverna
+     3. "Settings" → "Environment Variables"
+     4. Confira/atualize estas três, marcando os três ambientes
+        (Production, Preview, Development):
+
+          SUPABASE_SERVICE_ROLE_KEY   = <a nova service_role>
+          NEXT_PUBLIC_SUPABASE_ANON_KEY = <a nova anon>
+          NEXT_PUBLIC_SUPABASE_URL    = https://bzrrbbaqzlfmertirbak.supabase.co
+
+     5. Vá em "Deployments" e clique "Redeploy" no último deploy
+
+  PASSO 4 — Tirar a chave do código (me peça, é rápido)
+
+     Depois que os passos 1 a 3 estiverem prontos, me avise. Eu removo os
+     valores hardcoded do supabase.ts e deixo o código lendo só das
+     variáveis de ambiente.
+
+     NÃO FAÇO ISSO AGORA de propósito: se eu tirar o valor fixo antes das
+     variáveis estarem configuradas na Vercel, o site sai do ar no próximo
+     deploy.
+
+  PASSO 5 — Conferir se alguém usou a chave
+
+     1. Supabase Dashboard → "Logs" → "API Gateway" (ou "Postgres Logs")
+     2. Olhe requisições de IPs que você não reconhece
+     3. Sinais de invasão: usuários que você não criou com role='admin',
+        tabelas vazias, registros apagados
+
+     Se achar algo estranho, me avise que eu ajudo a investigar.
+
+  PASSO 6 — Trocar também o JWT_SECRET
+
+     A mesma lógica vale para o segredo que assina o login dos alunos.
+     Na Vercel, Environment Variables, gere um valor novo e longo para
+     JWT_SECRET. Todo mundo vai precisar entrar de novo — é o efeito
+     esperado.
+
+
+================================================================================
+  1. SUPABASE — CONFIRMAR QUE O RLS PEGOU
+================================================================================
+
+  DEPOIS de rodar a migration 008 no SQL Editor, cole isto e confira:
+
+    -- Nenhuma linha deve voltar. Se voltar, aquela tabela está aberta.
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public' AND NOT rowsecurity;
+
+    -- 'questoes' e 'bizus' NÃO podem aparecer nesta lista.
+    SELECT tablename, policyname, cmd FROM pg_policies
+    WHERE schemaname = 'public' ORDER BY tablename;
+
+  ONDE: Supabase Dashboard → SQL Editor → cole → Run
+
+
+================================================================================
+  2. SUPABASE — AUTENTICAÇÃO (o que precisa ser conferido no painel)
+================================================================================
+
+  IMPORTANTE ENTENDER: esta plataforma NÃO usa o Supabase Auth. O login é
+  próprio, com JWT assinado pela API do Next.js. Então boa parte das
+  configurações de Auth do painel não se aplica aqui.
+
+  O que AINDA assim vale conferir:
+
+  2.1  Confirme que o Supabase Auth está mesmo sem uso
+       Dashboard → Authentication → Users
+       Se a lista estiver vazia, está tudo certo: ninguém entra por ali.
+
+  2.2  Desative provedores de login que você não usa
+       Dashboard → Authentication → Providers
+       Deixe tudo desligado. Provedor ligado e esquecido é porta aberta.
+
+  2.3  URLs de redirecionamento
+       Dashboard → Authentication → URL Configuration
+       Só é relevante se um dia migrar para o Supabase Auth. Por ora,
+       mantenha a lista vazia ou só com o seu domínio.
+
+  2.4  MFA para a SUA conta do Supabase
+       Isso sim é crítico e não tem a ver com os alunos: proteja a conta
+       que administra o banco.
+       Dashboard → clique no seu avatar → "Account Settings" → "Security"
+       → ative "Two-Factor Authentication"
+
+  2.5  Proteção contra senha vazada
+       Não se aplica: a validação de senha é feita pelo código da
+       plataforma (mínimo 8 caracteres, maiúscula, número e especial —
+       está em /api/auth/recuperar e /api/auth/register).
+
+
+================================================================================
+  3. VERCEL — VARIÁVEIS DE AMBIENTE
+================================================================================
+
+  ONDE: vercel.com → seu projeto → Settings → Environment Variables
+
+  As variáveis que o código usa hoje:
+
+  ┌─────────────────────────────────┬────────────┬──────────────────────────┐
+  │ Variável                        │ Obrigatória│ Onde é usada             │
+  ├─────────────────────────────────┼────────────┼──────────────────────────┤
+  │ NEXT_PUBLIC_SUPABASE_URL        │ SIM        │ lib/supabase.ts          │
+  │ NEXT_PUBLIC_SUPABASE_ANON_KEY   │ SIM        │ lib/supabase.ts          │
+  │ SUPABASE_SERVICE_ROLE_KEY       │ SIM 🔒     │ lib/supabase.ts (server) │
+  │ JWT_SECRET                      │ SIM 🔒     │ lib/auth.ts              │
+  │ JWT_ACCESS_EXPIRATION           │ não (36000)│ lib/auth.ts              │
+  │ JWT_REFRESH_EXPIRATION          │ não (36000)│ lib/auth.ts              │
+  │ NEXT_PUBLIC_APP_URL             │ SIM        │ redirecionamentos        │
+  │ RESEND_API_KEY                  │ não 🔒     │ envio de e-mail          │
+  │ EMAIL_FROM                      │ não        │ remetente                │
+  │ UPSTASH_REDIS_REST_URL          │ não 🔒     │ (ainda não usada)        │
+  │ UPSTASH_REDIS_REST_TOKEN        │ não 🔒     │ (ainda não usada)        │
+  └─────────────────────────────────┴────────────┴──────────────────────────┘
+
+  🔒 = segredo. NUNCA ponha o prefixo NEXT_PUBLIC_ nessas.
+
+  REGRA DE OURO: tudo que começa com NEXT_PUBLIC_ é embutido no JavaScript
+  que vai para o navegador. Qualquer visitante lê no DevTools. Se uma chave
+  secreta ganhar esse prefixo, ela vaza para todo mundo na hora.
+
+  COMO SEPARAR POR AMBIENTE
+  1. Em cada variável, clique no lápis para editar
+  2. Marque as caixas: Production / Preview / Development
+  3. Recomendação: use um projeto Supabase SEPARADO para Preview e
+     Development. Assim um teste em branch nunca apaga dado real de aluno.
+     Hoje os três ambientes apontam para o mesmo banco.
+
+
+================================================================================
+  4. SUPABASE — BACKUP E RECUPERAÇÃO
+================================================================================
+
+  A DIFERENÇA ENTRE OS DOIS (importa muito)
+
+  Backup automático diário
+    Uma fotografia do banco, uma vez por dia. Se der problema, você volta
+    para a foto mais recente.
+    Se o backup foi às 3h e o problema foi às 22h, você perde 19 horas de
+    estudo, XP e conversa dos alunos.
+
+  Point-in-Time Recovery (PITR)
+    Grava tudo continuamente. Você volta para QUALQUER minuto dos últimos
+    7 dias — inclusive "um minuto antes do DELETE errado".
+    É pago (add-on do plano Pro).
+
+  O QUE VERIFICAR
+  1. Abra https://supabase.com/dashboard → seu projeto
+  2. Menu lateral → "Database" → "Backups"
+  3. Veja o que aparece:
+
+     Plano Free      → SEM backup automático. Você está por sua conta.
+     Plano Pro       → backup diário, guardado por 7 dias
+     Pro + add-on    → PITR disponível para ativar
+
+  SE VOCÊ ESTIVER NO PLANO FREE
+  Faça um backup manual você mesmo, com alguma regularidade:
+     1. Dashboard → Database → Backups → "Download backup"
+     ou, se tiver a CLI instalada:
+     supabase db dump -f backup-$(date +%F).sql
+
+  RECOMENDAÇÃO
+  Considerando que a plataforma guarda progresso de estudo de menores de
+  idade, sem backup você não tem como reparar um acidente. É o item de
+  maior custo-benefício depois do vazamento da chave.
+
+
+================================================================================
+  5. RATE LIMITING — LIMITAÇÃO DA IMPLEMENTAÇÃO ATUAL
+================================================================================
+
+  IMPLEMENTEI proteção em 6 endpoints (login, cadastro, recuperação,
+  redefinição, checagem de e-mail e busca de usuários), guardando a
+  contagem na memória do servidor.
+
+  LIMITAÇÃO HONESTA: na Vercel cada instância serverless tem a própria
+  memória, e elas são recicladas o tempo todo. Isso barra o ataque comum
+  (um script martelando o login de um IP só), mas não um atacante que
+  distribua as tentativas.
+
+  PARA A PROTEÇÃO FICAR COMPLETA — Upstash Redis (tem plano grátis)
+  1. Crie conta em https://upstash.com
+  2. "Create Database" → escolha a região mais perto (us-east-1)
+  3. Copie REST URL e REST TOKEN
+  4. Vercel → Settings → Environment Variables:
+       UPSTASH_REDIS_REST_URL   = <a url>
+       UPSTASH_REDIS_REST_TOKEN = <o token>
+  5. Me avise: eu troco a implementação em memória pela distribuída.
+     Só a função `registrarTentativa` muda; o resto do código fica igual.
+
+
+================================================================================
+  6. DEPENDÊNCIAS — npm audit
+================================================================================
+
+  NÃO CONSEGUI RODAR: o Node.js não está instalado nesta máquina.
+
+  Depois de instalar o Node (Parte 1 do INSTRUCOES-DEPLOY.txt):
+
+     cd C:\Users\SARA\Documents\projeto\Estudo\batcaverna
+     npm audit
+     npm audit fix          # corrige o que dá sem quebrar nada
+
+  NÃO rode `npm audit fix --force` sem me consultar: ele sobe versões
+  maiores e pode quebrar o app.
+
+  Me mande a saída do `npm audit` que eu avalio o que exige decisão.
+
+
+================================================================================
+  7. O QUE NÃO SE APLICA A ESTE PROJETO
+================================================================================
+
+  Verifiquei e registro para você não perder tempo procurando:
+
+  • Supabase Storage / buckets — não existe nenhum. Avatar e banner são
+    gravados como texto base64 direto na tabela `users`. (Se um dia migrar
+    para Storage, o bucket precisa de policy própria, separada das tabelas.)
+
+  • Webhooks — não existe nenhum. Sem Stripe, sem pagamento, sem
+    integração externa que chame a plataforma de volta.
+
+  • CORS — nenhuma rota abre `Access-Control-Allow-Origin: *`. As API
+    routes do Next.js são same-origin por padrão.
+
+  • Edge Functions do Supabase — não existe nenhuma. Toda a lógica está
+    nas API routes do Next.js.
+
+
+================================================================================
+  ORDEM SUGERIDA
+================================================================================
+
+  HOJE     item 0, passos 1 a 3   (repositório privado + rotacionar chave)
+  HOJE     item 4                 (conferir se tem backup)
+  ESTA SEMANA  item 2.4           (MFA na sua conta Supabase)
+  ESTA SEMANA  item 1             (rodar a 008 e conferir o RLS)
+  DEPOIS   itens 3, 5, 6          (ambientes, Redis, dependências)
+
+================================================================================

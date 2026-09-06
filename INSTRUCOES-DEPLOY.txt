@@ -6,7 +6,10 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 8 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 11 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+
+  >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, item 0. A chave
+     mestra do banco está exposta num repositório público do GitHub.
 
 
 ================================================================================
@@ -71,6 +74,7 @@
   [ ] 005_estudo_inteligente.sql
   [ ] 006_moderacao_contas.sql             NOVA
   [ ] 007_editais_e_assuntos.sql           NOVA
+  [ ] 008_seguranca_rls.sql                NOVA — fecha o gabarito público
 
        Por que rodar a 004 de novo:
          - ganhou a coluna `anulada`
