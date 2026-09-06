@@ -1,0 +1,257 @@
+================================================================================
+  BATCAVERNA 2.1.0 — TUDO QUE PRECISA SER FEITO
+  Gerado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
+================================================================================
+
+  Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
+  GitHub) e o que esperar de resultado.
+
+  Estado atual: 8 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+
+
+================================================================================
+  PARTE 1 — O QUE INSTALAR
+================================================================================
+
+  [ ] 1.1  Node.js 20 ou superior          https://nodejs.org
+           OBRIGATÓRIO. Não está instalado nesta máquina (só sobrou a pasta
+           node_modules). Sem ele não roda o site local nem gera o APK.
+           Conferir depois:   node -v     (tem que mostrar v20 ou maior)
+
+  [ ] 1.2  Git Credential Manager / login do GitHub
+           Já existe, mas SEM credencial salva. O push falha com:
+             "could not read Username for https://github.com"
+           Resolve sozinho na primeira vez que você rodar o push (abre a
+           janela de login do GitHub).
+
+  ( ) 1.3  Python 3                        JÁ INSTALADO (3.14.6)
+           Só é necessário para reprocessar provas novas pelo terminal.
+           A biblioteca Pillow foi instalada para otimizar imagens.
+
+  ( ) 1.4  JDK 17 ou 21 + Android SDK
+           SÓ se for gerar o APK. Ignore se ainda não for compilar o app.
+
+
+================================================================================
+  PARTE 2 — SUBIR PARA O GITHUB  (dispara o deploy do Vercel sozinho)
+================================================================================
+
+  [ ] 2.1  Rode isto no terminal do Claude Code (com o "!" na frente):
+
+             ! git -C "C:/Users/SARA/Documents/projeto/Estudo" push origin main
+
+           Vai abrir a janela de login do GitHub na primeira vez.
+
+  [ ] 2.2  Confira em https://vercel.com que o deploy começou.
+           IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
+           várias telas. Faça a PARTE 3 antes de usar a plataforma.
+
+  --- Os 8 commits que vão subir -------------------------------------------
+    1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
+    2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
+    3. feat(admin)      importador real, fila de resolução, 36 classes mudas
+    4. feat(admin)      moderação de contas + 3 bugs silenciosos
+    5. feat(questoes)   indicador de posição na leva
+    6. fix(seguranca)   código de senha vazando, 178 explicações, assuntos
+    7. docs(seeds)      migration 007 na ordem
+    8. fix(bizus)       filtro por banca de verdade
+
+
+================================================================================
+  PARTE 3 — BANCO DE DADOS (Supabase → SQL Editor)   << PRIORIDADE >>
+================================================================================
+
+  Cole cada arquivo no SQL Editor e execute NA ORDEM. Todos são
+  idempotentes: rodar de novo não duplica nada.
+
+  ---- 3.1 ESTRUTURA -------------------------------------------------------
+
+  [ ] 000_setup_completo_batcaverna.sql    SÓ SE O BANCO FOR NOVO
+  [ ] 004_plataforma_completa.sql          rode de novo mesmo já tendo rodado
+  [ ] 005_estudo_inteligente.sql
+  [ ] 006_moderacao_contas.sql             NOVA
+  [ ] 007_editais_e_assuntos.sql           NOVA
+
+       Por que rodar a 004 de novo:
+         - ganhou a coluna `anulada`
+         - APAGA os patamares de combo antigos (10/20/30) antes de instalar
+           os novos (11/21/31). Sem isso o aluno veria "INSANO x10" e
+           "INSANO x11" alternando.
+
+       Atenção na 006: ela tem um ALTER TYPE solto. Se o SQL Editor
+       reclamar, rode essa linha sozinha primeiro:
+         ALTER TYPE notificacao_tipo ADD VALUE IF NOT EXISTS 'sistema';
+
+  ---- 3.2 BANCO DE QUESTÕES (~2 min cada) ---------------------------------
+
+  [ ] cn_01.sql       [ ] cn_02.sql          432 questões  Colégio Naval
+  [ ] eear_01.sql                            382           EEAR
+  [ ] efomm_01.sql                           196           EFOMM
+  [ ] enem_01.sql ... enem_05.sql          1.656           ENEM 2016-2025
+  [ ] epcar_01.sql    [ ] epcar_02.sql       431           EPCAR
+  [ ] esa_01.sql                             150           ESA
+                                          ------
+                                           3.247 questões
+
+       RODE DE NOVO mesmo já tendo rodado antes: os arquivos foram
+       regerados com 178 explicações que o parser antigo perdia.
+
+  ---- 3.3 CONTEÚDO DIDÁTICO -----------------------------------------------
+
+  [ ] teoria_01_matematica.sql            8 temas
+  [ ] teoria_02_linguagens.sql            3 Português + 2 Inglês
+  [ ] teoria_03_natureza.sql              2 Física, 1 Química, 1 Biologia
+  [ ] teoria_04_humanas.sql               História, Geografia, Filosofia, Sociologia
+  [ ] teoria_05_redacao_literatura.sql    Redação + Literatura
+  [ ] teoria_06_gramatica.sql             crase, concordância, regência
+  [ ] bizus_01.sql                        31 bizus
+  [ ] videoaulas_01.sql                   72 vídeos  << depois das teorias >>
+  [ ] musicas_01.sql                      46 faixas em domínio público
+
+       videoaulas_01 DEPOIS das teorias: os dois casam pelo campo `tema`,
+       e é isso que faz a trilha mostrar texto e vídeo lado a lado.
+
+  ---- 3.4 VERSÃO (por último) ---------------------------------------------
+
+  [ ] versao_2_1_0.sql
+       Grava a versão do rodapé com a hora cheia, sem minutos.
+
+  ---- 3.5 CONFERÊNCIA -----------------------------------------------------
+
+  Cole no SQL Editor. Os resultados esperados estão ao lado.
+
+    -- deve voltar 0
+    SELECT COUNT(*) AS alternativas_sujas FROM questoes
+    WHERE alternativas::text ~ '-{6,}';
+
+    -- deve voltar ~3.247
+    SELECT COUNT(*) FROM questoes WHERE ativa;
+
+    -- 'pendente' deve estar perto de 383, não de 540
+    SELECT resolucao_status, COUNT(*) FROM questoes GROUP BY resolucao_status;
+
+    -- os 9 concursos com link do edital
+    SELECT sigla, edital_url IS NOT NULL AS tem_edital, tem_taf
+    FROM concursos ORDER BY ordem_exibicao;
+
+    -- EsPCEx tem que aparecer aqui agora
+    SELECT c.sigla, COUNT(*) FROM taf_provas t
+    JOIN concursos c ON c.id = t.concurso_id GROUP BY c.sigla;
+
+    -- combo: os pisos devem ser 3,5,11,21,31,51,76,101,151,201
+    SELECT minimo, rotulo FROM combo_patamares ORDER BY minimo;
+
+
+================================================================================
+  PARTE 4 — RODAR LOCALMENTE (depois de instalar o Node)
+================================================================================
+
+  [ ] 4.1  cd C:\Users\SARA\Documents\projeto\Estudo\batcaverna
+  [ ] 4.2  npm install
+  [ ] 4.3  Confira que apps/web/.env.local existe e está preenchido
+  [ ] 4.4  npm run dev:web        →  http://localhost:3000
+
+  [ ] 4.5  PRIMEIRA COISA A TESTAR (é o build que eu não pude rodar):
+             npm run build
+           Se acusar erro de tipo, me manda a mensagem que eu corrijo.
+
+
+================================================================================
+  PARTE 5 — GERAR O APK (opcional, só quando quiser o app)
+================================================================================
+
+  [ ] 5.1  Instale JDK 17 ou 21 e o Android SDK (ANDROID_HOME)
+  [ ] 5.2  Abra apps/mobile/android/gradle.properties e confira a linha
+           org.gradle.java.home — se apontar para a pasta de outro usuário,
+           comente ela ou aponte para o seu JDK
+  [ ] 5.3  npm run build:apk
+  [ ] 5.4  O arquivo sai em:
+           apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+
+
+================================================================================
+  PARTE 6 — DEPOIS QUE ESTIVER NO AR
+================================================================================
+
+  [ ] 6.1  Entre como admin e vá em /admin
+  [ ] 6.2  Aba "Fila de Resolução": 383 questões esperando gabarito escrito.
+           Vêm ordenadas pelas que mais derrubam aluno — comece pelo topo.
+  [ ] 6.3  Aba "Importar Questões": teste com um .txt que já foi importado.
+           Tem que dizer "já no banco" e não inserir nada. Se inserir
+           duplicado, me avise (seria falha na deduplicação).
+  [ ] 6.4  Teste os 7 cards de um concurso militar (EEAR, por exemplo).
+           Nenhum pode dar 404.
+  [ ] 6.5  Responda 12 questões seguidas e SAIA da página. O XP e a
+           sequência têm que continuar lá — era o bug que você relatou.
+
+
+================================================================================
+  PARTE 7 — O QUE FICOU PENDENTE (e por quê)
+================================================================================
+
+  ! 7.1  383 questões sem gabarito comentado
+         360 delas são ENEM 2024 e 2025, cujos .txt só têm a chave de
+         respostas ("GABARITO OFICIAL"), sem nenhum comentário. Não dá para
+         inventar explicação oficial. Use a Fila de Resolução no painel.
+
+  ! 7.2  EAM, EsPCEx e IME com 0 questões
+         Não existe .txt dessas provas na pasta BANCO DE QUESTOES.
+         Assim que tiver, importe pelo painel: /admin → Importar Questões.
+
+  ! 7.3  Índices numéricos do TAF da EsPCEx
+         Os 4 exercícios estão cadastrados, mas SEM número: não achei fonte
+         oficial confiável, e o edital avalia por APTO/INAPTO. Marca errada
+         faria o aluno treinar para o alvo errado. Se você tiver a tabela do
+         edital, me passa que eu cadastro.
+
+  ! 7.4  Conteúdo programático transcrito do edital
+         Não consegui fonte verificável. Em vez disso, o card "Assuntos que
+         caem" lista o que realmente caiu nas provas oficiais, com
+         frequência e ano — e linka o edital oficial no topo.
+
+  ! 7.5  Aba "Banners & Temas" do admin é só informativa
+         Não faz nada. Me diga o que ela deveria controlar.
+
+  ! 7.6  npm run build nunca foi executado
+         Node não está instalado aqui. Validei com 5 checagens estáticas
+         (143 arquivos, todas limpas), mas quem confirma a compilação é o
+         Vercel ou o passo 4.5.
+
+
+================================================================================
+  PARTE 8 — MANUTENÇÃO (para o futuro)
+================================================================================
+
+  Acrescentar prova nova — PELO PAINEL (recomendado, não precisa de Python):
+    /admin → Importar Questões → escolhe o concurso → carrega o .txt →
+    "Conferir antes de importar" → confere a amostra → "Importar"
+
+  Acrescentar prova nova — PELO TERMINAL:
+    cd batcaverna
+    python scripts/parse_questoes.py         # lê os .txt
+    python scripts/auditar_gabaritos.py      # aponta o que cheira a erro
+    python scripts/gerar_seed_sql.py         # gera os .sql
+    python scripts/checar_seeds.py           # confere antes de colar
+    (depois rode no Supabase só os arquivos que mudaram)
+
+  Revalidar as vídeo-aulas (vídeo do YouTube sai do ar):
+    python scripts/gerar_videoaulas.py
+
+  Otimizar foto de concurso nova:
+    python scripts/otimizar_imagens.py
+
+  Checagens que rodam sem Node:
+    python scripts/checar_imports.py          # imports e sintaxe
+    python scripts/checar_classes_tema.py     # classes de cor inexistentes
+    python scripts/checar_paridade_hash.py    # dedup do importador
+    python scripts/checar_seeds.py            # SQL antes de colar
+
+
+================================================================================
+  RESUMO DE UMA LINHA
+================================================================================
+
+  Instale o Node → dê o push → rode as 5 migrations e os 21 seeds no
+  Supabase na ordem da PARTE 3 → teste os 5 itens da PARTE 6.
+
+================================================================================

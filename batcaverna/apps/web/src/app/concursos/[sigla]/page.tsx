@@ -183,7 +183,7 @@ export default function ConcursoPage() {
     {
       icon: "💡",
       titulo: `Bizus Estratégicos ${concurso.sigla}`,
-      desc: "Macetes, atalhos e fórmulas de alto impacto para a prova desta banca.",
+      desc: "Macetes e fórmulas de alto impacto das matérias que caem nesta prova, mais os macetes próprios da banca.",
       href: `/bizus?concurso=${concurso.sigla}`,
       cor: "#A855F7",
     },

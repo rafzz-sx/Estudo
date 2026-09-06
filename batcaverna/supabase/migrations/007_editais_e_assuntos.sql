@@ -100,7 +100,26 @@ GROUP BY c.id, c.sigla, m.id, m.nome, m.icone_emoji, a.id, a.nome;
 
 
 -- ════════════════════════════════════════════════════════════════════
--- 4. Conferência
+-- 4. Bizus por banca
+-- ════════════════════════════════════════════════════════════════════
+-- O card do concurso promete "macetes para a prova desta banca", mas a
+-- tabela `bizus` só tinha vínculo com `assunto_id`. Na prática,
+-- /bizus?concurso=EEAR devolvia os bizus das MATÉRIAS que a EEAR cobra —
+-- exatamente os mesmos da EPCAR, que cobra as mesmas matérias.
+--
+-- A coluna é NULA de propósito: um bizu de crase vale para todo mundo e
+-- deve continuar aparecendo em qualquer concurso. Só quando ele é uma
+-- manha específica da banca é que ganha dono.
+
+ALTER TABLE bizus
+  ADD COLUMN IF NOT EXISTS concurso_id UUID REFERENCES concursos(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_bizus_concurso ON bizus(concurso_id)
+  WHERE concurso_id IS NOT NULL;
+
+
+-- ════════════════════════════════════════════════════════════════════
+-- 5. Conferência
 -- ════════════════════════════════════════════════════════════════════
 
 SELECT sigla, edital_url IS NOT NULL AS tem_link_do_edital, tem_taf
