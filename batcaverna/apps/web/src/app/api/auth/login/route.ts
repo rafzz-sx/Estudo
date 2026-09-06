@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { aplicarLimite } from '@/lib/seguranca';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -16,6 +17,11 @@ function getSupabase() {
 // ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
+    // 8 tentativas a cada 5 min por IP. Sem isso, dava para varrer
+    // senha por forca bruta na velocidade da rede.
+    const bloqueio = aplicarLimite(req, 'login', 8, 300);
+    if (bloqueio) return bloqueio;
+
     const body = await req.json();
     const { email, senha } = body;
 
@@ -150,7 +156,10 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { success: false, error: `Erro interno: ${error?.message || 'desconhecido'}` },
+      // A mensagem crua do Postgres entrega nome de tabela, de coluna e
+      // as vezes o proprio SQL. Vai para o log do servidor, nunca para
+      // a tela de quem tentou entrar.
+      { success: false, error: 'Erro interno do servidor' },
       { status: 500 }
     );
   }

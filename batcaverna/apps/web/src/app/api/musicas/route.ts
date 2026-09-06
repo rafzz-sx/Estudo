@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { limparTermoBusca } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
@@ -12,7 +13,9 @@ export async function GET(req: NextRequest) {
     const supabase = createServerSupabaseClient();
     const user = await getAuthUserFromRequest(req);
 
-    const busca = (searchParams.get('busca') ?? '').trim();
+    // Sanitizado: virgula, parentese e ponto sao metacaracteres do
+    // filtro do PostgREST e permitiriam sair da condicao pretendida.
+    const busca = limparTermoBusca(searchParams.get('busca'));
     const soFavoritas = searchParams.get('favoritas') === '1';
 
     let favoritasIds: string[] = [];

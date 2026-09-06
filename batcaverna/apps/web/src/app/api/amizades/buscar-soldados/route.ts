@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { limparTermoBusca, aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
@@ -11,13 +12,23 @@ async function getUserFromRequest(req: NextRequest) {
 // GET /api/amizades/buscar-soldados?apelido=nome
 export async function GET(req: NextRequest) {
   try {
+    // 40 buscas a cada 5 min: impede raspagem da lista de usuarios.
+    const bloqueio = aplicarLimite(req, 'buscar-soldados', 40, 300);
+    if (bloqueio) return bloqueio;
+
     const user = await getUserFromRequest(req);
     if (!user) {
       return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const termo = searchParams.get('apelido')?.trim();
+
+    // Sanitizado antes de entrar no `.or()` abaixo. Vírgula, parêntese e
+    // ponto são metacaracteres da linguagem de filtro do PostgREST: um
+    // termo como `a,role.eq.admin` sairia da condição pretendida e entraria
+    // em outra. `%` e `_` também saem — são curingas do LIKE e serviriam
+    // para forçar varredura completa da tabela de usuários.
+    const termo = limparTermoBusca(searchParams.get('apelido'), 40);
 
     if (!termo || termo.length < 2) {
       return NextResponse.json({ success: true, data: [] });

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import {
+  validarDataUrlMidia,
+  limparTexto,
+  MAX_AVATAR_BYTES,
+  MAX_BANNER_BYTES,
+} from '@/lib/seguranca';
 import { calcularNivel } from '@batcaverna/utils';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
@@ -147,11 +153,62 @@ export async function PATCH(req: NextRequest) {
       atualizado_em: new Date().toISOString(),
     };
 
-    if (nome !== undefined && nome !== null) updates.nome = nome.trim();
-    if (bio !== undefined) updates.bio = bio ? bio.trim() : null;
-    if (banner_url !== undefined) updates.banner_url = banner_url;
-    if (banner_tipo !== undefined) updates.banner_tipo = banner_tipo;
-    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    // ─── Validação do que vem do usuário ────────────────────
+    //
+    // Antes, avatar_url e banner_url eram gravados CRUS: qualquer string,
+    // de qualquer tamanho, com qualquer prefixo. O limite de 15 MB existia
+    // só no navegador — quem chamasse a API direto passava por cima dele e
+    // podia gravar 200 MB de lixo, ou um `javascript:` no lugar da imagem.
+
+    if (nome !== undefined && nome !== null) {
+      const limpo = limparTexto(nome, 100);
+      if (!limpo || limpo.length < 2) {
+        return NextResponse.json(
+          { success: false, error: 'Nome deve ter entre 2 e 100 caracteres.' },
+          { status: 400 }
+        );
+      }
+      updates.nome = limpo;
+    }
+
+    if (bio !== undefined) {
+      updates.bio = bio ? limparTexto(bio, 150) : null;
+    }
+
+    if (avatar_url !== undefined) {
+      const v = validarDataUrlMidia(avatar_url, { maxBytes: MAX_AVATAR_BYTES });
+      if (!v.ok) {
+        return NextResponse.json(
+          { success: false, error: v.erro },
+          { status: 400 }
+        );
+      }
+      updates.avatar_url = avatar_url || null;
+    }
+
+    if (banner_url !== undefined) {
+      const v = validarDataUrlMidia(banner_url, {
+        permitirVideo: true,
+        maxBytes: MAX_BANNER_BYTES,
+      });
+      if (!v.ok) {
+        return NextResponse.json(
+          { success: false, error: v.erro },
+          { status: 400 }
+        );
+      }
+      updates.banner_url = banner_url || null;
+      // O tipo vem do conteúdo real do arquivo, não do que o cliente disse.
+      if (v.tipo) updates.banner_tipo = v.tipo;
+    }
+
+    // banner_tipo só é aceito do cliente quando não veio banner novo, e
+    // ainda assim restrito ao conjunto que o enum do banco conhece.
+    if (banner_tipo !== undefined && banner_url === undefined) {
+      if (['imagem', 'gif', 'video'].includes(banner_tipo)) {
+        updates.banner_tipo = banner_tipo;
+      }
+    }
 
     // 2. Se for trocar o apelido:
     if (apelido && apelido.trim() !== currentUser.apelido) {

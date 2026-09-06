@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { limparTermoBusca } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
@@ -120,9 +121,9 @@ export async function GET(req: NextRequest) {
       query = query.in('id', favoritos);
     }
 
-    const busca = searchParams.get('busca');
-    if (busca && busca.trim().length >= 3) {
-      const termo = `%${busca.trim()}%`;
+    const busca = limparTermoBusca(searchParams.get('busca'));
+    if (busca.length >= 3) {
+      const termo = `%${busca}%`;
       query = query.or(`titulo.ilike.${termo},conteudo.ilike.${termo}`);
     }
 

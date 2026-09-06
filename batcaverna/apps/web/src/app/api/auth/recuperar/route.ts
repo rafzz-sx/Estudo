@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { hashToken, generateEmailToken, getEmailTokenExpiry } from '@/lib/auth';
 
@@ -11,6 +12,11 @@ function getSupabase() {
 // ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
+    // 4 pedidos a cada 15 min: recuperacao de senha e o alvo classico
+    // de quem quer descobrir quais e-mails existem na base.
+    const bloqueio = aplicarLimite(req, 'recuperar', 4, 900);
+    if (bloqueio) return bloqueio;
+
     const body = await req.json();
     const { email } = body;
 
@@ -96,6 +102,12 @@ export async function POST(req: NextRequest) {
 // ═══════════════════════════════════════════════════════════════
 export async function PUT(req: NextRequest) {
   try {
+    // O codigo tem 6 digitos: sao so 1 milhao de combinacoes. Sem
+    // limite, um script acerta em minutos e troca a senha de qualquer
+    // conta. 10 tentativas a cada 15 min por IP fecha essa porta.
+    const bloqueio = aplicarLimite(req, 'redefinir-senha', 10, 900);
+    if (bloqueio) return bloqueio;
+
     const body = await req.json();
     const { email, code, nova_senha } = body;
 

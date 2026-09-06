@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 
 // ─── Lista abrangente de domínios de e-mails descartáveis e falsos ───
@@ -43,6 +44,12 @@ function isValidApelido(apelido: string): { valid: boolean; error?: string } {
 // GET /api/auth/check-availability?field=email|apelido&value=xxx
 export async function GET(req: NextRequest) {
   try {
+    // 30 checagens a cada 5 min por IP. Este endpoint responde se um
+    // e-mail ja existe na base: sem limite, vira ferramenta pronta de
+    // enumeracao de contas.
+    const bloqueio = aplicarLimite(req, 'disponibilidade', 30, 300);
+    if (bloqueio) return bloqueio;
+
     const { searchParams } = new URL(req.url);
     const field = searchParams.get('field');
     const value = searchParams.get('value');
