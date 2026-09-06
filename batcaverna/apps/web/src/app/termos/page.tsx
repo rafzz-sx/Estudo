@@ -20,7 +20,7 @@ export default function TermosPage() {
             Termos de Uso da Plataforma
           </h1>
           <p className="text-bat-text-muted text-sm">
-            Última atualização: 29 de Agosto de 2026 · Versão 1.1.0
+            Última atualização: 29 de Agosto de 2026 · Versão 2.1.0 · Atualizados em Setembro de 2026
           </p>
         </div>
 
@@ -69,18 +69,80 @@ export default function TermosPage() {
             </h2>
             <p>É estritamente proibido:</p>
             <ul className="list-disc pl-5 space-y-1 text-bat-text">
-              <li>Praticar qualquer tipo de assédio, preconceito, discurso de ódio ou ofensa em chats e tickets.</li>
-              <li>Utilizar scripts, bots ou automações para manipular pontuações de XP ou respostas de simulados.</li>
+              <li>Praticar assédio, preconceito, discurso de ódio ou ofensa em chats e tickets — com rigor redobrado por haver menores de idade na plataforma.</li>
+              <li>Utilizar scripts, bots ou automações para manipular XP, ranking ou respostas de simulados.</li>
               <li>Compartilhar credenciais de acesso com terceiros.</li>
+              <li>Enviar como foto de perfil ou banner qualquer imagem ofensiva, de conteúdo adulto ou sobre a qual você não tenha direito de uso.</li>
+              <li>Acrescentar ao acervo de música faixas protegidas por direito autoral às quais você não tenha direito.</li>
             </ul>
             <p>
-              O descumprimento destas regras sujeita a conta infratora a advertência, suspensão temporária ou exclusão definitiva sem aviso prévio.
+              O descumprimento sujeita a conta a <strong>advertência</strong>, <strong>suspensão temporária</strong> ou
+              <strong> desativação</strong>. Na suspensão, o acesso é bloqueado e a sessão em curso cai na hora;
+              seu progresso, XP e histórico ficam preservados e voltam quando o prazo termina. Toda ação
+              administrativa fica registrada em log de auditoria, e você é avisado na caixa de notificações
+              com o motivo.
             </p>
           </section>
 
           <section className="space-y-3 border-t border-bat-border/50 pt-6">
             <h2 className="heading text-lg text-bat-gold-400 font-bold flex items-center gap-2">
-              <span>5.</span> Propriedade Intelectual e Isenção de Vínculo
+              <span>5.</span> Idade Mínima e Responsáveis
+            </h2>
+            <p>
+              A BatCaverna prepara para concursos que aceitam adolescentes — a <strong>EPCAR</strong> a partir
+              dos 14 anos e o <strong>Colégio Naval</strong> a partir dos 15. Por isso:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-bat-text">
+              <li>Menores de 16 anos só podem se cadastrar com <strong>consentimento de um responsável legal</strong>, nos termos do art. 14 da LGPD.</li>
+              <li>O responsável pode pedir acesso, correção ou exclusão dos dados do menor a qualquer momento.</li>
+              <li>Conta identificada como de menor de 14 anos é suspensa até que o responsável se manifeste.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3 border-t border-bat-border/50 pt-6">
+            <h2 className="heading text-lg text-bat-gold-400 font-bold flex items-center gap-2">
+              <span>6.</span> Conteúdo da Plataforma
+            </h2>
+            <ul className="list-disc pl-5 space-y-1 text-bat-text">
+              <li>
+                <strong>Questões:</strong> extraídas de provas oficiais já aplicadas pelas bancas, que são
+                documentos públicos. Nenhuma questão é inventada. Os enunciados pertencem às respectivas
+                bancas; os comentários e as resoluções passo a passo são produção nossa.
+              </li>
+              <li>
+                <strong>Vídeo-aulas:</strong> conteúdo de terceiros, exibido pelo player do YouTube dentro da
+                plataforma. Os direitos são de cada canal, e a exibição segue os termos do próprio YouTube.
+              </li>
+              <li>
+                <strong>Música:</strong> o acervo padrão é composto por gravações em <strong>domínio público</strong>.
+                Faixas que você acrescentar são de sua responsabilidade.
+              </li>
+              <li>
+                <strong>Teoria e bizus:</strong> produção da BatCaverna, para seu uso pessoal de estudo.
+                Redistribuir ou revender é proibido.
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-3 border-t border-bat-border/50 pt-6">
+            <h2 className="heading text-lg text-bat-gold-400 font-bold flex items-center gap-2">
+              <span>7.</span> Disponibilidade e Limites
+            </h2>
+            <p>
+              A plataforma é oferecida <strong>gratuitamente e no estado em que se encontra</strong>. Fazemos o
+              possível para manter tudo no ar e correto, mas não garantimos disponibilidade ininterrupta nem
+              ausência total de erro em questão ou gabarito.
+            </p>
+            <p>
+              <strong>Achou um gabarito errado?</strong> Abra um ticket em Suporte. Corrigimos e creditamos quem
+              apontou. Estudar aqui não garante aprovação: o resultado depende do seu esforço e das regras de
+              cada banca. Confira sempre o edital oficial vigente antes de decidir qualquer coisa.
+            </p>
+          </section>
+
+          <section className="space-y-3 border-t border-bat-border/50 pt-6">
+            <h2 className="heading text-lg text-bat-gold-400 font-bold flex items-center gap-2">
+              <span>8.</span> Propriedade Intelectual e Isenção de Vínculo
             </h2>
             <p>
               A marca <strong>BatCaverna</strong>, sua identidade visual, códigos-fonte e algoritmos são propriedade exclusiva dos desenvolvedores. As menções e logotipos de instituições militares e órgãos públicos têm caráter meramente informativo e pedagógico, não havendo qualquer afiliação oficial com as Forças Armadas, Ministério da Defesa ou bancas examinadoras.
@@ -89,7 +151,7 @@ export default function TermosPage() {
 
           <section className="space-y-3 border-t border-bat-border/50 pt-6">
             <h2 className="heading text-lg text-bat-gold-400 font-bold flex items-center gap-2">
-              <span>6.</span> Contato e Suporte Oficial
+              <span>9.</span> Contato e Suporte Oficial
             </h2>
             <p>
               Para dúvidas legais, reportes de vulnerabilidade ou solicitações de suporte, entre em contato diretamente com a administração da plataforma pelo e-mail oficial:

@@ -174,6 +174,13 @@ export default function ConcursoPage() {
         : undefined,
     },
     {
+      icon: "📋",
+      titulo: `Assuntos que caem n${art} ${concurso.sigla}`,
+      desc: "Tudo que já foi cobrado nas provas oficiais, na ordem do que mais aparece — com o seu desempenho em cada assunto.",
+      href: `/concursos/${concurso.sigla.toLowerCase()}/assuntos`,
+      cor: "#06B6D4",
+    },
+    {
       icon: "💡",
       titulo: `Bizus Estratégicos ${concurso.sigla}`,
       desc: "Macetes, atalhos e fórmulas de alto impacto para a prova desta banca.",
@@ -204,7 +211,7 @@ export default function ConcursoPage() {
       titulo: `TAF do ${concurso.sigla}`,
       desc: "Índices mínimos de aprovação no teste físico, por exercício e sexo.",
       href: `/concursos/${concurso.sigla.toLowerCase()}/taf`,
-      cor: "#06B6D4",
+      cor: "#F97316",
     });
   }
 

@@ -31,7 +31,10 @@ export async function GET(
     // 2. Respostas de questões recentes
     const { data: respostas } = await supabase
       .from('user_questao_respostas')
-      .select('*, questoes (enunciado, alternativa_correta, banca, ano)')
+      // Era `alternativa_correta`, coluna do schema 1.x que não existe mais:
+      // o PostgREST recusava a consulta inteira e a aba de atividade do
+      // usuário voltava vazia no painel.
+      .select('*, questoes (enunciado, resposta_correta, banca, ano)')
       .eq('user_id', id)
       .order('respondida_em', { ascending: false })
       .limit(10);

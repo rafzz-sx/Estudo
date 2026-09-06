@@ -553,11 +553,26 @@ RE_GAB_DOISPONTOS = re.compile(
 )
 # "166: E"  (enem-2024)
 RE_GAB_NUM = re.compile(r"^\s*(\d{1,3})\s*:\s*\(?([A-E])\)?", re.M)
-# "Explicação resumida: ..." | "Explicação: ..." | "Justificativa: ..."
+# "Explicação resumida:" | "Explicação detalhada:" | "Explicação:" |
+# "Justificativa:" | "Comentário:" | "Resolução:"
+#
+# O qualificador era fixo em "resumida", então "Explicação DETALHADA:" não
+# casava e a explicação era descartada em silêncio — 98 questões de ESA
+# 2024 e EPCAR 2022 entraram sem gabarito comentado por causa disso.
 RE_GAB_EXPLICACAO = re.compile(
-    r"^(?:Explica[çc][ãa]o(?:\s+resumida)?|Justificativa|Coment[áa]rio)\s*:\s*"
-    r"(.+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|\Z)",
+    r"^(?:Explica[çc][ãa]o(?:\s+\w+)?|Justificativa|Coment[áa]rio|Resolu[çc][ãa]o)"
+    r"\s*:\s*(.+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|\Z)",
     re.M | re.I | re.S,
+)
+
+# Explicação SEM rótulo nenhum: o comentário vem no parágrafo logo abaixo
+# da linha de gabarito (layout do enem-2018-dia1). Só vale quando o trecho
+# não começa por outro rótulo conhecido, senão engoliria a própria linha
+# "Gabarito:" da questão seguinte.
+RE_GAB_EXPLICACAO_SOLTA = re.compile(
+    r"\A\s*\n(?!\s*(?:Explica|Justificativa|Coment|Resolu|Quest[ãa]o\s+\d|=====))"
+    r"(.+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|\Z)",
+    re.I | re.S,
 )
 
 # Cabeçalho da SEÇÃO de gabarito (fica no fim do arquivo). Precisa excluir o
@@ -607,6 +622,24 @@ def extrair_gabaritos(texto: str) -> tuple[dict[int, dict], list[dict]]:
                 break
         if anterior is not None and anterior["explicacao"] is None:
             anterior["explicacao"] = limpar(m.group(1))
+
+    # 2ª passada: layouts em que o comentário vem logo abaixo da linha de
+    # gabarito, sem rótulo nenhum (enem-2018-dia1). Só para os que ficaram
+    # sem explicação na passada com rótulo.
+    for i, item in enumerate(em_ordem):
+        if item["explicacao"] is not None:
+            continue
+        fim = em_ordem[i + 1]["_pos"] if i + 1 < len(em_ordem) else len(escopo)
+        # Recua até o começo da linha seguinte ao gabarito do próximo item,
+        # senão o trecho terminaria no meio do rótulo "Questão N".
+        trecho = escopo[item["_pos"]: fim]
+        m = RE_GAB_EXPLICACAO_SOLTA.match(trecho)
+        if not m:
+            continue
+        texto_expl = limpar(m.group(1))
+        # Um comentário de verdade tem corpo; um resto de linha, não.
+        if len(texto_expl) >= 40:
+            item["explicacao"] = texto_expl
 
     por_numero: dict[int, dict] = {}
     for item in em_ordem:

@@ -223,8 +223,16 @@ const RE_IMAGEM = /\[?\s*(?:DESCRI[ÇC][ÃA]O\s+DA\s+)?IMAGEM\s*:\s*([^\]\n]+)\]
 // ─── Seção de gabarito no fim do arquivo ─────────────────────
 const RE_GAB_LINHA =
   /^\s*Quest[ãa]o\s+(\d{1,3})\s*[—–-]\s*Gabarito\s*:\s*\(?([A-Ea-e]|Anulada[^\n]*)\)?/gim;
+// O qualificador precisa ser livre: "Explicação resumida:", "Explicação
+// detalhada:", "Justificativa:", "Comentário:", "Resolução:". Fixá-lo em
+// "resumida" descartava em silêncio 98 explicações de ESA 2024 e EPCAR 2022.
 const RE_EXPLICACAO =
-  /^\s*Explica[çc][ãa]o(?:\s+resumida)?\s*:\s*([\s\S]+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|$)/im;
+  /^\s*(?:Explica[çc][ãa]o(?:\s+\w+)?|Justificativa|Coment[áa]rio|Resolu[çc][ãa]o)\s*:\s*([\s\S]+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|$)/im;
+
+// Layout em que o comentário vem no parágrafo logo abaixo da linha de
+// gabarito, sem rótulo nenhum (enem-2018-dia1).
+const RE_EXPLICACAO_SOLTA =
+  /^\s*\n(?!\s*(?:Explica|Justificativa|Coment|Resolu|Quest[ãa]o\s+\d|={4}))([\s\S]+?)(?=\n\s*\n|\n\s*Quest[ãa]o\s+\d|$)/i;
 
 interface GabaritoLido {
   letra: string | null;
@@ -253,8 +261,16 @@ export function extrairGabaritos(texto: string): Map<number, GabaritoLido> {
       i + 1 < ocorrencias.length ? ocorrencias[i + 1].index! : trecho.length;
     const corpo = trecho.slice(inicio, fim);
 
+    // 1ª tentativa: com rótulo. 2ª: o parágrafo solto logo abaixo.
     const mExp = corpo.match(RE_EXPLICACAO);
-    const explicacao = mExp ? limpar(mExp[1]) : null;
+    let explicacao = mExp ? limpar(mExp[1]) : null;
+
+    if (!explicacao) {
+      const mSolta = corpo.match(RE_EXPLICACAO_SOLTA);
+      const candidata = mSolta ? limpar(mSolta[1]) : '';
+      // Um comentário de verdade tem corpo; um resto de linha, não.
+      if (candidata.length >= 40) explicacao = candidata;
+    }
 
     // Um mesmo número pode reaparecer quando a prova tem dois dias; a
     // primeira leitura vence, que é a ordem em que os blocos aparecem.

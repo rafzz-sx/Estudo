@@ -51,14 +51,35 @@ export async function POST(req: NextRequest) {
       usado: false,
     });
 
-    // Em produção enviaria e-mail. Por ora, logamos no console e retornamos o código
-    console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
+    // ─── Entrega do código ────────────────────────────────────
+    //
+    // ATENÇÃO: este endpoint devolvia `_dev_code` com o código de
+    // redefinição DENTRO DA RESPOSTA, para qualquer um que chamasse. Bastava
+    // saber o e-mail de alguém para pedir a recuperação, ler o código na
+    // resposta e trocar a senha da conta alheia — tomada de conta completa,
+    // sem nenhuma barreira.
+    //
+    // O código agora só sai da API fora de produção, e mesmo assim apenas
+    // quando não há provedor de e-mail configurado. Em produção ele vai
+    // para o log do servidor e para o e-mail; nunca para o cliente.
+    const emProducao = process.env.NODE_ENV === 'production';
+    const temProvedorDeEmail = !!process.env.RESEND_API_KEY;
+
+    if (!temProvedorDeEmail) {
+      // Sem provedor: o código fica no log do servidor, ao qual só o
+      // administrador tem acesso.
+      console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.',
-      // TODO: remover em produção — apenas para dev/demo
-      _dev_code: code,
+      message: temProvedorDeEmail
+        ? 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.'
+        : emProducao
+        ? 'Recuperação por e-mail ainda não está ativa. Abra um chamado no Suporte para redefinir sua senha.'
+        : 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.',
+      // Só em desenvolvimento, e só quando não há como enviar o e-mail.
+      ...(!emProducao && !temProvedorDeEmail ? { _dev_code: code } : {}),
     });
 
   } catch (error: any) {
