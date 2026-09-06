@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { calcularNivel } from '@batcaverna/utils';
+import { calcularStreak } from '@/lib/gamificacao';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -73,21 +75,48 @@ export async function POST(req: NextRequest) {
       .update(updatePayload)
       .eq('id', session.id);
 
-    // Atualizar XP total do usuário e streak
+    // Atualizar XP total, NÍVEL e streak do usuário.
+    //
+    // O nível precisa ser recalculado aqui como já é em /questoes/responder,
+    // /simulados/finalizar e /teoria/concluir. Sem isso, quem sobe de nível
+    // só estudando no cronômetro continuava com `nivel_atual` antigo no
+    // banco — e como o AppShell lê o nível do banco, a patente do aluno
+    // ficava congelada até ele responder uma questão.
+    let nivelDepois = calcularNivel(0);
+    let subiuNivel = false;
+    let xpTotalDepois = 0;
+
     if (xpGanhoNesteIntervalo > 0) {
       try {
         const { data: userData } = await supabase
           .from('users')
-          .select('xp_total')
+          .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado')
           .eq('id', userId)
           .single();
 
         const xpAtual = userData?.xp_total || 0;
+        xpTotalDepois = xpAtual + xpGanhoNesteIntervalo;
+
+        const nivelAntes = calcularNivel(xpAtual);
+        nivelDepois = calcularNivel(xpTotalDepois);
+        subiuNivel = nivelDepois.nivel > nivelAntes.nivel;
+
+        // Estudar no cronômetro também mantém a corrente de dias viva.
+        const hoje = agora.toISOString().split('T')[0];
+        const streak = calcularStreak(
+          userData?.ultimo_dia_estudado ?? null,
+          hoje,
+          userData?.streak_dias ?? 0
+        );
+
         await supabase
           .from('users')
           .update({
-            xp_total: xpAtual + xpGanhoNesteIntervalo,
-            ultimo_dia_estudado: agora.toISOString().split('T')[0],
+            xp_total: xpTotalDepois,
+            nivel_atual: nivelDepois.nivel,
+            streak_dias: streak,
+            maior_streak: Math.max(userData?.maior_streak ?? 0, streak),
+            ultimo_dia_estudado: hoje,
           })
           .eq('id', userId);
       } catch (err) {
@@ -105,6 +134,11 @@ export async function POST(req: NextRequest) {
         multiplicador,
         blocos_completados: blocos15Min,
         novos_blocos: novosBlocos,
+        // O store precisa disso para atualizar a patente na topbar e
+        // disparar a animação de level up sem esperar um refresh.
+        xp_total: xpTotalDepois || null,
+        nivel: xpGanhoNesteIntervalo > 0 ? nivelDepois : null,
+        subiu_nivel: subiuNivel,
       },
     });
   } catch (error) {

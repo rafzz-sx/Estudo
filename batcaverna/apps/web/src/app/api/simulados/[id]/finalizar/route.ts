@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
-import { conferirBadges } from '@/lib/gamificacao';
+import { conferirBadges, calcularStreak } from '@/lib/gamificacao';
 
 /**
  * POST /api/simulados/[id]/finalizar
@@ -140,7 +140,8 @@ export async function POST(
       .from('users')
       .select(
         `xp_total, total_questoes_respondidas, total_acertos, streak_dias,
-         maior_combo_pessoal, tempo_estudo_total_segundos`
+         maior_streak, ultimo_dia_estudado, maior_combo_pessoal,
+         tempo_estudo_total_segundos`
       )
       .eq('id', user.id)
       .single();
@@ -150,6 +151,18 @@ export async function POST(
     const nivelAntes = calcularNivel(xpAntes);
     const nivelDepois = calcularNivel(xpDepois);
 
+    // Antes, este bloco gravava `ultimo_dia_estudado = hoje` mas NÃO mexia
+    // em `streak_dias`. O efeito era pior que não contar: no dia seguinte,
+    // o cálculo do streak em /questoes/responder via que o aluno "já tinha
+    // estudado hoje" e devolvia o streak parado. Fazer simulado congelava a
+    // corrente de dias.
+    const hoje = new Date().toISOString().slice(0, 10);
+    const streak = calcularStreak(
+      dadosUser?.ultimo_dia_estudado ?? null,
+      hoje,
+      dadosUser?.streak_dias ?? 0
+    );
+
     await supabase
       .from('users')
       .update({
@@ -158,7 +171,9 @@ export async function POST(
         total_questoes_respondidas:
           (dadosUser?.total_questoes_respondidas ?? 0) + respondidas,
         total_acertos: (dadosUser?.total_acertos ?? 0) + acertos,
-        ultimo_dia_estudado: new Date().toISOString().slice(0, 10),
+        streak_dias: streak,
+        maior_streak: Math.max(dadosUser?.maior_streak ?? 0, streak),
+        ultimo_dia_estudado: hoje,
       })
       .eq('id', user.id);
 
@@ -192,7 +207,9 @@ export async function POST(
       total_questoes_respondidas:
         (dadosUser?.total_questoes_respondidas ?? 0) + respondidas,
       maior_combo_pessoal: dadosUser?.maior_combo_pessoal ?? 0,
-      streak_dias: dadosUser?.streak_dias ?? 0,
+      // O streak recém-calculado, não o antigo: a insígnia de corrente de
+      // dias tem de poder cair no mesmo simulado que fechou a corrente.
+      streak_dias: streak,
       tempo_estudo_total_segundos: dadosUser?.tempo_estudo_total_segundos ?? 0,
     });
 

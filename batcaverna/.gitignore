@@ -43,3 +43,7 @@ scripts/tmp/
 # JSON intermediário do parser: 6 MB que mudam por inteiro a cada
 # regeneração e já estão representados nos seeds .sql.
 scripts/out/questoes.json
+
+# Originais das fotos de concurso antes da otimizacao. Ficam so na maquina:
+# as versoes de 2,5 MB ja estao no historico do git se precisar voltar.
+apps/web/public/images/concursos/_originais/

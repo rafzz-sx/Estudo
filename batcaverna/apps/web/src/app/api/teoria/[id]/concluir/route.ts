@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
+import { calcularStreak } from '@/lib/gamificacao';
 
 /**
  * POST /api/teoria/[id]/concluir
@@ -55,21 +56,45 @@ export async function POST(
 
     const { data: dados } = await supabase
       .from('users')
-      .select('xp_total')
+      .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado')
       .eq('id', user.id)
       .single();
 
-    const xpDepois = (dados?.xp_total ?? 0) + XP_POR_LEITURA;
+    const xpAntes = dados?.xp_total ?? 0;
+    const xpDepois = xpAntes + XP_POR_LEITURA;
+    const nivelAntes = calcularNivel(xpAntes);
     const nivel = calcularNivel(xpDepois);
+
+    // Ler teoria é estudar: conta para a corrente de dias como responder
+    // questão e como o cronômetro. Antes só a leitura ficava de fora, e
+    // quem passava o dia estudando teoria perdia o streak.
+    const hoje = new Date().toISOString().slice(0, 10);
+    const streak = calcularStreak(
+      dados?.ultimo_dia_estudado ?? null,
+      hoje,
+      dados?.streak_dias ?? 0
+    );
 
     await supabase
       .from('users')
-      .update({ xp_total: xpDepois, nivel_atual: nivel.nivel })
+      .update({
+        xp_total: xpDepois,
+        nivel_atual: nivel.nivel,
+        streak_dias: streak,
+        maior_streak: Math.max(dados?.maior_streak ?? 0, streak),
+        ultimo_dia_estudado: hoje,
+      })
       .eq('id', user.id);
 
     return NextResponse.json({
       success: true,
-      data: { xp_ganho: XP_POR_LEITURA, xp_total: xpDepois, nivel },
+      data: {
+        xp_ganho: XP_POR_LEITURA,
+        xp_total: xpDepois,
+        nivel,
+        subiu_nivel: nivel.nivel > nivelAntes.nivel,
+        streak_dias: streak,
+      },
     });
   } catch (error) {
     console.error('POST /api/teoria/[id]/concluir error:', error);

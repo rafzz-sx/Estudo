@@ -131,7 +131,15 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          const { xp_ganho_total_sessao, multiplicador, xp_ganho_intervalo } = data.data;
+          const {
+            xp_ganho_total_sessao,
+            multiplicador,
+            xp_ganho_intervalo,
+            // Vindos do servidor a partir da 2.1.0: são a verdade.
+            xp_total: xpTotalServidor,
+            nivel: nivelServidor,
+            subiu_nivel: subiuNivelServidor,
+          } = data.data;
 
           // Atualizar apenas métricas de gamificação sem alterar os segundos da tela
           set({
@@ -144,9 +152,15 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             const authUser = useAuthStore.getState().user;
             if (authUser) {
               const antigoXp = authUser.xp_total || 0;
-              const novoXp = antigoXp + xp_ganho_intervalo;
               const nivelAntigo = authUser.nivel_atual || 1;
-              const nivelInfo = calcularNivel(novoXp);
+
+              // Preferimos SEMPRE o total que o servidor acabou de gravar.
+              // Somar no cliente dessincroniza quando o aluno tem duas abas
+              // abertas ou quando um heartbeat se perde — e era assim que o
+              // XP "sumia" ao trocar de página.
+              const novoXp = xpTotalServidor ?? antigoXp + xp_ganho_intervalo;
+              const nivelInfo = nivelServidor ?? calcularNivel(novoXp);
+              const subiu = subiuNivelServidor ?? nivelInfo.nivel > nivelAntigo;
 
               useAuthStore.getState().updateUser({
                 xp_total: novoXp,
@@ -164,7 +178,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
                   })
                 );
 
-                if (nivelInfo.nivel > nivelAntigo) {
+                if (subiu) {
                   window.dispatchEvent(
                     new CustomEvent("batcaverna_level_up", {
                       detail: {
