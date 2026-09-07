@@ -1,74 +1,157 @@
 ================================================================================
   BATCAVERNA — AUDITORIA DE SEGURANÇA · AÇÕES QUE SÓ VOCÊ PODE FAZER
-  Gerado em 06/09/2026 · revisado na varredura da 2.2.0 (mesmo dia)
+  Gerado em 06/09/2026 · REESCRITO em 07/09/2026 após a auditoria completa
 ================================================================================
 
   Este arquivo tem só o que EU não consigo fazer por código. O que já foi
-  implementado está no relatório da conversa e nos commits.
+  implementado está nos commits.
 
-  ATENÇÃO: o item 0 é uma emergência. Faça ele antes de qualquer coisa,
-  antes até de subir o código.
 
-  ------------------------------------------------------------------------
-  NOVO NA REVISÃO DA 2.2.0 — leia antes de rodar a migration 008
-  ------------------------------------------------------------------------
-
-  SE VOCÊ JÁ RODOU A 008: rode de novo. Ela tinha um defeito meu.
-
-  A última linha da migration criava um CHECK sobre a coluna `conteudo` da
-  tabela `mensagem_chat`. Essa coluna se chama `conteudo_texto`. O comando
-  abortava com "column conteudo does not exist" e, como tudo estava dentro
-  de uma transação, o Postgres desfazia o arquivo INTEIRO — todas as
-  políticas de RLS junto. Você teria visto uma mensagem de erro vermelha e
-  acharia que era um detalhe no fim; na verdade nada tinha sido aplicado.
-
-  Já está corrigido no arquivo, e ele agora também limita o tamanho da
-  mídia do chat (8 MB por mensagem).
-
-  ------------------------------------------------------------------------
-  DOIS BURACOS DE AUTORIZAÇÃO FECHADOS POR CÓDIGO (nada a fazer, é aviso)
-  ------------------------------------------------------------------------
-
-  Se alguém já usou a plataforma, vale saber que estas portas estiveram
-  abertas — não para consertar agora, mas para você decidir se quer avisar
-  alguém ou olhar os registros:
-
-  • CHAT: /api/chat/mensagens não conferia se quem pedia participava da
-    conversa. Qualquer pessoa logada podia LER a conversa privada de dois
-    estranhos trocando o UUID na requisição, e ESCREVER dentro dela.
-  • CHAMADOS: /api/tickets/[id]/mensagens tinha o mesmo problema. Ticket de
-    suporte é onde o aluno escreve denúncia de assédio e dados de contato.
-  • RANKING: /api/ranking era público (sem login) e ignorava a preferência
-    "ocultar do ranking" que a tela de perfil salvava. Quem desligou
-    continuou aparecendo.
-
-  Explorar qualquer um deles exigia adivinhar um UUID — não é trivial — mas
-  a proteção não existia. Os três estão fechados nos commits 13 e 14.
+  ################################################################
+  #                                                              #
+  #   LEIA ISTO ANTES DE QUALQUER COISA                          #
+  #                                                              #
+  #   A versão anterior deste arquivo mandava rotacionar a        #
+  #   chave do Supabase ANTES de tirar o valor fixo do código.    #
+  #                                                              #
+  #   AQUELA ORDEM ESTAVA ERRADA. Seguir ela DERRUBA a            #
+  #   plataforma inteira.                                        #
+  #                                                              #
+  #   A auditoria de 07/09 descobriu o motivo, explicado no       #
+  #   item 0-B. A ordem certa está no item 0-C.                   #
+  #                                                              #
+  #   Se você já rotacionou a chave e o site caiu: é isto. Vá     #
+  #   direto ao item 0-D.                                        #
+  #                                                              #
+  ################################################################
 
 
 ================================================================================
-  🚨 0. URGENTE — CHAVE MESTRA DO BANCO EXPOSTA NA INTERNET
+  🚨 0-A. PRIMEIRA COISA, HOJE — O SEGREDO DO LOGIN PODE SER PÚBLICO
+================================================================================
+
+  Este é o item mais urgente do arquivo. Leva 1 minuto para verificar.
+
+  O QUE ACONTECE
+  --------------
+  Em  batcaverna/apps/web/src/lib/auth.ts  (linha 3):
+
+      const JWT_SECRET = new TextEncoder().encode(
+        process.env.JWT_SECRET || 'dev-secret-change-me'
+      );
+
+  Se a variável JWT_SECRET NÃO estiver configurada na Vercel, o segredo que
+  assina o login de todos os alunos é a string  'dev-secret-change-me'  —
+  escrita neste repositório, que é público.
+
+  POR QUE ISSO É PIOR QUE A CHAVE DO BANCO
+  ----------------------------------------
+  Com esse segredo, qualquer pessoa que leia o repositório monta sozinha um
+  token dizendo "eu sou administrador", cola no navegador e entra no painel
+  admin. Não precisa de senha, não precisa da chave do banco, não precisa
+  saber o e-mail de ninguém.
+
+  De lá se lê tudo: dados dos alunos, conversas privadas do chat, chamados
+  de suporte.
+
+  O QUE FAZER AGORA (1 minuto)
+  ----------------------------
+     1. Abra https://vercel.com/dashboard
+     2. Projeto da BatCaverna → "Settings" → "Environment Variables"
+     3. Procure  JWT_SECRET
+
+     SE ELA EXISTIR e estiver marcada em Production:
+        Confira que o valor NÃO é 'dev-secret-change-me'. Se for outro
+        valor longo e aleatório, você está protegido. Siga para o 0-B.
+
+     SE ELA NÃO EXISTIR:
+        A plataforma está aberta agora. Crie imediatamente:
+          - Nome:  JWT_SECRET
+          - Valor: uma sequência longa e aleatória (mínimo 40 caracteres).
+                   Pode gerar em https://www.random.org/strings/ ou apenas
+                   digitar bastante coisa sem sentido.
+          - Marque Production / Preview / Development
+        Depois: "Deployments" → "Redeploy" no último deploy.
+
+        Efeito colateral esperado: todo mundo é deslogado e precisa entrar
+        de novo. Isso é o certo — invalida qualquer token forjado.
+
+  DEPOIS, ME PEÇA
+  ---------------
+  Eu removo o  || 'dev-secret-change-me'  do código e faço a aplicação
+  recusar-se a subir sem a variável. Assim o problema não pode voltar
+  calado. (Não faço agora porque, se a variável não estiver configurada,
+  isso tiraria o site do ar.)
+
+
+================================================================================
+  🚨 0-B. A DESCOBERTA QUE MUDA A ORDEM DAS COISAS
+================================================================================
+
+  O QUE EU ENCONTREI NA AUDITORIA
+  -------------------------------
+  Em  batcaverna/apps/web/src/lib/supabase.ts  (linha 27):
+
+      const key = envServiceKey.includes('service_role')
+                  ? envServiceKey
+                  : SUPABASE_SERVICE_KEY;
+
+  A intenção era: "se a variável de ambiente tiver uma chave de serviço
+  válida, use ela; senão, use a do arquivo".
+
+  O problema: uma chave do Supabase é um JWT, e num JWT o texto
+  "service_role" fica guardado em base64 — NÃO aparece como palavra legível.
+
+  Eu testei com a própria chave do seu projeto:
+
+      a chave contém o texto 'service_role'?   ->  NÃO
+      a função (role) decodificada da chave:   ->  service_role
+
+  Ou seja: a condição é SEMPRE falsa.
+
+  CONSEQUÊNCIA PRÁTICA — e é séria
+  --------------------------------
+  A variável SUPABASE_SERVICE_ROLE_KEY que você configurar na Vercel é
+  IGNORADA. O código sempre usa a chave escrita no arquivo.
+
+  Isso significa que, se você rotacionar a chave no Supabase primeiro:
+
+      • a chave antiga é revogada
+      • o código continua enviando a chave antiga
+      • TODAS as telas param de funcionar ao mesmo tempo
+      • e configurar a chave nova na Vercel NÃO resolve, porque ela é
+        ignorada
+
+  O site só volta quando eu tirar o valor fixo do código e você fizer um
+  deploy novo. Ou seja: você ficaria fora do ar no meio do processo.
+
+  O mesmo defeito está na chave pública (`includes('anon')`) e na URL do
+  projeto (`includes('bzrrbbaqzlfmertirbak')`). Este último funciona por
+  acaso — o texto do endereço aparece mesmo —, mas prende a plataforma
+  neste projeto Supabase: apontar para um projeto novo exige mudar o código.
+
+
+================================================================================
+  🚨 0-C. A CHAVE MESTRA DO BANCO ESTÁ EXPOSTA — ORDEM CORRIGIDA
 ================================================================================
 
   O QUE ACONTECEU
   ---------------
-  A chave `service_role` do Supabase está escrita direto no código, no
-  arquivo:
+  A chave `service_role` do Supabase está escrita direto no código:
 
       batcaverna/apps/web/src/lib/supabase.ts   (linha 9)
 
-  Esse arquivo está commitado no repositório
-  https://github.com/rafzz-sx/Estudo
-  e eu confirmei pela API do GitHub que ele é **PÚBLICO**:
+  Esse arquivo está commitado em  https://github.com/rafzz-sx/Estudo  e eu
+  confirmei pela API do GitHub que o repositório é PÚBLICO:
 
       private: False        visibility: public
 
-  POR QUE ISSO É GRAVE
-  --------------------
+  POR QUE É GRAVE
+  ---------------
   A `service_role` ignora TODAS as regras de segurança do banco. Quem tem
   essa chave pode, de qualquer lugar do mundo, sem senha:
 
-    • ler todos os e-mails, senhas em hash e dados pessoais dos alunos
+    • ler e-mails, senhas em hash e dados pessoais dos alunos
     • ler todas as conversas privadas do chat
     • baixar o banco de questões inteiro com os gabaritos
     • APAGAR qualquer tabela ou o banco todo
@@ -76,79 +159,165 @@
 
   A chave é válida até 2036. Não expira sozinha.
 
-  ⚠ Uma coisa importante: eu verifiquei e a chave NÃO está sendo enviada
-    para o navegador dos visitantes (a função que a usaria nunca é chamada).
-    O vazamento é pelo GitHub público, não pelo site.
+  ⚠ Um alívio: verifiquei e a chave NÃO vai para o navegador dos visitantes
+    (a função que a usaria nunca é chamada). O vazamento é pelo GitHub.
 
-  O QUE FAZER — na ordem, sem pular
-  ---------------------------------
 
-  PASSO 1 — Tornar o repositório privado (2 minutos, faça agora)
+  A ORDEM CERTA — não pule e não troque a ordem
+  ---------------------------------------------
+
+  PASSO 1 — Tornar o repositório privado          (2 min, faça agora)
 
      1. Abra https://github.com/rafzz-sx/Estudo
      2. Aba "Settings" (no topo, à direita)
      3. Role até o fim, seção "Danger Zone"
-     4. Clique "Change repository visibility" → "Make private"
+     4. "Change repository visibility" → "Make private"
      5. Digite o nome do repositório para confirmar
 
-     Isso estanca o sangramento. Mas NÃO resolve: quem já copiou a chave
-     continua com ela. Por isso o passo 2.
+     Isso estanca o sangramento. NÃO resolve: quem já copiou a chave
+     continua com ela. Por isso os passos seguintes.
 
-  PASSO 2 — Trocar as chaves do Supabase (10 minutos)
+     Este passo é seguro e independente. Pode fazer sozinho, agora.
 
-     1. Abra https://supabase.com/dashboard
-     2. Escolha o projeto  bzrrbbaqzlfmertirbak
-     3. Menu lateral: "Project Settings" (engrenagem no rodapé)
-     4. Clique em "API Keys"
-     5. Na linha da `service_role`, clique nos três pontinhos → "Reveal"
-     6. Procure o botão de rotacionar / gerar nova chave
-        (em alguns planos aparece como "Generate new JWT secret" na aba
-         "JWT Keys" — atenção: isso invalida TODAS as chaves de uma vez,
+
+  PASSO 2 — Cadastrar as variáveis na Vercel      (5 min)
+
+     Ainda com as chaves ATUAIS (não rotacione nada ainda).
+
+     1. https://vercel.com/dashboard → projeto da BatCaverna
+     2. "Settings" → "Environment Variables"
+     3. Confira/crie, marcando Production + Preview + Development:
+
+          NEXT_PUBLIC_SUPABASE_URL      = https://bzrrbbaqzlfmertirbak.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY = <a anon key atual>
+          SUPABASE_SERVICE_ROLE_KEY     = <a service_role atual>
+          JWT_SECRET                    = <ver item 0-A>
+
+     Onde achar as chaves atuais: Supabase → Project Settings → API Keys.
+
+     Neste momento elas ainda não têm efeito (é o defeito do 0-B). Você
+     está preparando o terreno.
+
+
+  PASSO 3 — ME AVISAR                             (eu faço, 10 min)
+
+     Diga: "as variáveis estão na Vercel, pode tirar do código".
+
+     Eu então, num único commit:
+       • removo os valores fixos do supabase.ts
+       • conserto a comparação quebrada (o `.includes` do 0-B)
+       • faço a aplicação recusar subir sem as variáveis, em vez de cair
+         num valor padrão silencioso
+       • removo o `|| 'dev-secret-change-me'` do auth.ts
+
+     Você faz o deploy.
+
+
+  PASSO 4 — Confirmar que o site subiu             (2 min)
+
+     Abra a plataforma e entre com sua conta. Se funcionar, as variáveis
+     estão sendo lidas de verdade.
+
+     SE CAIR: alguma variável está faltando ou com valor errado. Corrija na
+     Vercel e faça Redeploy. A chave antiga ainda é válida neste ponto, ou
+     seja: dá para consertar sem pressa. É justamente por isso que este
+     passo vem ANTES da rotação.
+
+
+  PASSO 5 — SÓ AGORA rotacionar as chaves          (10 min)
+
+     Com o código já lendo das variáveis e o site confirmado no ar:
+
+     1. https://supabase.com/dashboard → projeto  bzrrbbaqzlfmertirbak
+     2. "Project Settings" (engrenagem no rodapé) → "API Keys"
+     3. Rotacione a `service_role`
+        (em alguns planos o botão está em "JWT Keys" como "Generate new JWT
+         secret" — atenção: isso invalida TODAS as chaves de uma vez,
          inclusive a anon)
-     7. COPIE a nova chave `service_role` e a nova `anon` num bloco de notas
+     4. Copie as chaves novas
+     5. Vercel → Environment Variables → substitua os valores
+     6. "Deployments" → "Redeploy"
 
-     Se não encontrar o botão de rotacionar no seu plano, abra um ticket
-     no suporte do Supabase pedindo a rotação — é procedimento comum.
+     Se não achar o botão de rotacionar no seu plano, abra um ticket no
+     suporte do Supabase pedindo a rotação. É procedimento comum.
 
-  PASSO 3 — Colocar as chaves novas na Vercel (5 minutos)
+     A janela de indisponibilidade aqui é só o tempo do deploy (1-2 min),
+     em vez do dia inteiro que a ordem antiga causaria.
 
-     1. Abra https://vercel.com/dashboard
-     2. Escolha o projeto da BatCaverna
-     3. "Settings" → "Environment Variables"
-     4. Confira/atualize estas três, marcando os três ambientes
-        (Production, Preview, Development):
 
-          SUPABASE_SERVICE_ROLE_KEY   = <a nova service_role>
-          NEXT_PUBLIC_SUPABASE_ANON_KEY = <a nova anon>
-          NEXT_PUBLIC_SUPABASE_URL    = https://bzrrbbaqzlfmertirbak.supabase.co
-
-     5. Vá em "Deployments" e clique "Redeploy" no último deploy
-
-  PASSO 4 — Tirar a chave do código (me peça, é rápido)
-
-     Depois que os passos 1 a 3 estiverem prontos, me avise. Eu removo os
-     valores hardcoded do supabase.ts e deixo o código lendo só das
-     variáveis de ambiente.
-
-     NÃO FAÇO ISSO AGORA de propósito: se eu tirar o valor fixo antes das
-     variáveis estarem configuradas na Vercel, o site sai do ar no próximo
-     deploy.
-
-  PASSO 5 — Conferir se alguém usou a chave
+  PASSO 6 — Conferir se alguém usou a chave        (10 min)
 
      1. Supabase Dashboard → "Logs" → "API Gateway" (ou "Postgres Logs")
-     2. Olhe requisições de IPs que você não reconhece
-     3. Sinais de invasão: usuários que você não criou com role='admin',
-        tabelas vazias, registros apagados
+     2. Procure requisições de IPs que você não reconhece
+     3. Sinais de invasão:
+          - usuários com role='admin' que você não criou
+          - tabelas vazias que deveriam ter dados
+          - registros apagados
+
+     Consulta útil no SQL Editor:
+
+        SELECT id, nome, apelido, email, criado_em
+        FROM users WHERE role = 'admin' ORDER BY criado_em;
 
      Se achar algo estranho, me avise que eu ajudo a investigar.
 
-  PASSO 6 — Trocar também o JWT_SECRET
 
-     A mesma lógica vale para o segredo que assina o login dos alunos.
-     Na Vercel, Environment Variables, gere um valor novo e longo para
-     JWT_SECRET. Todo mundo vai precisar entrar de novo — é o efeito
-     esperado.
+================================================================================
+  🚨 0-D. SE VOCÊ JÁ ROTACIONOU E O SITE CAIU
+================================================================================
+
+  Foi por causa do 0-B, e a culpa é da instrução que eu escrevi antes.
+
+  Como voltar ao ar, mais rápido primeiro:
+
+  CAMINHO A — se você AINDA tem a chave antiga anotada
+     Não dá para "desrotacionar" no Supabase. Pule para o caminho B.
+
+  CAMINHO B — o correto (me chame, ~15 min)
+     1. Garanta que SUPABASE_SERVICE_ROLE_KEY na Vercel tem a chave NOVA
+     2. Me avise: "rotacionei e caiu, tira do código"
+     3. Eu removo os valores fixos e conserto a comparação
+     4. Você faz Redeploy
+     5. Site volta
+
+     Enquanto isso, a plataforma responde erro em todas as telas que
+     acessam dados. O conteúdo do banco NÃO é perdido — é só o acesso que
+     está bloqueado.
+
+
+================================================================================
+  🔒 0-E. TRÊS PORTAS QUE ESTIVERAM ABERTAS (já fechadas no código)
+================================================================================
+
+  Nada a fazer aqui. É para você decidir se quer olhar registros ou avisar
+  alguém.
+
+  • CHAT — /api/chat/mensagens não conferia se quem pedia participava da
+    conversa. Qualquer pessoa logada podia LER a conversa privada de dois
+    estranhos trocando o UUID da requisição, e ESCREVER dentro dela.
+
+  • CHAMADOS — /api/tickets/[id]/mensagens tinha o mesmo problema. Chamado
+    de suporte é onde o aluno escreve denúncia de assédio e dados de
+    contato.
+
+  • RANKING — /api/ranking era público (sem login) e ignorava a preferência
+    "ocultar do ranking" que a tela de perfil salvava. Quem desligou
+    continuou aparecendo.
+
+  Explorar qualquer um exigia adivinhar um UUID — não é trivial — mas a
+  proteção não existia. Os três estão fechados nos commits 13 e 14.
+
+
+  AINDA ABERTA (encontrada na auditoria de 07/09, precisa de código):
+
+  • MINI-PERFIL — /api/usuarios/[id]/mini-perfil NÃO exige login. Com um
+    UUID em mãos, qualquer pessoa na internet obtém nome real, apelido,
+    foto, banner, bio, XP, nível, sequência, concursos favoritos, insígnias
+    e tempo de estudo — inclusive de menores de idade. E ignora o
+    "ocultar do ranking".
+
+    Não é ação sua: eu corrijo quando você autorizar a Fase 2 do plano.
+    Está aqui para você saber que existe.
 
 
 ================================================================================
@@ -166,20 +335,23 @@
     WHERE schemaname = 'public' ORDER BY tablename;
 
     -- As duas travas de tamanho do chat têm que existir. Se voltar vazio,
-    -- a 008 abortou no meio (veja o aviso no topo deste arquivo).
+    -- a 008 abortou no meio (veja o aviso da 2.2.0, no fim deste arquivo).
     SELECT conname FROM pg_constraint
     WHERE conrelid = 'mensagem_chat'::regclass AND contype = 'c';
 
   ONDE: Supabase Dashboard → SQL Editor → cole → Run
 
+  ATALHO: entre em /admin → aba "🩺 Diagnóstico". Ela roda a conferência de
+  todas as migrations sozinha e diz em vermelho qual não chegou ao banco.
+
 
 ================================================================================
-  2. SUPABASE — AUTENTICAÇÃO (o que precisa ser conferido no painel)
+  2. SUPABASE — AUTENTICAÇÃO (o que conferir no painel)
 ================================================================================
 
   IMPORTANTE ENTENDER: esta plataforma NÃO usa o Supabase Auth. O login é
-  próprio, com JWT assinado pela API do Next.js. Então boa parte das
-  configurações de Auth do painel não se aplica aqui.
+  próprio, com JWT assinado pela API do Next.js. Boa parte das configurações
+  de Auth do painel não se aplica aqui.
 
   O que AINDA assim vale conferir:
 
@@ -196,16 +368,16 @@
        Só é relevante se um dia migrar para o Supabase Auth. Por ora,
        mantenha a lista vazia ou só com o seu domínio.
 
-  2.4  MFA para a SUA conta do Supabase
-       Isso sim é crítico e não tem a ver com os alunos: proteja a conta
-       que administra o banco.
-       Dashboard → clique no seu avatar → "Account Settings" → "Security"
+  2.4  MFA para a SUA conta do Supabase          << faça esta semana
+       Crítico, e não tem a ver com os alunos: proteja a conta que
+       administra o banco.
+       Dashboard → seu avatar → "Account Settings" → "Security"
        → ative "Two-Factor Authentication"
 
   2.5  Proteção contra senha vazada
-       Não se aplica: a validação de senha é feita pelo código da
-       plataforma (mínimo 8 caracteres, maiúscula, número e especial —
-       está em /api/auth/recuperar e /api/auth/register).
+       Não se aplica: a validação é feita pelo código da plataforma
+       (mínimo 8 caracteres, maiúscula, número e especial — está em
+       /api/auth/recuperar e /api/auth/register).
 
 
 ================================================================================
@@ -214,35 +386,44 @@
 
   ONDE: vercel.com → seu projeto → Settings → Environment Variables
 
-  As variáveis que o código usa hoje:
-
   ┌─────────────────────────────────┬────────────┬──────────────────────────┐
-  │ Variável                        │ Obrigatória│ Onde é usada             │
+  │ Variável                        │ Obrigatória│ Observação               │
   ├─────────────────────────────────┼────────────┼──────────────────────────┤
-  │ NEXT_PUBLIC_SUPABASE_URL        │ SIM        │ lib/supabase.ts          │
-  │ NEXT_PUBLIC_SUPABASE_ANON_KEY   │ SIM        │ lib/supabase.ts          │
-  │ SUPABASE_SERVICE_ROLE_KEY       │ SIM 🔒     │ lib/supabase.ts (server) │
-  │ JWT_SECRET                      │ SIM 🔒     │ lib/auth.ts              │
-  │ JWT_ACCESS_EXPIRATION           │ não (36000)│ lib/auth.ts              │
-  │ JWT_REFRESH_EXPIRATION          │ não (36000)│ lib/auth.ts              │
+  │ NEXT_PUBLIC_SUPABASE_URL        │ SIM        │ ⚠ ver nota abaixo        │
+  │ NEXT_PUBLIC_SUPABASE_ANON_KEY   │ SIM        │ ⚠ HOJE É IGNORADA        │
+  │ SUPABASE_SERVICE_ROLE_KEY       │ SIM 🔒     │ ⚠ HOJE É IGNORADA        │
+  │ JWT_SECRET                      │ SIM 🔒     │ ⚠ tem padrão inseguro    │
+  │ JWT_ACCESS_EXPIRATION           │ não (36000)│ 10 horas                 │
+  │ JWT_REFRESH_EXPIRATION          │ não (36000)│                          │
   │ NEXT_PUBLIC_APP_URL             │ SIM        │ redirecionamentos        │
   │ RESEND_API_KEY                  │ não 🔒     │ envio de e-mail          │
   │ EMAIL_FROM                      │ não        │ remetente                │
-  │ UPSTASH_REDIS_REST_URL          │ não 🔒     │ (ainda não usada)        │
-  │ UPSTASH_REDIS_REST_TOKEN        │ não 🔒     │ (ainda não usada)        │
+  │ UPSTASH_REDIS_REST_URL          │ não 🔒     │ ainda não usada          │
+  │ UPSTASH_REDIS_REST_TOKEN        │ não 🔒     │ ainda não usada          │
   └─────────────────────────────────┴────────────┴──────────────────────────┘
 
   🔒 = segredo. NUNCA ponha o prefixo NEXT_PUBLIC_ nessas.
+
+  ⚠ AS TRÊS MARCADAS ACIMA — leia o item 0-B
+    As duas chaves do Supabase são hoje IGNORADAS pelo código por causa de
+    uma comparação quebrada. Configurá-las é necessário (é o Passo 2 do
+    item 0-C), mas elas só passam a valer depois que eu consertar o código.
+    JWT_SECRET, essa sim, JÁ funciona — e é por isso que o item 0-A é o
+    mais urgente do arquivo.
+
+  ⚠ NEXT_PUBLIC_SUPABASE_URL só é aceita se o endereço contiver
+    "bzrrbbaqzlfmertirbak". Apontar para OUTRO projeto Supabase exige mudar
+    o código. Se você pretende migrar de projeto, me avise antes.
 
   REGRA DE OURO: tudo que começa com NEXT_PUBLIC_ é embutido no JavaScript
   que vai para o navegador. Qualquer visitante lê no DevTools. Se uma chave
   secreta ganhar esse prefixo, ela vaza para todo mundo na hora.
 
-  COMO SEPARAR POR AMBIENTE
+  SEPARAR POR AMBIENTE
   1. Em cada variável, clique no lápis para editar
   2. Marque as caixas: Production / Preview / Development
   3. Recomendação: use um projeto Supabase SEPARADO para Preview e
-     Development. Assim um teste em branch nunca apaga dado real de aluno.
+     Development, para um teste em branch nunca apagar dado real de aluno.
      Hoje os três ambientes apontam para o mesmo banco.
 
 
@@ -264,7 +445,7 @@
     É pago (add-on do plano Pro).
 
   O QUE VERIFICAR
-  1. Abra https://supabase.com/dashboard → seu projeto
+  1. https://supabase.com/dashboard → seu projeto
   2. Menu lateral → "Database" → "Backups"
   3. Veja o que aparece:
 
@@ -273,23 +454,25 @@
      Pro + add-on    → PITR disponível para ativar
 
   SE VOCÊ ESTIVER NO PLANO FREE
-  Faça um backup manual você mesmo, com alguma regularidade:
+  Faça um backup manual com regularidade:
      1. Dashboard → Database → Backups → "Download backup"
-     ou, se tiver a CLI instalada:
+     ou, com a CLI instalada:
      supabase db dump -f backup-$(date +%F).sql
 
   RECOMENDAÇÃO
-  Considerando que a plataforma guarda progresso de estudo de menores de
-  idade, sem backup você não tem como reparar um acidente. É o item de
-  maior custo-benefício depois do vazamento da chave.
+  A plataforma guarda progresso de estudo de menores de idade. Sem backup
+  você não tem como reparar um acidente. É o item de maior custo-benefício
+  depois dos itens 0.
+
+  E FAÇA UM BACKUP ANTES da rotação de chaves (Passo 5 do item 0-C).
 
 
 ================================================================================
   5. RATE LIMITING — LIMITAÇÃO DA IMPLEMENTAÇÃO ATUAL
 ================================================================================
 
-  IMPLEMENTEI proteção em 6 endpoints (login, cadastro, recuperação,
-  redefinição, checagem de e-mail e busca de usuários), guardando a
+  IMPLEMENTEI proteção em 7 endpoints (login, cadastro, recuperação,
+  redefinição, checagem de e-mail, busca de usuários e ranking), guardando a
   contagem na memória do servidor.
 
   LIMITAÇÃO HONESTA: na Vercel cada instância serverless tem a própria
@@ -297,9 +480,9 @@
   (um script martelando o login de um IP só), mas não um atacante que
   distribua as tentativas.
 
-  PARA A PROTEÇÃO FICAR COMPLETA — Upstash Redis (tem plano grátis)
+  PARA FICAR COMPLETO — Upstash Redis (tem plano grátis)
   1. Crie conta em https://upstash.com
-  2. "Create Database" → escolha a região mais perto (us-east-1)
+  2. "Create Database" → região mais perto (us-east-1)
   3. Copie REST URL e REST TOKEN
   4. Vercel → Settings → Environment Variables:
        UPSTASH_REDIS_REST_URL   = <a url>
@@ -325,9 +508,46 @@
 
   Me mande a saída do `npm audit` que eu avalio o que exige decisão.
 
+  ACHADO DA AUDITORIA: três dependências estão declaradas e NUNCA são
+  importadas por nenhum arquivo — `recharts`, `framer-motion` e
+  `lucide-react`. Não afetam o site (o Next não empacota o que ninguém
+  importa), mas aumentam o tempo de instalação e a superfície do
+  `npm audit`. Posso removê-las quando você autorizar a fase de limpeza.
+
 
 ================================================================================
-  7. O QUE NÃO SE APLICA A ESTE PROJETO
+  7. PONTOS QUE EXIGEM DECISÃO SUA (não são ação de painel)
+================================================================================
+
+  Estes três a auditoria encontrou, eu consigo corrigir por código, mas
+  envolvem uma escolha que é sua:
+
+  7.1  SENHA GUARDADA COM SHA-256 SIMPLES
+       Hoje a senha vira um hash SHA-256 direto, sem "sal" e sem função
+       lenta. Se a tabela `users` vazar, senhas comuns são descobertas
+       rapidamente com placa de vídeo.
+       O certo é PBKDF2 (funciona no ambiente da Vercel).
+       DECISÃO SUA: a migração precisa reprocessar a senha de cada pessoa
+       no próximo login dela. Quem não entrar mais nunca fica com o hash
+       antigo. Não há como converter sem a senha em mãos.
+
+  7.2  TOKEN DE LOGIN GUARDADO NO NAVEGADOR
+       Os cookies são httpOnly (JavaScript não lê) — mas os MESMOS tokens
+       também ficam no localStorage, onde qualquer script lê. A proteção do
+       cookie fica anulada.
+       Como as APIs já aceitam o cookie, dá para parar de guardar os tokens
+       no localStorage sem perder nada.
+       DECISÃO SUA: só quero seu aval porque mexe no fluxo de login, e
+       prefiro fazer num momento em que você possa testar.
+
+  7.3  REPOSITÓRIO PRIVADO x HISTÓRICO DO GIT
+       Tornar privado (Passo 1) esconde o repositório, mas quem já clonou
+       continua com a cópia, inclusive o histórico com as chaves antigas.
+       Por isso a rotação (Passo 5) é obrigatória, não opcional.
+
+
+================================================================================
+  8. O QUE NÃO SE APLICA A ESTE PROJETO
 ================================================================================
 
   Verifiquei e registro para você não perder tempo procurando:
@@ -347,13 +567,49 @@
 
 
 ================================================================================
+  9. HISTÓRICO — AVISO DA VERSÃO 2.2.0 (ainda vale)
+================================================================================
+
+  SE VOCÊ JÁ RODOU A MIGRATION 008 ANTES DE 06/09: rode de novo.
+
+  A última linha dela criava um CHECK sobre a coluna `conteudo` da tabela
+  `mensagem_chat`. Essa coluna se chama `conteudo_texto`. O comando abortava
+  com "column conteudo does not exist" e, como tudo estava numa transação, o
+  Postgres desfazia o arquivo INTEIRO — todas as políticas de RLS junto.
+  Você teria visto um erro vermelho no fim e acharia que era detalhe; na
+  verdade nada tinha sido aplicado.
+
+  Já está corrigido, e o arquivo agora também limita o tamanho da mídia do
+  chat (8 MB por mensagem).
+
+  Confira pelo /admin → 🩺 Diagnóstico.
+
+
+================================================================================
   ORDEM SUGERIDA
 ================================================================================
 
-  HOJE     item 0, passos 1 a 3   (repositório privado + rotacionar chave)
-  HOJE     item 4                 (conferir se tem backup)
-  ESTA SEMANA  item 2.4           (MFA na sua conta Supabase)
-  ESTA SEMANA  item 1             (rodar a 008 e conferir o RLS)
-  DEPOIS   itens 3, 5, 6          (ambientes, Redis, dependências)
+  AGORA (10 minutos, sozinho, sem risco)
+     0-A  conferir JWT_SECRET na Vercel        << o mais urgente de todos
+     0-C  Passo 1: tornar o repositório privado
+
+  HOJE
+     4    conferir se existe backup — e fazer um antes de mexer em chave
+     0-C  Passo 2: cadastrar as variáveis na Vercel
+
+  QUANDO VOCÊ ME CHAMAR (eu faço o código, você faz o deploy)
+     0-C  Passos 3 e 4: tirar a chave do código e confirmar o site no ar
+     0-C  Passo 5: SÓ ENTÃO rotacionar
+     0-C  Passo 6: conferir os registros
+
+  ESTA SEMANA
+     2.4  MFA na sua conta do Supabase
+     1    rodar a 008 e conferir o RLS (ou usar o Diagnóstico)
+
+  DEPOIS
+     3    separar os ambientes (Preview/Dev com banco próprio)
+     5    Upstash Redis
+     6    npm audit
+     7    decidir sobre senha (7.1) e token no navegador (7.2)
 
 ================================================================================

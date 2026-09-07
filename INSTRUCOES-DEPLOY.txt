@@ -8,8 +8,20 @@
 
   Estado atual: 27 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
-  >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, item 0. A chave
-     mestra do banco está exposta num repositório público do GitHub.
+  >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
+     Dois pontos, e o primeiro leva 1 minuto:
+
+       0-A  JWT_SECRET pode não estar configurado na Vercel. Se não
+            estiver, o segredo que assina o login é uma string que está
+            neste repositório público — e qualquer um forja um token de
+            administrador. CONFIRA HOJE.
+
+       0-C  A chave mestra do banco está exposta no repositório público.
+
+     ATENÇÃO — A ORDEM MUDOU (auditoria de 07/09): a instrução anterior
+     mandava rotacionar a chave ANTES de tirá-la do código. Aquilo DERRUBA
+     a plataforma, porque a variável de ambiente é hoje ignorada por uma
+     comparação quebrada. A ordem certa está no item 0-C.
 
 
 ================================================================================

@@ -5,9 +5,9 @@
 
 ---
 
-## 🚨 Versão 2.0 — leia antes de rodar
+## 🚨 Versão 2.4.0 — leia antes de rodar
 
-Se você está subindo o projeto depois da atualização 2.0, a ordem é:
+Se você está subindo o projeto depois da atualização 2.4.0, a ordem é:
 
 ```bash
 npm install                                  # requer Node.js >= 20
@@ -28,9 +28,18 @@ Depois, no **SQL Editor do Supabase**, siga
 9. `supabase/migrations/012_escudo_streak_e_simulados.sql` — escudo de sequência
 10. `supabase/migrations/013_taf_treino.sql` — diário de treino do TAF
 11. `supabase/migrations/014_teoria_ligada_ao_assunto.sql` — liga teoria ao assunto
-7. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
-8. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
-9. `versao_2_4_0.sql` — registra a versão exibida no rodapé
+12. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
+13. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
+14. `versao_2_4_0.sql` — registra a versão exibida no rodapé
+
+> **Atenção à ordem:** a `011` REMAPEIA assuntos já gravados, então precisa
+> rodar **depois** dos seeds de questões (item 12). A `014` casa o tema da
+> teoria com o nome do assunto, então precisa rodar depois da `011` **e** dos
+> seeds de teoria (item 13). Rodar fora de ordem não dá erro — simplesmente
+> não faz efeito, que é pior.
+>
+> Confira o resultado em **/admin → 🩺 Diagnóstico**: ele diz, migration por
+> migration, o que chegou ao banco.
 
 ```bash
 npm run dev:web
@@ -152,7 +161,16 @@ Configurações TypeScript estendidas (`tsconfig.base.json`).
 - **Biblioteca Core**: [React 19](https://react.dev/)
 - **Estilização**: [Tailwind CSS v4](https://tailwindcss.com/) (`@tailwindcss/postcss`)
 - **Gerenciamento de Estado**: [Zustand 5](https://zustand-demo.pmnd.rs/) com persistência em `localStorage`
-- **Componentes & Animações**: Lucide React, Framer Motion, Recharts
+- **Componentes & Animações**: nenhuma biblioteca de UI em uso. Os gráficos
+  (evolução semanal, simulados, TAF) são SVG escrito à mão — são poucas
+  dezenas de pontos e uma linha; um pacote de gráficos pesaria mais que a
+  página inteira.
+
+> [!NOTE]
+> `lucide-react`, `framer-motion` e `recharts` estão declaradas em
+> `apps/web/package.json` e **não são importadas em nenhum arquivo**
+> (verificado em 07/09/2026). São peso morto no `npm install` e na superfície
+> de `npm audit`.
 - **Criptografia & JWT**: `jose`
 
 ### Mapa de Rotas e Páginas
@@ -160,7 +178,7 @@ Configurações TypeScript estendidas (`tsconfig.base.json`).
 apps/web/src/app/
 ├── page.tsx                     # Landing Page pública com apresentação e atalho de acesso
 ├── auth/page.tsx                # Central de Autenticação (Login, Cadastro, Recuperação de Senha)
-├── dashboard/page.tsx           # Painel Geral do Estudante (XP, metas, streak, matérias)
+├── dashboard/page.tsx           # "Plano de Hoje": o que estudar agora, radar de fraqueza
 ├── concursos/page.tsx           # Catálogo de Concursos Militares e seleção de foco
 ├── questoes/page.tsx            # Banco Interativo de Questões com filtros dinâmicos
 ├── simulado/page.tsx            # Modo Prova Cronometrada e geração personalizada
@@ -169,6 +187,12 @@ apps/web/src/app/
 ├── chat/page.tsx                # Comunicação entre soldados e conversas diretas
 ├── tickets/page.tsx             # Central de Suporte e reporte de inconsistências
 ├── perfil/page.tsx              # Estatísticas do estudante, edição de perfil e banner
+├── progresso/page.tsx           # Histórico: streak, tempo, XP, evolução e simulados
+├── caderno/page.tsx             # Caderno de erros com anotação por questão
+├── revisoes/page.tsx            # Fila da repetição espaçada
+├── cronograma/page.tsx          # Plano de estudo por semana até a data da prova
+├── musica/page.tsx              # Acervo de música, favoritos e playlists
+├── concursos/[sigla]/           # trilha · assuntos · estatísticas · TAF
 ├── admin/                       # Painel Administrativo (Gestão de usuários, moderação, armazém)
 ├── termos/                      # Termos de Uso
 ├── privacidade/                 # Política de Privacidade (LGPD)
@@ -238,12 +262,14 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/study-sessions/start` | POST | Abre uma sessão ativa de estudo cronometrada | Autenticado |
 | `/api/study-sessions/heartbeat`| POST | Sincroniza segundos estudados, calcula multiplicador e soma XP | Autenticado |
 | `/api/study-sessions/stop` | POST | Finaliza a sessão atual de estudo | Autenticado |
-| `/api/ranking` | GET | Retorna tabela de líderes (tempo de estudo ou acertos) | Pública |
+| `/api/ranking` | GET | Tabela de líderes; respeita `ocultar_do_ranking` e filtra por concurso | Autenticado |
 | `/api/amizades/solicitar` | POST | Envia solicitação de amizade entre soldados | Autenticado |
 | `/api/chat/mensagens` | GET / POST | Envia e lista mensagens privadas entre amigos | Autenticado |
 | `/api/tickets` | GET / POST | Criação e acompanhamento de tickets de suporte | Autenticado |
 | `/api/admin/usuarios` | GET / PATCH | Gestão administrativa de usuários e permissões | Admin |
-| `/api/admin/armazem/executar-agora` | POST | Executa varredura e importação de questões com hash SHA-256 | Admin |
+| `/api/admin/questoes/importar` | POST | Prévia e importação de um `.txt` de prova, com deduplicação por hash SHA-256 | Admin |
+| `/api/admin/moderacao` | GET / PUT | Fila de mensagens sinalizadas do chat e registro da decisão | Admin |
+| `/api/admin/saude` | GET | Diagnóstico da instalação: confere se cada migration chegou ao banco | Admin |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---
@@ -288,6 +314,11 @@ erDiagram
 ```
 
 ### Administrador Padrão (Seed):
+> [!WARNING]
+> Este e-mail está no seed e, portanto, num repositório público. Se o
+> repositório for tornado privado, isto deixa de ser exposição; enquanto não
+> for, considere trocar por um endereço de serviço.
+
 - **E-mail**: `raf4biel.venafro@gmail.com`
 - **Apelido**: `AdminCaverna`
 - **Role**: `admin`
@@ -309,7 +340,9 @@ O aplicativo mobile **não utiliza Expo gerenciado**, sendo um projeto **Bare Re
      window.IS_BATCAVERNA_MOBILE_APP = true;
      window.ReactNativeWebView = window.ReactNativeWebView || {};
      ```
-   - Permite que o frontend web detecte o aplicativo Android e adapte elementos visuais ou de navegação.
+   - **A intenção era permitir que o web detectasse o app e adaptasse a
+     interface — mas nenhum arquivo de `apps/web/src` lê essas variáveis**
+     (verificado em 07/09/2026). Hoje a injeção não tem efeito.
 3. **Resiliência e Fallback Offline**:
    - Protegido por um `ErrorBoundary` nativo no topo da árvore de componentes, evitando crash total do app.
    - Tratamento de falhas de conexão de rede com tela customizada e botão "Tentar Novamente ⚡".
@@ -358,8 +391,9 @@ sequenceDiagram
     participant DB as Supabase PostgreSQL
 
     Aluno->>Web: Seleciona alternativa (ex: "B") e clica Responder
-    Web->>API: POST com { resposta_dada: "B", tempo_gasto, combo_atual }
+    Web->>API: POST com { resposta_dada: "B", tempo_gasto }
     API->>DB: Consulta gabarito oficial na tabela questoes
+    API->>DB: Lê o combo atual do usuário (o cliente NÃO envia combo)
     API->>API: Compara resposta, calcula novo combo e base de XP
     API->>DB: Grava resposta em user_questao_respostas
     API->>DB: Incrementa xp_total e maior_combo_pessoal em users
@@ -391,8 +425,28 @@ cp apps/web/.env.example apps/web/.env.local
 | `UPSTASH_REDIS_REST_URL` | Não | Instância Redis para rate limiting e cache do ranking | `https://...` |
 | `UPSTASH_REDIS_REST_TOKEN` | Não | Token de autenticação da REST API do Upstash | `...` |
 
-> [!NOTE]
-> Em `apps/web/src/lib/supabase.ts`, há credenciais de fallback pré-configuradas para o ambiente de demonstração da BatCaverna na nuvem. Para o seu próprio banco de dados em produção ou desenvolvimento independente, defina sempre as variáveis no `.env.local`.
+> [!CAUTION]
+> **`apps/web/src/lib/supabase.ts` tem a URL, a anon key e a `service_role`
+> escritas no código.** Não é um "fallback de demonstração": é a credencial
+> do projeto de produção, num repositório público.
+>
+> Pior: a função que decide entre a env var e o valor fixo faz
+> `envServiceKey.includes('service_role')`. Essa string **nunca aparece
+> literalmente num JWT do Supabase** — o payload é base64. A condição é
+> sempre falsa, então **a env var `SUPABASE_SERVICE_ROLE_KEY` é ignorada e o
+> código sempre usa a chave do arquivo**.
+>
+> Consequência prática: **rotacionar a chave no Supabase derruba a
+> plataforma**, porque o código continuará enviando a chave revogada.
+> A ordem correta é remover o valor fixo e configurar a env var no MESMO
+> deploy, e só então rotacionar. Veja `SEGURANCA-ACOES-MANUAIS.txt`.
+
+> [!CAUTION]
+> `JWT_SECRET` tem fallback `'dev-secret-change-me'` em
+> `apps/web/src/lib/auth.ts`. Se a variável não estiver definida no ambiente,
+> qualquer pessoa que leia este repositório público pode assinar um token com
+> `role: 'admin'` e entrar no painel. **Confirme que ela está configurada na
+> Vercel antes de qualquer outra coisa.**
 
 ---
 
