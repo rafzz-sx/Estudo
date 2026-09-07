@@ -159,6 +159,44 @@ export async function GET(req: NextRequest) {
     // dói mais.
     const acoes: AcaoRecomendada[] = [];
 
+    // ─── RETA FINAL ──────────────────────────────────────────
+    //
+    // A data da prova estava no banco (`planos_estudo.data_prova`), a tela
+    // mostrava a contagem regressiva, e NADA mudava por causa dela. Faltando
+    // um mês, a prioridade deixa de ser aprender assunto novo: o que rende é
+    // consolidar o que já foi visto e treinar no formato e no ritmo da banca.
+    //
+    // Por isso estas ações vêm ANTES de todas as outras quando o prazo aperta
+    // — inclusive antes das revisões vencidas, que continuam logo abaixo.
+    const retaFinal = diasParaProva !== null && diasParaProva >= 0 && diasParaProva <= 30;
+
+    if (retaFinal) {
+      acoes.push({
+        chave: 'reta_final_simulado',
+        titulo:
+          diasParaProva! <= 7
+            ? `Faltam ${diasParaProva} ${diasParaProva === 1 ? 'dia' : 'dias'}: simule a prova inteira`
+            : `Reta final: simulado no formato do ${concurso.sigla}`,
+        descricao:
+          'Prova completa, no formato e na duração da banca, com as matérias no peso certo. Nesta altura, o que falta treinar é ritmo e resistência.',
+        href: `/simulado?concurso=${concurso.sigla}&tipo=oficial&auto=1`,
+        emoji: '⏱️',
+        urgencia: 'alta',
+      });
+
+      if (errosAbertos > 0) {
+        acoes.push({
+          chave: 'reta_final_erros',
+          titulo: `Fechar ${errosAbertos} ${errosAbertos === 1 ? 'erro em aberto' : 'erros em aberto'}`,
+          descricao:
+            'Na reta final, erro em aberto vale mais que assunto novo: já está meio aprendido e custa pouco para virar acerto.',
+          href: `/simulado?concurso=${concurso.sigla}&tipo=erros&auto=1`,
+          emoji: '🎯',
+          urgencia: 'alta',
+        });
+      }
+    }
+
     if ((revisoesHoje ?? 0) > 0) {
       acoes.push({
         chave: 'revisoes',
@@ -171,7 +209,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (errosAbertos >= 5) {
+    if (errosAbertos >= 5 && !retaFinal) {
       acoes.push({
         chave: 'refazer_erros',
         titulo: `Refazer ${errosAbertos} erros`,
@@ -249,6 +287,9 @@ export async function GET(req: NextRequest) {
           ? { id: plano.id, nome: plano.nome, data_prova: plano.data_prova }
           : null,
         dias_para_prova: diasParaProva,
+        // A menos de 30 dias a prioridade muda: consolidar e simular, em vez
+        // de abrir assunto novo. A tela troca o tom por causa disto.
+        reta_final: retaFinal,
         revisoes_hoje: revisoesHoje ?? 0,
         erros_abertos: errosAbertos,
         acoes,

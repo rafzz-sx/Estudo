@@ -82,6 +82,7 @@ interface Painel {
   };
   evolucao?: PontoEvolucao[];
   projecao?: ProjecaoDados | null;
+  reta_final?: boolean;
 }
 
 const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
@@ -219,10 +220,28 @@ export default function DashboardPage() {
         )}
       </header>
 
+      {/* ═══════════ RETA FINAL ═══════════
+          A data da prova já estava no banco e a tela só a contava para trás.
+          A menos de 30 dias o plano muda de objetivo — e dizer isso em voz
+          alta é metade do valor da mudança. */}
+      {painel.reta_final && dias !== null && (
+        <div className="rounded-2xl border border-bat-gold-400/40 bg-bat-gold-400/10 px-5 py-4">
+          <p className="heading text-base font-bold text-bat-gold-400">
+            🔥 Reta final — {dias === 0 ? "a prova é hoje" : `faltam ${dias} ${dias === 1 ? "dia" : "dias"}`}
+          </p>
+          <p className="mt-1 text-sm text-bat-text-secondary">
+            A partir daqui o plano muda: em vez de abrir assunto novo, o que
+            rende é <strong className="text-bat-text">consolidar o que você já
+            viu</strong> e treinar no formato e no ritmo da banca. As primeiras
+            ações abaixo já seguem essa ordem.
+          </p>
+        </div>
+      )}
+
       {/* ═══════════ O QUE FAZER AGORA ═══════════ */}
       <section>
         <h2 className="heading mb-3 text-lg text-bat-text">
-          Por onde começar
+          {painel.reta_final ? "Prioridade agora" : "Por onde começar"}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {painel.acoes.map((a) => (

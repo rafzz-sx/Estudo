@@ -10,6 +10,7 @@ import { ComboBanner, patamarDe } from "@/components/questoes/ComboBadge";
 import { calcularNivel } from "@batcaverna/utils";
 import { HistoricoSimulados } from "@/components/estudo/HistoricoSimulados";
 import { GraficoEvolucao } from "@/components/estudo/GraficoEvolucao";
+import { ComparacaoTurma } from "@/components/estudo/ComparacaoTurma";
 
 // ─── Barra de progresso XP ───────────────────────────────────
 function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
@@ -269,6 +270,12 @@ export default function ProgressoPage() {
           traz o aluno a esta tela: "eu estou melhorando?". O resto é
           contexto. */}
       {evolucao.length >= 2 && <GraficoEvolucao pontos={evolucao} />}
+
+      {/* ═══ ONDE VOCÊ ESTÁ EM RELAÇÃO A QUEM RESOLVE MUITO ═══
+          Depois da curva de evolução: primeiro "eu estou melhorando?",
+          depois "melhorando em direção a quê?". O componente se esconde
+          sozinho quando ainda não há grupo suficiente para comparar. */}
+      <ComparacaoTurma sigla={favoritos[0]?.sigla} />
 
       {/* ═══ SIMULADOS ═══ */}
       <HistoricoSimulados />
