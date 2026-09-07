@@ -5,9 +5,9 @@
 
 ---
 
-## 🚨 Versão 2.6.0 — leia antes de rodar
+## 🚨 Versão 2.7.0 — leia antes de rodar
 
-Se você está subindo o projeto depois da atualização 2.6.0, a ordem é:
+Se você está subindo o projeto depois da atualização 2.7.0, a ordem é:
 
 ```bash
 npm install                                  # requer Node.js >= 20
@@ -29,9 +29,10 @@ Depois, no **SQL Editor do Supabase**, siga
 10. `supabase/migrations/013_taf_treino.sql` — diário de treino do TAF
 11. `supabase/migrations/014_teoria_ligada_ao_assunto.sql` — liga teoria ao assunto
 12. `supabase/migrations/015_contatos_publicos.sql` — mensagens do formulário público de contato
-13. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
-14. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
-15. `versao_2_6_0.sql` — registra a versão exibida no rodapé
+13. `supabase/migrations/016_redacao.sql` — módulo de redação (temas e redações do aluno)
+14. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
+15. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
+16. `versao_2_7_0.sql` — registra a versão exibida no rodapé
 
 > **Atenção à ordem:** a `011` REMAPEIA assuntos já gravados, então precisa
 > rodar **depois** dos seeds de questões (item 13). A `014` casa o tema da
@@ -39,7 +40,7 @@ Depois, no **SQL Editor do Supabase**, siga
 > seeds de teoria (item 14). Rodar fora de ordem não dá erro — simplesmente
 > não faz efeito, que é pior.
 >
-> **A 2.6.0 não acrescentou migration.** A última é a `015`.
+> **A 2.7.0 acrescentou a `016`** (módulo de redação), que é aditiva.
 >
 > Confira o resultado em **/admin → 🩺 Diagnóstico**: ele diz, migration por
 > migration, o que chegou ao banco.
@@ -192,7 +193,8 @@ apps/web/src/app/
 │   ├── concursos/page.tsx       # Catálogo de Concursos Militares e seleção de foco
 │   ├── concursos/[sigla]/       # trilha · assuntos · estatísticas · TAF
 │   ├── questoes/page.tsx        # Banco Interativo de Questões com filtros dinâmicos
-│   ├── simulado/page.tsx        # Prova cronometrada; sobrevive a recarregar a página
+│   ├── simulado/page.tsx        # Prova cronometrada, repartida no peso da banca
+│   ├── redacao/page.tsx         # Temas reais, rubrica das 5 competências e autoavaliação
 │   ├── ranking/page.tsx         # Hall da Fama (Geral, Semanal, Mensal e por Concurso)
 │   ├── bizus/page.tsx           # Anotações táticas, fórmulas e resumos de alto impacto
 │   ├── chat/page.tsx            # Comunicação entre soldados e conversas diretas
@@ -289,7 +291,11 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/admin/moderacao` | GET / PUT | Fila de mensagens sinalizadas do chat e registro da decisão | Admin |
 | `/api/admin/saude` | GET | Diagnóstico da instalação: confere se cada migration chegou ao banco | Admin |
 | `/api/contato` | POST | Formulário público de contato: grava em `contatos_publicos` e notifica os administradores | Pública (3/15min por IP) |
+| `/api/redacao` | GET / POST / PATCH | Temas, redações do aluno e a autoavaliação pela rubrica oficial | Autenticado |
+| `/api/redacao/[id]` | GET / DELETE | Uma redação com o texto inteiro. Só o dono lê | Dono |
+| `/api/estudo/comparacao` | GET | Médias anônimas de quem resolve muito, por matéria | Autenticado |
 | `/api/admin/contatos` | GET / PATCH | Mensagens do formulário público, com marcação de lida e respondida | Admin |
+| `/api/admin/lacunas-teoria` | GET | Assuntos sem teoria, ordenados por frequência × erro coletivo | Admin |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---

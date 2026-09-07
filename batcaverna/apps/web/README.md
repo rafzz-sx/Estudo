@@ -33,7 +33,8 @@ apps/web/src/
 │   │   ├── progresso/           #   histórico, evolução, simulados
 │   │   ├── concursos/           #   catálogo + [sigla]/trilha·assuntos·estatisticas·taf
 │   │   ├── questoes/            #   resolução interativa
-│   │   ├── simulado/            #   prova cronometrada (persiste no aparelho)
+│   │   ├── simulado/            #   prova cronometrada, no peso da banca
+│   │   ├── redacao/             #   temas reais, rubrica das 5 competências
 │   │   ├── revisoes/ caderno/   #   repetição espaçada · caderno de erros
 │   │   ├── cronograma/ musica/  #   plano de estudo · acervo de música
 │   │   ├── ranking/ chat/       #   hall da fama · conversas
@@ -44,6 +45,8 @@ apps/web/src/
 ├── components/
 │   ├── AppShell.tsx             # Layout lateral padrão (Sidebar, Header, Notificações)
 │   ├── GaleriaBadges.tsx        # Insígnias conquistadas e o que falta para as demais
+│   ├── estudo/ProjecaoNota.tsx  # Quanto falta para o corte, decomposto por matéria
+│   ├── estudo/ComparacaoTurma.tsx # Onde você está em relação a quem resolve muito
 │   ├── estudo/                  # RadarFraqueza, GraficoEvolucao, HistoricoSimulados, TreinoTaf
 │   ├── questoes/                # ComboBadge, Distratores, QuadroFigura, ResolucaoGabarito
 │   ├── admin/                   # Painéis do admin (moderação, saúde, importação, avisos, contatos…)
@@ -55,6 +58,10 @@ apps/web/src/
 ├── lib/
 │   ├── auth.ts                  # JWT (`jose`), senha em PBKDF2 com sal e validação de tokens
 │   ├── sessao-estudo.ts         # Ciclo de vida da sessão: virada de 8 h/dia e teto anti-fraude
+│   ├── distribuicao-prova.ts    # Como a banca reparte a prova + faixa de corte de referência
+│   ├── projecao-nota.ts         # Nota projetada e onde os pontos estão sendo perdidos
+│   ├── comparacao-turma.ts      # Médias anônimas de quem resolve muito (mínimo de 5 alunos)
+│   ├── redacao.ts               # Rubrica oficial das 5 competências do ENEM
 │   ├── prova-em-andamento.ts    # Simulado guardado no aparelho, amarrado ao dono
 │   ├── supabase.ts              # Clientes Supabase (Server com Service Role e Browser com Anon)
 │   ├── gamificacao.ts           # XP, combo, streak com escudo e badges — fonte da verdade

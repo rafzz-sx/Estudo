@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.6.0
+# Ordem de execução no Supabase — versão 2.7.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -26,6 +26,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 11 | `../migrations/013_taf_treino.sql` | Diário de treino do TAF |
 | 12 | `../migrations/014_teoria_ligada_ao_assunto.sql` | Liga cada texto de teoria ao assunto canônico |
 | 13 | `../migrations/015_contatos_publicos.sql` | Tabela do formulário público de contato (que antes descartava a mensagem) |
+| 14 | `../migrations/016_redacao.sql` | **Módulo de redação**: banco de temas e as redações do aluno com autoavaliação. Já vem com 10 temas oficiais do ENEM |
 
 > **A 011 depende dos seeds de questões.** Se o banco estiver vazio, rode
 > primeiro os `.sql` do banco de questões (seção 2) e só então a 011 — ela
@@ -99,17 +100,20 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_6_0.sql
+versao_2_7_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.
 
 > As versões anteriores continuam no diretório só como histórico. Rodar mais
 > de uma não quebra nada (cada uma apaga o registro anterior antes de
-> inserir), mas só a **2.6.0** precisa ser executada.
+> inserir), mas só a **2.7.0** precisa ser executada.
 >
-> **A 2.6.0 não traz migration nova.** A correção do hash de senha usa um
-> formato que cabe na coluna `senha_hash VARCHAR(255)` que já existe.
+> **A 2.7.0 traz a migration 016** (módulo de redação). Rode-a antes deste
+> seed. Ela é aditiva: só cria `redacao_temas` e `redacoes`.
+>
+> A 2.6.0 não trouxe migration — a correção do hash de senha usa um formato
+> que cabe na coluna `senha_hash VARCHAR(255)` que já existia.
 
 ---
 
