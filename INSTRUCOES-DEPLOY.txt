@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 53 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 56 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os principais commits que vão subir (dos 53) -----------------------
+  --- Os principais commits que vão subir (dos 56) -----------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -549,6 +549,20 @@
   [ ] 6.48 REDAÇÃO É PRIVADA · Copie o id de uma redação sua e tente abrir
            /api/redacao/<id> logado em OUTRA conta. Tem que responder 404.
 
+  [ ] 6.49 GUIA DE REDAÇÃO · /redacao abre na aba "📖 Como escrever".
+           Confira as cinco seções: Estrutura (quatro parágrafos, cada um
+           com movimentos, moldes, exemplo escrito e erros), Conectivos (8
+           grupos), Repertórios (40 fontes em 8 contextos, com busca),
+           Proposta (os 5 elementos) e O que zera.
+           Na busca de repertórios digite "educação": tem que filtrar.
+
+  [ ] 6.50 RANKING RÁPIDO · /ranking com período "Geral" (o padrão). Os
+           números têm que bater com o perfil de cada aluno. Antes esta aba
+           varria a tabela de respostas inteira; agora usa os contadores.
+           Compare um aluno:
+             SELECT apelido, total_questoes_respondidas, total_acertos
+             FROM users WHERE apelido = 'xxx';
+
 
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
@@ -624,6 +638,22 @@
          O "Online" verde era escrito na mão para todo mundo. Agora mostra
          o último acesso de verdade ("Visto há 20 min"). Presença ao vivo
          exigiria websocket/Realtime — dá para fazer, é só pedir.
+
+
+  ! 7.12 `users.tempo_estudo_total_segundos` é uma coluna MORTA
+         A migration 004 a preencheu uma vez, somando as sessões daquele
+         momento, e NADA a atualiza desde então. Três arquivos a leem, e o
+         valor que eles leem está congelado no dia em que a migration rodou.
+
+         Não é bug visível hoje porque as telas que mostram tempo de estudo
+         somam `study_sessions` na hora — a coluna é lida mas o número
+         exibido não vem dela. Mas é uma armadilha: quem usar essa coluna
+         achando que ela está atualizada vai mostrar um número errado.
+
+         O que fazer: ou o heartbeat passa a mantê-la (e aí o ranking por
+         tempo também deixa de varrer `study_sessions`), ou ela é removida.
+         Me diga qual você prefere — a primeira dá mais desempenho, a
+         segunda é mais honesta com o schema.
 
 
 ================================================================================
@@ -823,6 +853,11 @@
 
   Mesmo caso, com desvio menor: enem-2023-dia1, cn-2023-dia1,
   epcar-2026 e esa-2025-geral.
+
+  >> NA MESMA VISITA, confira também os 10 temas de redação cadastrados
+     pela migration 016 (ação A-0). Mesma razão: cadastrei o registro
+     público das provas, mas não pude validar contra a fonte daqui.
+       SELECT ano, titulo FROM redacao_temas ORDER BY ano DESC;
 
 
   ----------------------------------------------------------------------

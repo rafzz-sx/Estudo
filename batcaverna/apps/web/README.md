@@ -47,6 +47,7 @@ apps/web/src/
 │   ├── GaleriaBadges.tsx        # Insígnias conquistadas e o que falta para as demais
 │   ├── estudo/ProjecaoNota.tsx  # Quanto falta para o corte, decomposto por matéria
 │   ├── estudo/ComparacaoTurma.tsx # Onde você está em relação a quem resolve muito
+│   ├── estudo/GuiaRedacao.tsx   # Como escrever: estrutura, conectivos, repertórios
 │   ├── estudo/                  # RadarFraqueza, GraficoEvolucao, HistoricoSimulados, TreinoTaf
 │   ├── questoes/                # ComboBadge, Distratores, QuadroFigura, ResolucaoGabarito
 │   ├── admin/                   # Painéis do admin (moderação, saúde, importação, avisos, contatos…)
@@ -62,6 +63,7 @@ apps/web/src/
 │   ├── projecao-nota.ts         # Nota projetada e onde os pontos estão sendo perdidos
 │   ├── comparacao-turma.ts      # Médias anônimas de quem resolve muito (mínimo de 5 alunos)
 │   ├── redacao.ts               # Rubrica oficial das 5 competências do ENEM
+│   ├── redacao-guia.ts          # O método: estrutura, conectivos, 40 repertórios
 │   ├── prova-em-andamento.ts    # Simulado guardado no aparelho, amarrado ao dono
 │   ├── supabase.ts              # Clientes Supabase (Server com Service Role e Browser com Anon)
 │   ├── gamificacao.ts           # XP, combo, streak com escudo e badges — fonte da verdade
@@ -152,5 +154,14 @@ Consulte a tabela completa de variáveis de ambiente no [Manual Geral do Monorep
    milhões de XP. Qualquer valor vindo do navegador passa por
    `duracaoAceita()` em `lib/sessao-estudo.ts`, que corta no tempo real de
    relógio.
+9. **Antes de varrer uma tabela, pergunte se o número já existe.** O ranking
+   geral recalculava, lendo `user_questao_respostas` inteira, o que
+   `users.total_questoes_respondidas` já somava a cada resposta. Tabelas que
+   crescem com o produto (alunos × ações) precisam de contador persistido,
+   janela de tempo ou cache — nunca varredura completa num caminho quente.
+10. **Repertório de redação é conteúdo verificável.** Nada em
+   `lib/redacao-guia.ts` pode ser inventado: obra, autor, lei e dado
+   precisam existir. Repertório falso é o erro mais caro que um aluno
+   comete, porque o corretor conhece a obra.
 
 Para a documentação completa da plataforma, veja o [README Principal da BatCaverna](../../README.md).

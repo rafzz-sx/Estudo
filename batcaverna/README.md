@@ -194,7 +194,7 @@ apps/web/src/app/
 │   ├── concursos/[sigla]/       # trilha · assuntos · estatísticas · TAF
 │   ├── questoes/page.tsx        # Banco Interativo de Questões com filtros dinâmicos
 │   ├── simulado/page.tsx        # Prova cronometrada, repartida no peso da banca
-│   ├── redacao/page.tsx         # Temas reais, rubrica das 5 competências e autoavaliação
+│   ├── redacao/page.tsx         # Como escrever, temas reais, rubrica e autoavaliação
 │   ├── ranking/page.tsx         # Hall da Fama (Geral, Semanal, Mensal e por Concurso)
 │   ├── bizus/page.tsx           # Anotações táticas, fórmulas e resumos de alto impacto
 │   ├── chat/page.tsx            # Comunicação entre soldados e conversas diretas
@@ -295,7 +295,7 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/redacao/[id]` | GET / DELETE | Uma redação com o texto inteiro. Só o dono lê | Dono |
 | `/api/estudo/comparacao` | GET | Médias anônimas de quem resolve muito, por matéria | Autenticado |
 | `/api/admin/contatos` | GET / PATCH | Mensagens do formulário público, com marcação de lida e respondida | Admin |
-| `/api/admin/lacunas-teoria` | GET | Assuntos sem teoria, ordenados por frequência × erro coletivo | Admin |
+| `/api/admin/lacunas-teoria` | GET | Assuntos sem teoria, ordenados por frequência × erro coletivo (janela de 180 dias) | Admin |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---
