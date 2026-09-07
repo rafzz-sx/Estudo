@@ -143,6 +143,7 @@ WHERE NOT EXISTS (
 -- ════════════════════════════════════════════════════════════════════
 
 -- Quantas questões o aluno vê com e sem comentário escrito.
+-- Esperado: true 2.886 · false 361 (ENEM 2024/2025 e 2 do ENEM 2021).
 SELECT
   tem_comentario,
   COUNT(*) AS questoes

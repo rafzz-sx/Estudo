@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
       query = query.ilike('enunciado', `%${busca}%`);
     }
 
-    // Só as que têm gabarito comentado escrito. As 362 questões do ENEM
+    // Só as que têm gabarito comentado escrito. As 361 questões do ENEM
     // 2024/2025 vieram das provas oficiais com a chave de respostas e nenhum
     // comentário — quem está estudando para entender, e não só para conferir
     // a letra, liga este filtro e não esbarra nelas.

@@ -155,7 +155,7 @@
     -- deve voltar ~3.247
     SELECT COUNT(*) FROM questoes WHERE ativa;
 
-    -- true ~2.885 · false ~362  (as do ENEM 2024/2025 sem comentário)
+    -- true ~2.886 · false ~361  (as do ENEM 2024/2025 sem comentário)
     SELECT tem_comentario, COUNT(*) FROM questoes
     WHERE ativa GROUP BY tem_comentario;
 
@@ -217,7 +217,7 @@
 ================================================================================
 
   [ ] 6.1  Entre como admin e vá em /admin
-  [ ] 6.2  Aba "Fila de Resolução": 362 questões esperando gabarito escrito.
+  [ ] 6.2  Aba "Fila de Resolução": 361 questões esperando gabarito escrito.
            Vêm ordenadas pelas que mais derrubam aluno — comece pelo topo.
   [ ] 6.3  Aba "Importar Questões": teste com um .txt que já foi importado.
            Tem que dizer "já no banco" e não inserir nada. Se inserir
@@ -257,8 +257,8 @@
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
 ================================================================================
 
-  ! 7.1  362 questões sem gabarito comentado
-         360 delas são ENEM 2024 e 2025, cujos .txt só têm a chave de
+  ! 7.1  361 questões sem gabarito comentado
+         359 delas são ENEM 2024 e 2025, cujos .txt só têm a chave de
          respostas, sem nenhum comentário — conferi arquivo por arquivo
          procurando "Explicação", "Justificativa", "Comentário" e
          "Resolução": zero ocorrências nos três arquivos. Não dá para
