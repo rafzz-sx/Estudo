@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 16 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 18 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, item 0. A chave
      mestra do banco está exposta num repositório público do GitHub.
@@ -49,7 +49,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 16 commits que vão subir ------------------------------------------
+  --- Os 18 commits que vão subir ------------------------------------------
      1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
      2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
      3. feat(admin)      importador real, fila de resolução, 36 classes mudas
@@ -66,6 +66,8 @@
     14. fix(ranking)     "sair do ranking" era ignorado + 5 defeitos
     15. fix(simulado)    "simulado rápido" do card não gerava simulado
     16. fix              XP, gabarito comentado, chat no celular, build quebrado
+    17. docs             roteiro e relatório de segurança da 2.2.0
+    18. docs             número exato de questões sem comentário (361)
 
 
 ================================================================================
