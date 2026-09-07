@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { fetchWithAuth } from "@/stores/auth-store";
+import { TreinoTaf } from "@/components/estudo/TreinoTaf";
 
 interface TafItem {
   sexo: string;
@@ -170,6 +171,18 @@ export default function TafPage() {
           );
         })}
       </div>
+
+      {/* ═══ DIÁRIO DE TREINO ═══ */}
+      {/* Vem logo depois da tabela: a tabela diz onde chegar, isto diz onde
+          você está. Separados, o aluno não faz a conta sozinho. */}
+      <TreinoTaf
+        sigla={sigla}
+        exercicios={dados.taf.map((t) => ({
+          exercicio: t.exercicio,
+          unidade: t.unidade,
+          minimo_aprovacao: t.minimo_aprovacao,
+        }))}
+      />
 
       {/* Dica de preparo */}
       <section className="mt-6 rounded-2xl border border-bat-border bg-bat-bg-card p-5">
