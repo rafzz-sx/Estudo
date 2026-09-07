@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { fetchWithAuth } from "@/stores/auth-store";
 import { Markdown } from "@/components/Markdown";
 import { VideoAulaPlayer, type VideoAula } from "@/components/VideoAulaPlayer";
@@ -41,9 +41,13 @@ interface Trilha {
   total_questoes: number;
 }
 
-export default function TrilhaPage() {
+// `useSearchParams` exige uma fronteira de Suspense no App Router: sem ela o
+// build do Next falha com "should be wrapped in a suspense boundary". Mesmo
+// padrão das telas de simulado e de questões.
+function Trilha() {
   const params = useParams();
   const sigla = String(params?.sigla ?? "").toUpperCase();
+  const params_ = useSearchParams();
 
   const [trilha, setTrilha] = useState<Trilha | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -68,6 +72,21 @@ export default function TrilhaPage() {
       .catch(() => undefined)
       .finally(() => setCarregando(false));
   }, [sigla]);
+
+  // O radar de fraqueza manda o aluno para cá com ?teoria=<id>: abrir o texto
+  // sozinho é o que fecha o caminho "você erra isto -> leia aquilo". Sem
+  // isto, ele cairia na trilha inteira e teria de procurar o assunto na mão.
+  const teoriaDaUrl = params_.get("teoria");
+  const abriuDaUrl = useRef(false);
+
+  useEffect(() => {
+    if (!teoriaDaUrl || abriuDaUrl.current || carregando) return;
+    abriuDaUrl.current = true;
+    abrirTeoria(teoriaDaUrl);
+    // `abrirTeoria` é estável dentro do componente e não entra nas deps de
+    // propósito: incluí-la reabriria o modal a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teoriaDaUrl, carregando]);
 
   const abrirTeoria = async (id: string) => {
     setCarregandoTeoria(true);
@@ -372,5 +391,13 @@ export default function TrilhaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TrilhaPage() {
+  return (
+    <Suspense fallback={<div className="skeleton h-96 w-full rounded-2xl" />}>
+      <Trilha />
+    </Suspense>
   );
 }

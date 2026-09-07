@@ -55,6 +55,9 @@ export interface AssuntoDiagnostico {
   prioridade: number;
   situacao: SituacaoAssunto;
   confiavel: boolean;
+  /** Existe texto de teoria para este assunto? O radar leva o aluno até ele. */
+  teoria_id: string | null;
+  teoria_titulo: string | null;
 }
 
 interface LinhaResposta {
@@ -159,7 +162,28 @@ export async function radarDeFraqueza(
     }
   }
 
-  // ─── 4. Prioridade ───────────────────────────────────────
+  // ─── 4. Teoria disponível ────────────────────────────────
+  // O casamento é por NOME do tema, não por `assunto_id`. Motivo: as
+  // matérias-guarda-chuva do ENEM ("Ciências da Natureza") têm os próprios
+  // assuntos, e o texto de Ecologia está cadastrado sob "Biologia". Ligar só
+  // por id deixaria 134 questões sem teoria tendo o texto pronto.
+  const nomesDeAssunto = [...new Set([...nomes.values()].map((n) => n.nome))];
+  const teoriaPorTema = new Map<string, { id: string; titulo: string }>();
+
+  for (let i = 0; i < nomesDeAssunto.length; i += 200) {
+    const { data } = await supabase
+      .from('teoria_conteudo')
+      .select('id, tema, titulo')
+      .in('tema', nomesDeAssunto.slice(i, i + 200));
+
+    for (const t of data ?? []) {
+      if (!teoriaPorTema.has(t.tema)) {
+        teoriaPorTema.set(t.tema, { id: t.id, titulo: t.titulo });
+      }
+    }
+  }
+
+  // ─── 5. Prioridade ───────────────────────────────────────
   const maxQuestoes = Math.max(...totalPorAssunto.values());
 
   const linhas: AssuntoDiagnostico[] = [];
@@ -202,6 +226,8 @@ export async function radarDeFraqueza(
       prioridade,
       situacao,
       confiavel: d.total >= MINIMO_CONFIAVEL,
+      teoria_id: teoriaPorTema.get(info.nome)?.id ?? null,
+      teoria_titulo: teoriaPorTema.get(info.nome)?.titulo ?? null,
     });
   }
 

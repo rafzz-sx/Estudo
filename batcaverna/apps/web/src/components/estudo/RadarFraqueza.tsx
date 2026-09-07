@@ -28,6 +28,8 @@ export interface AssuntoRadar {
   prioridade: number;
   situacao: "critico" | "atencao" | "dominado" | "nao_testado";
   confiavel: boolean;
+  teoria_id: string | null;
+  teoria_titulo: string | null;
 }
 
 const SITUACAO: Record<
@@ -98,17 +100,19 @@ export function RadarFraqueza({
           {fracos.map((a) => {
             const s = SITUACAO[a.situacao];
             return (
-              <Link
+              <article
                 key={a.assunto_id}
-                href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
-                className="group block rounded-xl border border-bat-border bg-bat-bg-card p-4 no-underline transition-all hover:border-bat-gold-400/40"
+                className="group rounded-xl border border-bat-border bg-bat-bg-card p-4 transition-all hover:border-bat-gold-400/40"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-base">{a.materia_emoji ?? "📚"}</span>
-                    <span className="truncate text-sm font-semibold text-bat-text transition-colors group-hover:text-bat-gold-400">
+                    <Link
+                      href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
+                      className="truncate text-sm font-semibold text-bat-text no-underline transition-colors hover:text-bat-gold-400"
+                    >
                       {a.assunto}
-                    </span>
+                    </Link>
                     <span
                       className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
                       style={{ color: s.cor, background: `${s.cor}1A` }}
@@ -155,7 +159,29 @@ export function RadarFraqueza({
                     <span className="italic">amostra pequena</span>
                   )}
                 </div>
-              </Link>
+
+                {/* Apontar a fraqueza sem oferecer o remédio é metade do
+                    trabalho. São dois caminhos separados de propósito: quem
+                    erra muito precisa LER antes de resolver mais, e quem já
+                    leu quer ir direto para as questões. */}
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Link
+                    href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
+                    className="rounded-lg border border-bat-gold-400/30 bg-bat-gold-400/10 px-2.5 py-1 text-[11px] font-semibold text-bat-gold-400 no-underline transition-colors hover:bg-bat-gold-400/20"
+                  >
+                    ⚔️ Resolver questões
+                  </Link>
+                  {a.teoria_id && (
+                    <Link
+                      href={`/concursos/${sigla.toLowerCase()}/trilha?teoria=${a.teoria_id}`}
+                      className="rounded-lg border border-bat-info/30 bg-bat-info/10 px-2.5 py-1 text-[11px] text-bat-info no-underline transition-colors hover:bg-bat-info/20"
+                      title={a.teoria_titulo ?? undefined}
+                    >
+                      📖 Ler a teoria antes
+                    </Link>
+                  )}
+                </div>
+              </article>
             );
           })}
         </div>
