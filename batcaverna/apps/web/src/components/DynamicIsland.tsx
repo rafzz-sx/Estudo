@@ -145,18 +145,41 @@ export function DynamicIsland() {
   // Espaço e setas controlam o player de qualquer tela — desde que o aluno
   // não esteja digitando num campo (senão a barra de espaço pausaria a
   // música no meio de uma mensagem do chat).
+  //
+  // DUAS TRAVAS que faltavam, e as duas valiam para a plataforma inteira:
+  //
+  //   1. O atalho era registrado MESMO SEM MÚSICA. O `if (!musica) return
+  //      null` fica depois dos efeitos, então o ouvinte existia em toda tela
+  //      logada, tocando ou não. Com `preventDefault()` no Espaço, rolar a
+  //      página com a barra de espaço — comportamento padrão do navegador —
+  //      parava de funcionar em todo o site.
+  //
+  //   2. Espaço também ATIVA um botão em foco. Como <button> não é INPUT
+  //      nem TEXTAREA, o atalho engolia a tecla: quem navega por teclado não
+  //      conseguia marcar alternativa, entregar simulado nem abrir menu
+  //      nenhum. São 151 botões na plataforma.
   useEffect(() => {
+    if (!musica) return;
+
     const atalho = (e: KeyboardEvent) => {
       const alvo = e.target as HTMLElement | null;
+      if (!alvo) return;
+
+      // Campo de digitação: a tecla é do aluno, não do player.
       if (
-        alvo &&
-        (alvo.tagName === "INPUT" ||
-          alvo.tagName === "TEXTAREA" ||
-          alvo.tagName === "SELECT" ||
-          alvo.isContentEditable)
+        alvo.tagName === "INPUT" ||
+        alvo.tagName === "TEXTAREA" ||
+        alvo.tagName === "SELECT" ||
+        alvo.isContentEditable
       ) {
         return;
       }
+
+      // Elemento que o próprio navegador aciona com Espaço/Enter.
+      if (alvo.closest("button, a, summary, [role='button'], [tabindex]")) {
+        return;
+      }
+
       if (e.code === "Space") {
         e.preventDefault();
         alternarPlay();
@@ -168,9 +191,10 @@ export function DynamicIsland() {
         anterior();
       }
     };
+
     window.addEventListener("keydown", atalho);
     return () => window.removeEventListener("keydown", atalho);
-  }, [alternarPlay, proxima, anterior]);
+  }, [musica, alternarPlay, proxima, anterior]);
 
   // Recalcula as cores sempre que a capa muda.
   useEffect(() => {
