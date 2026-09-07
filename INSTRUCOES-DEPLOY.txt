@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 62 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 64 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -635,9 +635,10 @@
              [RECUPERAÇÃO] Código para <e-mail>: 123456
            Dá para você pegar ali e passar para o aluno que abrir contato.
 
-  [ ] 6.57 ESQUECI MINHA SENHA, COM E-MAIL CONFIGURADO · só depois de você
-           cadastrar RESEND_API_KEY na Vercel. Mesmo caminho, mas agora tem
-           que avançar para o passo do código.
+  [ ] 6.57 ESQUECI MINHA SENHA, COM E-MAIL CONFIGURADO · só depois da AÇÃO
+           A-6 (conta no Resend + as duas variáveis na Vercel). Mesmo
+           caminho, mas agora tem que avançar para o passo do código e o
+           e-mail tem que chegar, com o código em amarelo.
            Confira as duas correções de validade:
              • peça um código, NÃO use, e peça outro. O PRIMEIRO tem que
                falhar com "Código inválido ou expirado" — pedir um novo
@@ -763,11 +764,9 @@
          você lê a mensagem em /admin → "Mensagens de Contato", pega o
          código no log da Vercel e devolve para ele.
 
-         Para resolver de vez: crie a conta no Resend (o plano gratuito dá
-         3.000 e-mails/mês, muito acima do necessário), cadastre
-         `RESEND_API_KEY` nas variáveis da Vercel e escreva o envio no
-         lugar marcado em `api/auth/recuperar/route.ts` — o código já é
-         gerado e guardado, falta só entregá-lo.
+         O ENVIO JÁ ESTÁ ESCRITO (`apps/web/src/lib/email.ts`), por HTTP e
+         sem biblioteca nenhuma — não precisa instalar nada. Falta só a
+         conta e a chave: veja o passo a passo na AÇÃO A-6.
 
          Enquanto isso, /contato é o caminho de saída e ele funciona.
 
@@ -1064,6 +1063,75 @@
        um contador da Play Store e só precisa subir quando você for
        de fato publicar um APK novo.
 
+  ----------------------------------------------------------------------
+    A-6   RECOMENDADO — LIGAR O PROVEDOR DE E-MAIL
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Criar a conta no Resend e cadastrar duas variáveis na Vercel.
+  Motivo:       Sem isso o aluno NÃO redefine a senha sozinho. A tela é
+                honesta sobre isso — avisa que não está ativo e manda para
+                /contato — mas honesto não é o mesmo que funcionando.
+
+                O CÓDIGO DE ENVIO JÁ ESTÁ ESCRITO (apps/web/src/lib/email.ts).
+                Ele fala com o Resend por HTTP, sem biblioteca nenhuma, então
+                NÃO É PRECISO INSTALAR NADA. Falta só a conta e a chave.
+
+  ─── Passo a passo ──────────────────────────────────────────────────
+
+  1. Crie a conta em https://resend.com (o plano gratuito dá 3.000
+     e-mails por mês e 100 por dia — muito acima do necessário).
+
+  2. Verifique um domínio em "Domains" → "Add Domain".
+     Use o domínio do site (ex.: batcaverna.com.br). O Resend mostra três
+     registros DNS (SPF, DKIM e, opcionalmente, DMARC) para você cadastrar
+     onde o domínio está registrado. A verificação leva de minutos a
+     algumas horas.
+
+     >> SEM DOMÍNIO VERIFICADO, o Resend só entrega para o e-mail dono da
+        conta. Dá para testar a integração assim, mas nenhum aluno recebe.
+        É por isso que este passo não é opcional.
+
+  3. Em "API Keys" → "Create API Key", permissão "Sending access".
+     Copie a chave (começa com "re_"). Ela só aparece uma vez.
+
+  4. Na Vercel → Settings → Environment Variables, cadastre as duas, em
+     Production e Preview:
+
+       RESEND_API_KEY = re_xxxxxxxxxxxxxxxxxxxx
+       EMAIL_FROM     = BatCaverna <naoresponda@SEUDOMINIO>
+
+     O EMAIL_FROM precisa ser do domínio que você verificou no passo 2.
+     Aceita "nome@dominio" ou "Nome <nome@dominio>".
+
+  5. Faça um redeploy. Variável de ambiente nova só vale no build seguinte.
+
+  Validação:    /auth/recuperar → digite o e-mail de uma conta sua →
+                "Enviar". Tem que:
+                  • avançar para o passo do código (antes ficava parado
+                    com a mensagem de indisponível)
+                  • o e-mail chegar em segundos, com o código em amarelo
+                  • o código funcionar na tela
+
+                Se o envio falhar, a tela NÃO avança e diz para tentar de
+                novo — e o código vai para o log da Vercel assim mesmo,
+                para você conseguir socorrer quem pediu:
+                  [RECUPERAÇÃO] Código para <e-mail>: 123456
+
+  >> NÃO ESCREVA A CHAVE NESTE ARQUIVO nem em nenhum arquivo do
+     repositório. Ela vive só nas variáveis de ambiente da Vercel.
+
+  >> Trocar de provedor depois é reescrever uma função só
+     (`dispararNoProvedor` em lib/email.ts). Quem chama não sabe qual
+     serviço está atrás.
+
+  >> A VERIFICAÇÃO DE E-MAIL DO CADASTRO CONTINUA SEM ENVIAR NADA. O
+     cadastro gera o token e grava, a rota /api/auth/verify-email existe e
+     funciona, mas não há tela que a chame nem e-mail que leve o link. Com
+     o provedor de pé isso passa a ser possível — me peça quando quiser.
+
+  ----------------------------------------------------------------------
+    A-7   OPCIONAL — AVATAR E BANNER NO STORAGE
   ----------------------------------------------------------------------
   [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
 

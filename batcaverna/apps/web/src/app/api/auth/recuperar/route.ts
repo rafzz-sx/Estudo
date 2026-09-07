@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { hashToken, hashSenha, getResetTokenExpiry } from '@/lib/auth';
+import {
+  hashToken,
+  hashSenha,
+  getResetTokenExpiry,
+  MINUTOS_DO_CODIGO,
+} from '@/lib/auth';
+import {
+  enviarEmail,
+  modeloCodigoDeSenha,
+  temProvedorDeEmail,
+} from '@/lib/email';
 import { isStrongPassword } from '@/lib/validators';
 
 function getSupabase() {
@@ -83,40 +93,64 @@ export async function POST(req: NextRequest) {
     // sem nenhuma barreira.
     //
     // O código agora só sai da API fora de produção, e mesmo assim apenas
-    // quando não há provedor de e-mail configurado. Em produção ele vai
-    // para o log do servidor e para o e-mail; nunca para o cliente.
+    // quando não há provedor de e-mail configurado. Havendo provedor, ele vai
+    // por e-mail e mais nada — o log só recebe o código quando o envio falha,
+    // para o administrador conseguir socorrer quem pediu.
     const emProducao = process.env.NODE_ENV === 'production';
-    const temProvedorDeEmail = !!process.env.RESEND_API_KEY;
+    const temProvedor = temProvedorDeEmail();
+    let entregue = false;
 
-    if (!temProvedorDeEmail) {
+    if (temProvedor) {
+      const modelo = modeloCodigoDeSenha(code, MINUTOS_DO_CODIGO);
+      const envio = await enviarEmail({
+        para: user.email,
+        assunto: modelo.assunto,
+        html: modelo.html,
+        texto: modelo.texto,
+      });
+      entregue = envio.ok;
+
+      if (!envio.ok) {
+        // Provedor configurado mas o envio falhou (cota, domínio que deixou
+        // de estar verificado, rede). O código continua no log para o
+        // administrador conseguir socorrer quem pediu, e a tela NÃO avança:
+        // mandar a pessoa digitar um código que não saiu daqui é o mesmo
+        // beco sem saída de quando não havia provedor nenhum.
+        console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
+      }
+    } else {
       // Sem provedor: o código fica no log do servidor, ao qual só o
       // administrador tem acesso.
       console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
     }
 
     // `codigo_enviado` diz à tela se existe um código A CAMINHO das mãos de
-    // quem pediu — por e-mail, ou na resposta em desenvolvimento.
+    // quem pediu: em produção, só se o e-mail saiu; fora dela, sempre, porque
+    // o código volta na própria resposta.
     //
     // Sem este campo a tela não tinha como saber, e avançava sempre para o
-    // passo do código. Em produção sem provedor de e-mail, o resultado era o
-    // pior tipo de erro: a mensagem "recuperação por e-mail ainda não está
-    // ativa" aparecia com ✓ verde de sucesso, logo acima de um formulário
-    // pedindo "o código de 6 dígitos enviado para seu e-mail". A pessoa
-    // ficava presa num campo que nunca ia aceitar nada.
-    const codigoEnviado = temProvedorDeEmail || !emProducao;
+    // passo do código. Em produção sem provedor, o resultado era o pior tipo
+    // de erro: "recuperação por e-mail ainda não está ativa" aparecia com ✓
+    // verde de sucesso, logo acima de um formulário pedindo "o código de 6
+    // dígitos enviado para seu e-mail". A pessoa ficava presa num campo que
+    // nunca ia aceitar nada.
+    const codigoEnviado = entregue || !emProducao;
 
     return NextResponse.json({
       success: true,
       codigo_enviado: codigoEnviado,
       message: codigoEnviado
         ? 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.'
-        : 'Recuperação por e-mail ainda não está ativa nesta instalação. ' +
-          'Fale com a gente pela página de Contato para redefinir sua senha. ' +
-          // /contato, e não /tickets: quem esqueceu a senha não consegue
-          // entrar, e a tela de chamados fica atrás do login.
-          'A página de contato não exige login.',
+        : temProvedor
+          ? 'Não consegui enviar o e-mail agora. Tente de novo em alguns ' +
+            'minutos ou fale com a gente pela página de Contato.'
+          : 'Recuperação por e-mail ainda não está ativa nesta instalação. ' +
+            'Fale com a gente pela página de Contato para redefinir sua senha. ' +
+            // /contato, e não /tickets: quem esqueceu a senha não consegue
+            // entrar, e a tela de chamados fica atrás do login.
+            'A página de contato não exige login.',
       // Só em desenvolvimento, e só quando não há como enviar o e-mail.
-      ...(!emProducao && !temProvedorDeEmail ? { _dev_code: code } : {}),
+      ...(!emProducao && !temProvedor ? { _dev_code: code } : {}),
     });
 
   } catch (error: any) {

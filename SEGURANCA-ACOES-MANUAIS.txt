@@ -420,8 +420,8 @@
   │ JWT_ACCESS_EXPIRATION           │ não (36000)│ 10 horas                 │
   │ JWT_REFRESH_EXPIRATION          │ não (36000)│                          │
   │ NEXT_PUBLIC_APP_URL             │ SIM        │ redirecionamentos        │
-  │ RESEND_API_KEY                  │ não 🔒     │ envio de e-mail          │
-  │ EMAIL_FROM                      │ não        │ remetente                │
+  │ RESEND_API_KEY                  │ não 🔒     │ e-mail: A-6 no DEPLOY.txt│
+  │ EMAIL_FROM                      │ não        │ remetente verificado     │
   │ UPSTASH_REDIS_REST_URL          │ não 🔒     │ ainda não usada          │
   │ UPSTASH_REDIS_REST_TOKEN        │ não 🔒     │ ainda não usada          │
   └─────────────────────────────────┴────────────┴──────────────────────────┘

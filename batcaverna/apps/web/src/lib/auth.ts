@@ -214,8 +214,10 @@ export function getEmailTokenExpiry(): Date {
  * hora a mais em que um código esquecido num e-mail aberto ainda abre a
  * conta. 30 minutos é tempo de sobra para quem pediu e está esperando.
  */
+export const MINUTOS_DO_CODIGO = 30;
+
 export function getResetTokenExpiry(): Date {
-  return new Date(Date.now() + 30 * 60 * 1000);
+  return new Date(Date.now() + MINUTOS_DO_CODIGO * 60 * 1000);
 }
 
 /**
