@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { aplicarLimite } from '@/lib/seguranca';
+import { lerTudo } from '@/lib/contagens';
 import { calcularNivel } from '@batcaverna/utils';
 
 /**
@@ -27,30 +28,6 @@ import { calcularNivel } from '@batcaverna/utils';
  *  6. Trazia `banner_url` — imagem em base64 de até 16 MB guardada na linha
  *     do usuário — e nunca usava.
  */
-
-/**
- * Lê uma tabela inteira em fatias, contornando o teto de 1.000 linhas por
- * requisição do PostgREST.
- *
- * `montar` devolve a consulta JÁ com o `.select()` aplicado: no supabase-js
- * os filtros (`.eq`, `.gte`) só existem depois do select.
- */
-async function lerTudo<T>(montar: () => any, maximo = 100_000): Promise<T[]> {
-  const PAGINA = 1000;
-  const acumulado: T[] = [];
-
-  for (let inicio = 0; inicio < maximo; inicio += PAGINA) {
-    const { data, error } = await montar().range(inicio, inicio + PAGINA - 1);
-
-    if (error) throw error;
-    if (!data?.length) break;
-
-    acumulado.push(...(data as T[]));
-    if (data.length < PAGINA) break;
-  }
-
-  return acumulado;
-}
 
 interface UsuarioRanking {
   id: string;

@@ -12,6 +12,37 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * número, sem trafegar linha nenhuma. É mais correto e mais rápido.
  */
 
+/**
+ * Lê uma tabela inteira em fatias, contornando o teto de 1.000 linhas por
+ * requisição do PostgREST.
+ *
+ * `montar` devolve a consulta JÁ com o `.select()` aplicado — no supabase-js
+ * os filtros (`.eq`, `.gte`) só existem depois do select.
+ *
+ * Use em consultas que precisam de TODAS as linhas de uma tabela que cresce
+ * com o uso (users, study_sessions, user_questao_respostas...). Para listas
+ * paginadas na tela, `.range()` direto é o certo.
+ */
+export async function lerTudo<T>(
+  montar: () => any,
+  maximo = 100_000
+): Promise<T[]> {
+  const PAGINA = 1000;
+  const acumulado: T[] = [];
+
+  for (let inicio = 0; inicio < maximo; inicio += PAGINA) {
+    const { data, error } = await montar().range(inicio, inicio + PAGINA - 1);
+
+    if (error) throw error;
+    if (!data?.length) break;
+
+    acumulado.push(...(data as T[]));
+    if (data.length < PAGINA) break;
+  }
+
+  return acumulado;
+}
+
 export interface FiltroContagem {
   concurso_id?: string | null;
   materia_id?: string | null;

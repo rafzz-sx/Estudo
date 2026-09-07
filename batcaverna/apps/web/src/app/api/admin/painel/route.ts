@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getAdminFromRequest(req: NextRequest) {
@@ -39,17 +40,29 @@ export async function GET(req: NextRequest) {
       .order('criado_em', { ascending: false })
       .limit(500);
 
-    const { data: temposUso } = await supabase
-      .from('user_tempo_uso')
-      .select('user_id, segundos_totais');
+    // Uma linha por usuário: estoura o teto de 1.000 do PostgREST com mil
+    // contas, e o tempo de uso dos demais aparecia como zero no painel.
+    const temposUso = await lerTudo<{ user_id: string; segundos_totais: number | null }>(
+      () => supabase.from('user_tempo_uso').select('user_id, segundos_totais')
+    );
 
     const usoPorUser = new Map(
       (temposUso ?? []).map((t) => [t.user_id, t.segundos_totais ?? 0])
     );
 
-    const { data: sessoes } = await supabase
-      .from('study_sessions')
-      .select('user_id, duracao_segundos, finalizada_em, ultima_atividade_em');
+    // VÁRIAS linhas por usuário (uma por sessão): passa de 1.000 muito antes
+    // de haver 1.000 contas. O total de estudo e a contagem de "online"
+    // ficavam errados em silêncio.
+    const sessoes = await lerTudo<{
+      user_id: string;
+      duracao_segundos: number | null;
+      finalizada_em: string | null;
+      ultima_atividade_em: string | null;
+    }>(() =>
+      supabase
+        .from('study_sessions')
+        .select('user_id, duracao_segundos, finalizada_em, ultima_atividade_em')
+    );
 
     const estudoPorUser = new Map<string, number>();
     for (const s of sessoes ?? []) {

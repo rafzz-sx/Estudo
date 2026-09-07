@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
 /**
@@ -27,17 +28,24 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    const { data: users, error: uErr } = await supabase
-      .from('users')
-      .select(
-        `id, nome, apelido, email, email_verified, role, xp_total, nivel_atual,
-         streak_dias, avatar_url, banner_url, criado_em, ultimo_login_em,
-         ativo, suspenso_ate, motivo_suspensao,
-         total_questoes_respondidas, total_acertos`
-      )
-      .order('criado_em', { ascending: false });
-
-    if (uErr) {
+    // `banner_url` saiu do select: é uma imagem em base64 de até 16 MB
+    // guardada na própria linha, e a listagem não a exibe. Com algumas
+    // dezenas de banners grandes a resposta passava de 100 MB. E a leitura
+    // passou a paginar — o PostgREST corta em 1.000 linhas.
+    let users: any[];
+    try {
+      users = await lerTudo<any>(() =>
+        supabase
+          .from('users')
+          .select(
+            `id, nome, apelido, email, email_verified, role, xp_total, nivel_atual,
+             streak_dias, avatar_url, criado_em, ultimo_login_em,
+             ativo, suspenso_ate, motivo_suspensao,
+             total_questoes_respondidas, total_acertos`
+          )
+          .order('criado_em', { ascending: false })
+      );
+    } catch (uErr) {
       console.error('Erro ao buscar usuários no admin:', uErr);
       return NextResponse.json(
         { success: false, error: 'Erro ao buscar usuários' },

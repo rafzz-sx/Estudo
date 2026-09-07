@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { lerTudo } from './contagens';
 
 /**
  * Diagnóstico de estudo — o motor por trás do "o que eu estudo agora".
@@ -63,20 +64,6 @@ export interface AssuntoDiagnostico {
 interface LinhaResposta {
   correta: boolean | null;
   questoes: { assunto_id: string | null } | null;
-}
-
-/** Lê tudo em fatias: o PostgREST corta em 1.000 linhas por requisição. */
-async function lerTudo<T>(montar: () => any, maximo = 60_000): Promise<T[]> {
-  const PAGINA = 1000;
-  const acc: T[] = [];
-  for (let i = 0; i < maximo; i += PAGINA) {
-    const { data, error } = await montar().range(i, i + PAGINA - 1);
-    if (error) throw error;
-    if (!data?.length) break;
-    acc.push(...(data as T[]));
-    if (data.length < PAGINA) break;
-  }
-  return acc;
 }
 
 /**

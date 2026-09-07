@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getAdminFromRequest(req: NextRequest) {
@@ -86,8 +87,12 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    const { data: usuarios } = await supabase.from('users').select('id');
-    const destinatarios = usuarios ?? [];
+    // Sem paginar, o PostgREST devolvia só as 1.000 primeiras linhas: acima
+    // disso o aviso "para todos" chegava a uma parte, e o contador de
+    // destinatários registrava o número errado.
+    const destinatarios = await lerTudo<{ id: string }>(() =>
+      supabase.from('users').select('id').eq('ativo', true)
+    );
 
     const { data: aviso, error: avisoErr } = await supabase
       .from('avisos_globais')
