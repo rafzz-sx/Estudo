@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.7.0
+# Ordem de execução no Supabase — versão 2.8.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -27,6 +27,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 12 | `../migrations/014_teoria_ligada_ao_assunto.sql` | Liga cada texto de teoria ao assunto canônico |
 | 13 | `../migrations/015_contatos_publicos.sql` | Tabela do formulário público de contato (que antes descartava a mensagem) |
 | 14 | `../migrations/016_redacao.sql` | **Módulo de redação**: banco de temas e as redações do aluno com autoavaliação. Já vem com 10 temas oficiais do ENEM |
+| 15 | `../migrations/017_contestar_gabarito.sql` | **Contestação de gabarito**: o aluno passa a poder avisar que uma questão está errada. Tabela nova, nada destrutivo |
 
 > **A 011 depende dos seeds de questões.** Se o banco estiver vazio, rode
 > primeiro os `.sql` do banco de questões (seção 2) e só então a 011 — ela

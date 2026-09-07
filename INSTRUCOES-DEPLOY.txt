@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 58 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 60 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os principais commits que vão subir (dos 58) -----------------------
+  --- Os principais commits que vão subir (dos 60) -----------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -114,6 +114,8 @@
   [ ] 014_teoria_ligada_ao_assunto.sql     NOVA — << rode DEPOIS das teorias
   [ ] 015_contatos_publicos.sql            formulário de contato
   [ ] 016_redacao.sql                      NOVA — módulo de redação
+  [ ] 017_contestar_gabarito.sql           NOVA — tabela da contestação de
+                                           gabarito. Aditiva, não destrutiva.
 
        A 016 cria DUAS TABELAS NOVAS (`redacao_temas` e `redacoes`) e já
        vem com 10 temas oficiais do ENEM (2015 a 2024). É ADITIVA: não
@@ -584,6 +586,39 @@
            nenhum assunto novo com parêntese apareceu:
              SELECT nome FROM assuntos WHERE nome LIKE '%(%';
 
+  [ ] 6.53 FILA DE FIGURA · /admin → "✍️ Resolução & Figura" → aba
+           "📐 Figura". Tem que listar questões com figura descrita e sem
+           desenho — são 347 no banco, 107 de Matemática e 85 de Física.
+           Abra a primeira, cole um SVG simples no campo do editor:
+             <svg viewBox="0 0 100 60"><circle cx="50" cy="30" r="25"
+               fill="none" stroke="black" stroke-width="2"/></svg>
+           Salve. A questão tem que SAIR da fila. Depois abra a mesma
+           questão em /questoes e confira que o desenho aparece no quadro
+           branco no lugar da descrição.
+           Teste a recusa: cole <svg onload="alert(1)"> — tem que dar erro
+           dizendo que o SVG contém evento inline.
+
+  [ ] 6.54 CONTESTAR GABARITO · /questoes, responda uma questão qualquer e
+           veja o gabarito. Embaixo aparece o link discreto "Refez a conta e
+           continua discordando?". Abra, escolha "O gabarito está errado",
+           aponte outra letra e escreva o motivo.
+           Confira as travas:
+             • com menos de 15 caracteres, o botão fica desabilitado
+             • enviar duas vezes na mesma questão tem que dar
+               "Você já contestou esta questão"
+           Depois vá em /admin → "⚖️ Contestações": a questão aparece com a
+           contagem. Julgue como "Improcede" escrevendo uma resposta.
+
+  [ ] 6.55 CONTESTAR SEM RESPONDER É RECUSADO · a trava mais importante da
+           contestação. Pegue o id de uma questão que você NUNCA respondeu e
+           chame a rota direto (console do navegador, logado):
+             await fetch('/api/questoes/<ID>/contestar', {method:'POST',
+               headers:{'Content-Type':'application/json'},
+               body: JSON.stringify({motivo:'teste de trava sem responder'})})
+           Tem que voltar 409 com "Responda a questão antes de contestar".
+           Sem essa trava a fila enche de quem passou o olho e o número
+           deixa de significar "gente que resolveu isto e discorda".
+
 
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
@@ -727,7 +762,7 @@
   Otimizar foto de concurso nova:
     python scripts/otimizar_imagens.py
 
-  Checagens que rodam sem Node — rode as 14 antes de todo push:
+  Checagens que rodam sem Node — rode as 15 antes de todo push:
     python scripts/checar_imports.py             # imports e sintaxe
     python scripts/checar_referencias.py         # componente usado sem import
     python scripts/checar_escopo.py              # variável que não existe (*)
@@ -742,6 +777,7 @@
     python scripts/checar_seeds.py               # SQL dos seeds antes de colar
     python scripts/checar_taxonomia.py           # assunto inalcançável / meio de palavra
     python scripts/checar_paridade_taxonomia.py  # taxonomia igual no .py e no .ts
+    python scripts/checar_contestacao.py         # regras da contestação: SQL x rota x tela
 
   Ou de uma vez (PowerShell):
     Get-ChildItem scripts/checar_*.py | ForEach-Object {

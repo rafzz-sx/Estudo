@@ -296,6 +296,8 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/estudo/comparacao` | GET | Médias anônimas de quem resolve muito, por matéria | Autenticado |
 | `/api/admin/contatos` | GET / PATCH | Mensagens do formulário público, com marcação de lida e respondida | Admin |
 | `/api/admin/lacunas-teoria` | GET | Assuntos sem teoria, ordenados por frequência × erro coletivo (janela de 180 dias) | Admin |
+| `/api/questoes/[id]/contestar` | GET·POST | O aluno avisa que a questão está errada. Só quem respondeu, uma vez por questão | Aluno |
+| `/api/admin/contestacoes` | GET·PATCH | Fila de contestações agrupada por questão, ordenada por consenso | Admin |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---
