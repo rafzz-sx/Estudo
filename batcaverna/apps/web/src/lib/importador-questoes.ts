@@ -13,7 +13,19 @@
  *
  * A régua de aceitação também é a mesma de `publicavel()` no gerador de
  * seeds: só entra o que o aluno consegue de fato responder.
+ *
+ * O ASSUNTO passa pela taxonomia canônica, igual ao pipeline Python. Antes
+ * não passava: este módulo canonizava matéria e dificuldade e gravava o
+ * assunto exatamente como a banca escreveu. Como o importador cria em
+ * `assuntos` o que não existe, cada prova trazida pela tela abria rótulos
+ * novos — "Geometria Plana (Triângulo Equilátero e Radiciação)" virava uma
+ * linha própria — e refragmentava a taxonomia que a migration 011 tinha
+ * acabado de unificar (2.452 rótulos em 529). O caminho que o
+ * INSTRUCOES-DEPLOY.txt chama de "recomendado" era o que desfazia o
+ * trabalho, sem dar erro nenhum.
  */
+
+import { canonizarAssunto } from '@/lib/taxonomia';
 
 // ─── Contratos ───────────────────────────────────────────────
 export interface AlternativaImportada {
@@ -481,7 +493,12 @@ export async function parsearProvaTxt(
       numero_ordem: numeroBloco,
       numero_original: campo(CAMPOS.original)?.slice(0, 20) || String(numeroBloco),
       materia,
-      assunto: (campo(CAMPOS.assunto) || 'Geral').slice(0, 150),
+      // Canoniza igual ao Python. Sem isto, o rótulo livre da banca virava
+      // um assunto novo em `assuntos` a cada importação pela tela.
+      assunto: canonizarAssunto(
+        materia,
+        campo(CAMPOS.assunto)
+      ).assunto.slice(0, 150),
       dificuldade: canonizarDificuldade(campo(CAMPOS.dificuldade)),
       texto_base: textoBase,
       enunciado,
