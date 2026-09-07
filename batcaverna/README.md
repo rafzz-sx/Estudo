@@ -5,9 +5,9 @@
 
 ---
 
-## 🚨 Versão 2.4.0 — leia antes de rodar
+## 🚨 Versão 2.6.0 — leia antes de rodar
 
-Se você está subindo o projeto depois da atualização 2.4.0, a ordem é:
+Se você está subindo o projeto depois da atualização 2.6.0, a ordem é:
 
 ```bash
 npm install                                  # requer Node.js >= 20
@@ -28,15 +28,18 @@ Depois, no **SQL Editor do Supabase**, siga
 9. `supabase/migrations/012_escudo_streak_e_simulados.sql` — escudo de sequência
 10. `supabase/migrations/013_taf_treino.sql` — diário de treino do TAF
 11. `supabase/migrations/014_teoria_ligada_ao_assunto.sql` — liga teoria ao assunto
-12. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
-13. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
-14. `versao_2_4_0.sql` — registra a versão exibida no rodapé
+12. `supabase/migrations/015_contatos_publicos.sql` — mensagens do formulário público de contato
+13. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
+14. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
+15. `versao_2_6_0.sql` — registra a versão exibida no rodapé
 
 > **Atenção à ordem:** a `011` REMAPEIA assuntos já gravados, então precisa
-> rodar **depois** dos seeds de questões (item 12). A `014` casa o tema da
+> rodar **depois** dos seeds de questões (item 13). A `014` casa o tema da
 > teoria com o nome do assunto, então precisa rodar depois da `011` **e** dos
-> seeds de teoria (item 13). Rodar fora de ordem não dá erro — simplesmente
+> seeds de teoria (item 14). Rodar fora de ordem não dá erro — simplesmente
 > não faz efeito, que é pior.
+>
+> **A 2.6.0 não acrescentou migration.** A última é a `015`.
 >
 > Confira o resultado em **/admin → 🩺 Diagnóstico**: ele diz, migration por
 > migration, o que chegou ao banco.
@@ -55,6 +58,9 @@ npm run dev:web
 | `fetchWithAuth` no front | páginas e componentes | `fetch` puro não renovava o token expirado |
 | Gamificação no servidor | `apps/web/src/lib/gamificacao.ts` | XP e combo eram calculados só no navegador e se perdiam ao trocar de página |
 | Contagens com `count: 'exact'` | `apps/web/src/lib/contagens.ts` | O PostgREST corta em 1.000 linhas: contar por `.length` passaria a mentir com 3 mil questões |
+| **Ciclo da sessão de estudo** | `apps/web/src/lib/sessao-estudo.ts` | A regra de virada (8 h ou mudança de dia) existia só em `/start`, que nunca mais era chamado depois da primeira visita. Agora é fonte única do servidor, usada por `start`, `status` e `heartbeat` — e o heartbeat corta a duração informada pelo cliente no tempo real de relógio |
+| **Senha em PBKDF2** | `apps/web/src/lib/auth.ts` | Era SHA-256 de uma volta, sem sal. O formato novo (`pbkdf2$iterações$sal$hash`) cabe no `VARCHAR(255)` existente, então **não houve migration**, e a base migra sozinha no login |
+| **Prova de simulado com dono** | `apps/web/src/lib/prova-em-andamento.ts` | O `localStorage` é do navegador, não da conta: em computador compartilhado, o próximo aluno caía na prova do anterior |
 
 ### Scripts de manutenção (Python 3)
 
@@ -64,6 +70,7 @@ python scripts/parse_questoes.py           # gera scripts/out/questoes.json
 python scripts/gerar_seed_sql.py           # gera supabase/seeds/*.sql
 python scripts/checar_imports.py           # confere imports quebrados sem tsc
 python scripts/auditar_gabaritos.py        # integridade dos gabaritos
+python scripts/checar_hash_senha.py        # formato do hash de senha e migração
 ```
 
 ---
@@ -231,7 +238,14 @@ O proxy do Next.js (antigo middleware) intercepta todas as rotas protegidas (`/d
 > **NUNCA** chame `supabase.auth.signInWithPassword()` ou `supabase.auth.signUp()`.
 
 ### Arquitetura de Autenticação (`src/lib/auth.ts`)
-- **Armazenamento de Senha**: Hash SHA-256 via Web Crypto (`crypto.subtle.digest`) comparado com `users.senha_hash`.
+- **Armazenamento de Senha**: **PBKDF2-HMAC-SHA256**, 210.000 iterações, sal
+  por usuário, via Web Crypto (`crypto.subtle.deriveBits`). Guardado em
+  `users.senha_hash` no formato auto-descritivo
+  `pbkdf2$<iterações>$<sal>$<derivado>` — cabe no `VARCHAR(255)` que já
+  existia, por isso não houve migration. O formato antigo (SHA-256 de uma
+  volta, sem sal) ainda é aceito no login e **regravado no formato novo na
+  hora**: a base migra sozinha, sem pedir nada ao aluno. Comparação em tempo
+  constante nos dois casos.
 - **Access Token (JWT)**: Emitido via biblioteca `jose` (`HS256`), assinado com `JWT_SECRET`, com duração padrão de **10 horas** (36.000s) para garantir estudo ininterrupto.
 - **Refresh Token**: Gerado aleatoriamente com bytes criptográficos, armazenado com hash na tabela `refresh_tokens` e vinculado ao cookie seguro HTTP-only `bat_refresh_token`.
 - **Compatibilidade Dupla**: Suporta Cookies (ideal para SSR e páginas web) e Headers Bearer (ideal para clientes mobile e chamadas client-side).
@@ -269,11 +283,13 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/amizades/solicitar` | POST | Envia solicitação de amizade entre soldados | Autenticado |
 | `/api/chat/mensagens` | GET / POST | Envia e lista mensagens privadas entre amigos | Autenticado |
 | `/api/tickets` | GET / POST | Criação e acompanhamento de tickets de suporte | Autenticado |
+| `/api/tickets/[id]` | GET | Um chamado com a conversa inteira. **Não existia**: quatro telas a chamavam e recebiam 404, então ninguém conseguia ler nem responder um chamado | Dono ou Admin |
 | `/api/admin/usuarios` | GET / PATCH | Gestão administrativa de usuários e permissões | Admin |
 | `/api/admin/questoes/importar` | POST | Prévia e importação de um `.txt` de prova, com deduplicação por hash SHA-256 | Admin |
 | `/api/admin/moderacao` | GET / PUT | Fila de mensagens sinalizadas do chat e registro da decisão | Admin |
 | `/api/admin/saude` | GET | Diagnóstico da instalação: confere se cada migration chegou ao banco | Admin |
 | `/api/contato` | POST | Formulário público de contato: grava em `contatos_publicos` e notifica os administradores | Pública (3/15min por IP) |
+| `/api/admin/contatos` | GET / PATCH | Mensagens do formulário público, com marcação de lida e respondida | Admin |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---
@@ -295,10 +311,15 @@ Para subir o banco completo de uma só vez em um novo ambiente Supabase:
    - Ativação de Row Level Security (RLS) e políticas de leitura pública.
 
 ### Tabelas Principais do Domínio
+> **Legado:** `user_progresso`, `concurso_assuntos`, `nivel_gamificacao`,
+> `ranking_cache`, `tipos_armadilha` e a view `users_bloqueados` existem no
+> schema e **nenhuma linha de código as lê ou escreve** (verificado em
+> 07/09/2026). São restos de abordagens substituídas. Ficam por serem
+> inofensivas; removê-las seria destrutivo e sem ganho.
+
 ```mermaid
 erDiagram
     users ||--o{ refresh_tokens : possui
-    users ||--o{ user_progresso : registra
     users ||--o{ user_questao_respostas : responde
     users ||--o{ simulados : realiza
     users ||--o{ study_sessions : estuda

@@ -1,12 +1,12 @@
 ================================================================================
-  BATCAVERNA 2.5.0 — TUDO QUE PRECISA SER FEITO
-  Atualizado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
+  BATCAVERNA 2.6.0 — TUDO QUE PRECISA SER FEITO
+  Atualizado em 07/09/2026 · Guarde este arquivo, ele é o roteiro completo
 ================================================================================
 
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 36 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 46 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 36 commits que vão subir ----------------------------------------
+  --- Os principais commits que vão subir (dos 46) -----------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -113,6 +113,11 @@
   [ ] 013_taf_treino.sql                   NOVA
   [ ] 014_teoria_ligada_ao_assunto.sql     NOVA — << rode DEPOIS das teorias
   [ ] 015_contatos_publicos.sql            NOVA — formulário de contato
+
+       A 2.6.0 NÃO ACRESCENTOU MIGRATION. A 015 continua sendo a última.
+       A correção do hash de senha (PBKDF2) usa um formato que cabe na
+       coluna `senha_hash VARCHAR(255)` que já existe — de propósito,
+       justamente para não exigir mais um passo manual aqui.
 
        A 010 começa com um ALTER TYPE solto (igual à 006). Se o SQL Editor
        reclamar, rode esta linha sozinha primeiro e depois o resto:
@@ -187,7 +192,7 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_5_0.sql
+  [ ] versao_2_6_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
        (as versões anteriores ficam só como histórico.)
 
@@ -401,6 +406,83 @@
            onde você soltou. Antes travava.
 
 
+  --- Os testes da correção final de 07/09 (versão 2.6.0) ---
+
+  [ ] 6.26 CHAMADO DE SUPORTE · Abra /tickets, crie um chamado e CLIQUE nele.
+           Tem que aparecer o título, o status e a sua mensagem — e a caixa
+           para responder. Entre como admin, aba "🎫 Tickets", clique no
+           mesmo chamado: tem que ver a conversa e conseguir responder.
+           Antes NENHUM dos dois funcionava: a rota que carrega o chamado
+           não existia, e a caixa de resposta vive dentro do bloco que
+           depende dela.
+
+  [ ] 6.27 XP NÃO FORJÁVEL · (só se souber usar o console do navegador)
+           F12 → Console, com a sessão de estudo ativa:
+             await fetch('/api/study-sessions/heartbeat', {
+               method:'POST', headers:{'Content-Type':'application/json'},
+               body: JSON.stringify({ duracao_segundos: 99999999 })
+             }).then(r => r.json())
+           O `xp_ganho_intervalo` da resposta tem que ser um número
+           pequeno (perto de 0), NÃO milhões. Confira no banco que
+           users.xp_total não deu salto:
+             SELECT xp_total, nivel_atual FROM users WHERE email = 'seu@email';
+
+  [ ] 6.28 SENHA · Entre com uma conta ANTIGA (criada antes deste deploy).
+           Tem que entrar normalmente. Depois, no SQL Editor:
+             SELECT LEFT(senha_hash, 12) FROM users WHERE email = 'seu@email';
+           Tem que mostrar 'pbkdf2$21000' — o hash foi migrado sozinho no
+           login. Saia e entre de novo: continua funcionando.
+           Crie uma conta NOVA: já nasce com 'pbkdf2$'.
+           >> Se alguma conta antiga NÃO entrar, me avise imediatamente.
+
+  [ ] 6.29 TEMPO DE HOJE · Estude 3 minutos, feche tudo e volte NO DIA
+           SEGUINTE. O contador "hoje" tem que começar do zero e subir.
+           No banco, a sessão de ontem tem que ter finalizada_em preenchido
+           e tem que existir uma linha nova:
+             SELECT iniciada_em, finalizada_em, duracao_segundos
+             FROM study_sessions ORDER BY iniciada_em DESC LIMIT 3;
+           Antes existia UMA linha por usuário para sempre, e "hoje" dava 0.
+
+  [ ] 6.30 PLAYLIST · /musica → aba Playlists → crie uma. Volte ao Acervo e
+           toque no botão "＋" de uma faixa: a playlist aparece na lista.
+           Escolha. Volte à aba Playlists: a faixa está lá e o botão
+           "▶ Tocar" funciona. Recarregue: continua. Antes NÃO HAVIA como
+           colocar faixa em playlist — todas ficavam vazias para sempre.
+
+  [ ] 6.31 BADGES · /perfil → aba Badges. Tem que mostrar as insígnias de
+           verdade, marcando as conquistadas e dizendo o que falta para as
+           outras. Antes eram um card fixo "Primeiro Login" e oito
+           cadeados "???" inventados.
+
+  [ ] 6.32 CONTATO LEGÍVEL · Deslogado, mande em /contato uma mensagem
+           LONGA (mais de 300 caracteres). Entre como admin → aba
+           "📨 Mensagens de Contato": tem que aparecer, e ao clicar você lê
+           o texto INTEIRO. Marque como respondida e recarregue: continua
+           marcada. Antes a mensagem só existia no SQL Editor.
+
+  [ ] 6.33 PROVA DE OUTRO ALUNO · Inicie um simulado na conta A, responda 2
+           questões, faça LOGOUT. Entre com a conta B e abra /simulado:
+           tem que cair na tela de configuração LIMPA. Antes B caía dentro
+           da prova de A, com as respostas de A, e ficava preso.
+
+  [ ] 6.34 RETOMAR NA QUESTÃO CERTA · Simulado, responda 10 questões, vá
+           até a 11 e recarregue (F5). Tem que voltar NA 11, não na 1.
+
+  [ ] 6.35 BLOQUEAR · /perfil → aba Amigos → botão 🚫 num amigo. Confirme.
+           Ele some da lista. Antes a rota existia e não havia botão.
+
+  [ ] 6.36 CONCURSO SEM QUESTÕES · Abra /concursos/ime (ou eam, espcex).
+           Os cards de Questões, Assuntos, Simulado e Estatísticas têm que
+           aparecer apagados, dizendo "Sem questões cadastradas ainda", e
+           não devem ser clicáveis. Trilha e Bizus continuam abertos.
+
+  [ ] 6.37 ERRO DE REDE ≠ FALTA DE CONTEÚDO · Abra a trilha de um concurso
+           com a internet desligada. Tem que dizer "Não consegui carregar a
+           trilha" com botão "Tentar de novo" — e NÃO "Trilha em
+           construção", que é a mensagem de quando realmente não há
+           conteúdo.
+
+
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
 ================================================================================
@@ -514,13 +596,19 @@
     python scripts/checar_moderacao.py        # falso positivo no filtro do chat
     python scripts/checar_streak.py           # lógica do escudo de sequência
 
-  Testes do pacote de utilidades (precisam de Node):
-    cd batcaverna && npx vitest run packages/utils
-    (cobre níveis, combo, multiplicador e — desde 07/09 — os patamares do
-     combo, que agora vivem em packages/utils como fonte única)
+  Testes do pacote de utilidades:
+    >> ESTE COMANDO AINDA NÃO FUNCIONA. Veja a AÇÃO MANUAL A-3 no fim
+       deste arquivo: o `vitest` não está instalado nem declarado em
+       nenhum package.json, e nenhum workspace tem script `test`.
+       `npm test` na raiz roda `turbo run test`, não encontra tarefa
+       nenhuma e sai com SUCESSO — falha silenciosa.
+    Os dois arquivos de teste existem e estão corretos:
+      packages/utils/tests/gamification.test.ts
+      packages/utils/tests/deduplication.test.ts
     python scripts/checar_classes_tema.py     # classes de cor inexistentes
     python scripts/checar_seeds.py            # SQL antes de colar
     python scripts/checar_paridade_hash.py    # dedup do importador
+    python scripts/checar_hash_senha.py       # formato do hash de senha
 
     (*) checar_escopo é heurística: ele lista candidatos, não certezas.
         Confira cada um antes de mexer. Foi ele que achou o `questoes` que
@@ -528,11 +616,177 @@
 
 
 ================================================================================
+  PARTE 9 — AÇÕES MANUAIS PENDENTES (executar na SUA máquina)
+================================================================================
+
+  Tudo aqui é PENDENTE. Eu documentei; você executa. Nada disto foi feito
+  nesta máquina — eu não instalo dependência, não rodo migration e não
+  configuro serviço externo por conta própria.
+
+  Ordenado por prioridade.
+
+
+  ----------------------------------------------------------------------
+    A-1   OBRIGATÓRIO — RODAR O SEED DA VERSÃO
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Rodar supabase/seeds/versao_2_6_0.sql no SQL Editor.
+  Motivo:       É o que faz o rodapé mostrar 2.6.0. Sem ele o site continua
+                anunciando a versão anterior.
+  Comando:      Copiar o arquivo inteiro e colar no SQL Editor do Supabase.
+  Configuração: nenhuma.
+  Validação:    O rodapé de qualquer tela mostra "2.6.0". Ou:
+                  SELECT versao_atual FROM app_info;
+
+  >> NÃO HÁ MIGRATION NOVA nesta versão. A 015 continua sendo a última.
+     A troca do hash de senha foi feita de propósito num formato que cabe
+     na coluna que já existe, para não gerar mais um passo aqui.
+
+
+  ----------------------------------------------------------------------
+    A-2   OBRIGATÓRIO — CONFERIR O LOGIN DEPOIS DO DEPLOY
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Entrar com uma conta ANTIGA logo depois do deploy.
+  Motivo:       O hash de senha mudou de SHA-256 para PBKDF2. O código
+                aceita os dois formatos e regrava no novo durante o login,
+                então ninguém deveria ser afetado — mas isto é o login de
+                todo mundo, e eu NÃO PUDE EXECUTAR o código nesta máquina
+                (não há Node aqui). Conferir leva 30 segundos.
+  Comando:      nenhum — é pela tela.
+  Validação:    A conta antiga entra normalmente. Depois, no SQL Editor:
+                  SELECT LEFT(senha_hash, 8) FROM users WHERE email = 'seu@email';
+                Tem que mostrar 'pbkdf2$'.
+  Se falhar:    Me avise. O formato antigo continua no banco intacto até o
+                primeiro login bem-sucedido, então nada foi perdido.
+
+
+  ----------------------------------------------------------------------
+    A-3   RECOMENDADO — INSTALAR O RUNNER DE TESTES
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Instalar o vitest e criar o script de teste.
+  Motivo:       Existem DOIS arquivos de teste corretos e completos em
+                packages/utils/tests/ que NUNCA FORAM EXECUTADOS: o vitest
+                não está instalado nem declarado em nenhum package.json, e
+                nenhum workspace tem script "test". Pior: `npm test` na
+                raiz roda `turbo run test`, não encontra tarefa nenhuma e
+                SAI COM SUCESSO — dá falsa sensação de cobertura em CI.
+
+                Eu não fiz porque isto exige alterar package.json, e a
+                regra desta rodada proíbe mexer em manifests e lockfiles.
+
+  Dependência:  vitest    (devDependency)
+                versão:   a mais recente estável (não fixei porque não
+                          instalei nem testei nenhuma aqui)
+                onde:     packages/utils
+                por quê:  os dois arquivos de teste fazem
+                          import { describe, it, expect } from 'vitest'
+
+  Comando:      cd C:\Users\SARA\Documents\projeto\Estudo\batcaverna
+                npm install -D vitest --workspace=@batcaverna/utils
+
+  Configuração: acrescentar em packages/utils/package.json, em "scripts":
+                  "test": "vitest run"
+
+  Validação:    npm test        (na raiz do monorepo)
+                Tem que EXECUTAR e listar os casos — não sair calado.
+                Os testes cobrem níveis, combo, multiplicador, patamares do
+                combo e a normalização de texto da deduplicação.
+
+
+  ----------------------------------------------------------------------
+    A-4   RECOMENDADO — CONFERIR UM GABARITO SUSPEITO
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Conferir 10 questões do ENEM 2020 dia 2 contra a chave
+                oficial do INEP.
+  Motivo:       No arquivo ENEM-2020-DIA2.txt, a resposta é D em 34 das 90
+                questões (38%) e A em apenas 7 (7,8%). Uma prova de 90
+                questões costuma distribuir perto de 18 por letra.
+
+                IMPORTANTE — o problema NÃO é do extrator: comparei a
+                distribuição do .txt com a do banco e são IDÊNTICAS, letra
+                por letra. E o parser casa gabarito e questão por NÚMERO,
+                não por posição. Se houver erro, ele está na transcrição do
+                .txt de origem.
+
+                Também não é desalinhamento: um gabarito deslocado permuta
+                quais questões recebem quais letras, mas PRESERVA a
+                contagem de cada letra. Distribuição torta é evidência
+                contra deslocamento.
+
+                Marquei como POSSÍVEL, não confirmado — não tenho a chave
+                oficial para confrontar e não vou afirmar o que não posso
+                provar.
+
+  Comando:      nenhum — é conferência de conteúdo.
+  Validação:    Se as 10 baterem, a distribuição é real e o assunto está
+                encerrado. Se não baterem, me diga e eu corrijo o .txt e
+                regero o seed daquele arquivo.
+
+  Mesmo caso, com desvio menor: enem-2023-dia1, cn-2023-dia1,
+  epcar-2026 e esa-2025-geral.
+
+
+  ----------------------------------------------------------------------
+    A-5   OPCIONAL — ALINHAR OS NÚMEROS DE VERSÃO
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Acertar a versão nos manifests.
+  Motivo:       Hoje convivem quatro números diferentes:
+                  package.json (raiz)         2.1.0
+                  apps/web/package.json       2.1.0
+                  apps/mobile/package.json    2.1.0
+                  android/app/build.gradle    2.0.0  (versionName)
+                  a plataforma exibe          2.6.0  (vem do banco)
+                Um APK gerado hoje se anuncia como 2.0.0 no sistema, seis
+                versões atrás — atrapalha o suporte quando o aluno relata a
+                versão que está usando.
+
+                Não corrigi porque exige alterar package.json.
+
+  Comando:      edição manual dos quatro arquivos para 2.6.0.
+  Validação:    Gerar o APK e conferir em Configurações -> Aplicativos.
+
+
+  ----------------------------------------------------------------------
+    A-6   OPCIONAL — TIRAR AS IMAGENS DE DENTRO DO BANCO
+  ----------------------------------------------------------------------
+  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+
+  Tarefa:       Migrar avatar e banner para o Storage do Supabase.
+  Motivo:       Hoje as duas imagens são guardadas como data URL em base64
+                DENTRO da coluna, com teto de 4 MB e 16 MB. Base64 infla
+                ~33%, então um banner no teto vira ~21 MB de texto no banco
+                e em toda consulta que o traga.
+
+                Já reduzi o dano: /api/usuarios/me não devolve mais o
+                banner por padrão (só com ?completo=1), e a listagem do
+                admin também não. Mas a raiz continua — imagem em coluna de
+                texto.
+
+                Isto é mudança de arquitetura, não correção de bug. Me peça
+                quando quiser fazer: envolve bucket, política de acesso,
+                migração dos dados existentes e troca do upload.
+
+  Configuração: bucket com leitura pública no Supabase Storage.
+  Validação:    As colunas passam a guardar URL curta em vez de base64.
+
+
+================================================================================
   RESUMO DE UMA LINHA
 ================================================================================
 
-  Torne o repositório privado → instale o Node → dê o push → rode as 6
-  migrations e os 22 seeds no Supabase na ordem da PARTE 3 → teste os 10
-  itens da PARTE 6.
+  Confira o JWT_SECRET na Vercel → torne o repositório privado → instale o
+  Node → dê o push → rode as migrations e os seeds na ordem da PARTE 3
+  (a 2.6.0 NÃO tem migration nova, só o versao_2_6_0.sql) → teste a PARTE 6,
+  com atenção especial ao 6.28 (login de conta antiga) → leia a PARTE 9,
+  que lista o que ainda depende de você.
 
 ================================================================================

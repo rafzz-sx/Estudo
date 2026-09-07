@@ -43,16 +43,19 @@ apps/web/src/
 │   └── page.tsx                 # Landing page pública
 ├── components/
 │   ├── AppShell.tsx             # Layout lateral padrão (Sidebar, Header, Notificações)
+│   ├── GaleriaBadges.tsx        # Insígnias conquistadas e o que falta para as demais
 │   ├── estudo/                  # RadarFraqueza, GraficoEvolucao, HistoricoSimulados, TreinoTaf
 │   ├── questoes/                # ComboBadge, Distratores, QuadroFigura, ResolucaoGabarito
-│   ├── admin/                   # Painéis do admin (moderação, saúde, importação, avisos…)
+│   ├── admin/                   # Painéis do admin (moderação, saúde, importação, avisos, contatos…)
 │   ├── DynamicIsland.tsx        # Player flutuante de música, presente em toda a plataforma
 │   ├── StudySessionWidget.tsx   # Widget de tempo real da sessão de estudo e heartbeat
 │   ├── NotificationCenter.tsx   # Sino e dropdown de notificações em tempo real
 │   ├── MiniPerfilModal.tsx      # Modal com cartão de perfil público do soldado
 │   └── AdicionarAmigoModal.tsx  # Busca e envio de solicitação de amizade
 ├── lib/
-│   ├── auth.ts                  # JWT (`jose`), hash SHA-256 e validação de tokens
+│   ├── auth.ts                  # JWT (`jose`), senha em PBKDF2 com sal e validação de tokens
+│   ├── sessao-estudo.ts         # Ciclo de vida da sessão: virada de 8 h/dia e teto anti-fraude
+│   ├── prova-em-andamento.ts    # Simulado guardado no aparelho, amarrado ao dono
 │   ├── supabase.ts              # Clientes Supabase (Server com Service Role e Browser com Anon)
 │   ├── gamificacao.ts           # XP, combo, streak com escudo e badges — fonte da verdade
 │   ├── diagnostico.ts           # Radar de fraqueza, evolução semanal e erros em aberto
@@ -69,6 +72,16 @@ apps/web/src/
     ├── study-session-store.ts   # Timer de estudo ativo e heartbeats
     └── player-store.ts          # Player de música, com <audio> singleton fora do React
 ```
+
+> [!NOTE]
+> **Ciclo da sessão de estudo (corrigido em 07/09/2026).** `stopSession()`
+> existia no store e nenhum componente o chamava, então `finalizada_em` nunca
+> era preenchido e o aluno tinha **uma única linha em `study_sessions` para
+> sempre**. Com isso, "tempo de estudo hoje" dava 0 da segunda visita em
+> diante, o limite de 8 h virava teto de vida e o multiplicador de
+> continuidade travava em 1,5× para todo mundo. A regra de virada agora é do
+> **servidor** (`lib/sessao-estudo.ts`), usada por `start`, `status` e
+> `heartbeat` — não depende de o navegador avisar nada.
 
 > [!NOTE]
 > `components/StudySessionWidget.tsx` exporta dois componentes: o
@@ -122,5 +135,15 @@ Consulte a tabela completa de variáveis de ambiente no [Manual Geral do Monorep
    pegam import quebrado, coluna inexistente no schema, classe de Tailwind
    sem token e identificador não declarado — a classe de erro que o
    TypeScript veria mas que só aparece no deploy.
+7. **Senha nunca passa por `hashToken`.** Essa função é SHA-256 de uma volta
+   e serve para o refresh token, que já é aleatório. Para senha use
+   `hashSenha()` ao gravar e `verificarSenha()` ao conferir — o segundo
+   aceita o formato antigo e devolve `precisaRehash` para a migração
+   transparente acontecer no login.
+8. **Não confie na duração que o cliente manda.** O heartbeat de estudo
+   aceitava `duracao_segundos` sem teto, e uma requisição forjada virava
+   milhões de XP. Qualquer valor vindo do navegador passa por
+   `duracaoAceita()` em `lib/sessao-estudo.ts`, que corta no tempo real de
+   relógio.
 
 Para a documentação completa da plataforma, veja o [README Principal da BatCaverna](../../README.md).

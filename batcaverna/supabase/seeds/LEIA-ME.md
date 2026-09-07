@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.5.0
+# Ordem de execução no Supabase — versão 2.6.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -79,10 +79,10 @@ concurso (o que alimenta os filtros da tela) e insere as questões com
 | `teoria_03_natureza.sql` | 2 de Física, 1 de Química, 1 de Biologia |
 | `teoria_04_humanas.sql` | 2 de História, 2 de Geografia, 1 de Filosofia, 1 de Sociologia |
 | `teoria_05_redacao_literatura.sql` | 2 de Redação + 1 de Literatura |
-| `teoria_06_gramatica.sql
-teoria_07_sociologia_filosofia.sql
-teoria_08_ingles.sql
-teoria_09_historia_artes_edfisica.sql` | Crase, concordância e regência |
+| `teoria_06_gramatica.sql` | Crase, concordância e regência |
+| `teoria_07_sociologia_filosofia.sql` | 6 temas de Sociologia e Filosofia |
+| `teoria_08_ingles.sql` | 6 temas de Inglês (a matéria tinha ZERO) |
+| `teoria_09_historia_artes_edfisica.sql` | 8 temas de História, Artes e Ed. Física |
 | `bizus_01.sql` | 31 bizus táticos ancorados nos mesmos temas |
 | `videoaulas_01.sql` | 72 vídeo-aulas, todas conferidas no YouTube |
 | `musicas_01.sql` | 46 faixas em domínio público para estudar |
@@ -99,14 +99,17 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_5_0.sql
+versao_2_6_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.
 
 > As versões anteriores continuam no diretório só como histórico. Rodar mais
 > de uma não quebra nada (cada uma apaga o registro anterior antes de
-> inserir), mas só a 2.3.0 precisa ser executada.
+> inserir), mas só a **2.6.0** precisa ser executada.
+>
+> **A 2.6.0 não traz migration nova.** A correção do hash de senha usa um
+> formato que cabe na coluna `senha_hash VARCHAR(255)` que já existe.
 
 ---
 

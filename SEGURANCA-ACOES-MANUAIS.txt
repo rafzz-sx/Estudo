@@ -1,6 +1,18 @@
 ================================================================================
   BATCAVERNA — AUDITORIA DE SEGURANÇA · AÇÕES QUE SÓ VOCÊ PODE FAZER
   Gerado em 06/09/2026 · REESCRITO em 07/09/2026 após a auditoria completa
+  ATUALIZADO em 07/09/2026 após a correção final (versão 2.6.0)
+
+  O que MUDOU nesta última atualização:
+    • 7.1 (senha em SHA-256) foi CORRIGIDO no código — virou PBKDF2 com
+      sal, migrando sozinho no login. Deixou de ser decisão sua; sobrou
+      uma conferência de 30 segundos.
+    • Achado novo e grave, já corrigido: o heartbeat de estudo aceitava
+      qualquer duração vinda do navegador, sem teto. Qualquer aluno
+      logado forjava XP ilimitado, nível máximo e o topo dos dois
+      rankings com UMA requisição. Ver item 7.4.
+    • 0-A (JWT_SECRET na Vercel) CONTINUA PENDENTE e continua sendo o
+      item mais urgente deste arquivo.
 ================================================================================
 
   Este arquivo tem só o que EU não consigo fazer por código. O que já foi
@@ -538,13 +550,64 @@
   envolvem uma escolha que é sua:
 
   7.1  SENHA GUARDADA COM SHA-256 SIMPLES
-       Hoje a senha vira um hash SHA-256 direto, sem "sal" e sem função
-       lenta. Se a tabela `users` vazar, senhas comuns são descobertas
-       rapidamente com placa de vídeo.
-       O certo é PBKDF2 (funciona no ambiente da Vercel).
-       DECISÃO SUA: a migração precisa reprocessar a senha de cada pessoa
-       no próximo login dela. Quem não entrar mais nunca fica com o hash
-       antigo. Não há como converter sem a senha em mãos.
+
+       >>> RESOLVIDO NO CÓDIGO EM 07/09 (versão 2.6.0). VALE A PARTIR DO
+           PRÓXIMO DEPLOY. Você só precisa fazer a conferência abaixo.
+
+       O que era: a senha virava um hash SHA-256 direto, sem "sal" e sem
+       função lenta. Se a tabela `users` vazasse, senhas comuns seriam
+       descobertas em minutos com placa de vídeo.
+
+       O que é agora: PBKDF2-HMAC-SHA256, 210.000 iterações, com sal
+       diferente por usuário. Usa a Web Crypto que já existe no ambiente —
+       nenhuma dependência nova foi instalada.
+
+       Por que NÃO precisou de migration nem de decisão sua: o formato
+       novo é auto-descritivo e cabe na coluna que já existia —
+
+           pbkdf2$<iterações>$<sal>$<derivado>      (111 caracteres)
+           senha_hash é VARCHAR(255)
+
+       E a migração é transparente: o login aceita os DOIS formatos e,
+       quando a senha confere no formato antigo, regrava no novo na hora.
+       Ninguém precisa redefinir senha. Ninguém é deslogado. A base migra
+       sozinha conforme as pessoas usam a plataforma.
+
+       Quem nunca mais entrar continua com o hash antigo — isso é
+       inevitável (não há como converter sem a senha em mãos) e é
+       inofensivo: são contas inativas, e o hash antigo continua sendo
+       aceito.
+
+       O QUE VOCÊ PRECISA FAZER (30 segundos, depois do deploy):
+         entrar com uma conta ANTIGA e confirmar que entra normalmente.
+         Depois, no SQL Editor:
+           SELECT LEFT(senha_hash, 8) FROM users WHERE email = 'seu@email';
+         Tem que mostrar 'pbkdf2$'.
+         Está detalhado como A-2 na PARTE 9 do INSTRUCOES-DEPLOY.txt.
+
+  7.4  XP ERA FORJÁVEL POR QUALQUER ALUNO LOGADO
+
+       >>> RESOLVIDO NO CÓDIGO EM 07/09 (versão 2.6.0). Nada a fazer.
+
+       Achado da varredura final, que a auditoria anterior não pegou.
+
+       A rota que registra o tempo de estudo aceitava a duração informada
+       pelo navegador SEM NENHUM TETO. Uma única requisição dizendo
+       "estudei 99.999.999 segundos" virava cerca de 2.500.000 de XP
+       gravados direto na conta — o nível máximo da plataforma pede
+       25.000 — mais o primeiro lugar no ranking de XP e no de tempo de
+       estudo.
+
+       Não vazava dado de ninguém, mas destruía a integridade do ranking,
+       que é o coração da plataforma. E não havia trilha de auditoria em
+       `users.xp_total` para desfazer.
+
+       Agora o valor informado é cortado pelo tempo que o relógio do
+       servidor realmente andou desde a última gravação.
+
+       Se quiser conferir depois do deploy: teste 6.27 do
+       INSTRUCOES-DEPLOY.txt.
+
 
   7.2  TOKEN DE LOGIN GUARDADO NO NAVEGADOR
        Os cookies são httpOnly (JavaScript não lê) — mas os MESMOS tokens
@@ -625,6 +688,7 @@
      3    separar os ambientes (Preview/Dev com banco próprio)
      5    Upstash Redis
      6    npm audit
-     7    decidir sobre senha (7.1) e token no navegador (7.2)
+     7    decidir sobre token no navegador (7.2) — a senha (7.1) já foi
+          corrigida no código; falta só você conferir um login antigo
 
 ================================================================================
