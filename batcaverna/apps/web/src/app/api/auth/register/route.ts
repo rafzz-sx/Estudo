@@ -139,9 +139,20 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       console.error('Error inserting user:', insertError);
+      // A mensagem crua do Postgres entrega nome de tabela, de coluna e o
+      // nome da constraint violada — um mapa do schema oferecido na tela de
+      // cadastro, que é pública. Fica no log do servidor.
+      // 23505 é violação de unicidade: aqui só pode ser e-mail ou apelido já
+      // em uso, e isso o usuário PRECISA saber para corrigir.
+      const duplicado = (insertError as { code?: string }).code === '23505';
       return NextResponse.json(
-        { success: false, error: `Erro no banco de dados: ${insertError.message}` },
-        { status: 500 }
+        {
+          success: false,
+          error: duplicado
+            ? 'Este e-mail ou apelido já está em uso.'
+            : 'Não consegui criar sua conta agora. Tente de novo em instantes.',
+        },
+        { status: duplicado ? 409 : 500 }
       );
     }
 
@@ -239,7 +250,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Register error:', error);
     return NextResponse.json(
-      { success: false, error: `Erro interno: ${error?.message || 'desconhecido'}` },
+      { success: false, error: 'Erro interno do servidor' },
       { status: 500 }
     );
   }

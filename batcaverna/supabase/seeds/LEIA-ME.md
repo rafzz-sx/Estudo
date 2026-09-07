@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.1.0
+# Ordem de execução no Supabase — versão 2.2.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -18,9 +18,13 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 3 | `../migrations/005_estudo_inteligente.sql` | Revisão espaçada, caderno de erros e planos de estudo |
 | 4 | `../migrations/006_moderacao_contas.sql` | Suspender/desativar conta e promover admin pelo painel |
 | 5 | `../migrations/007_editais_e_assuntos.sql` | Link do edital de cada concurso, TAF da EsPCEx e a lista de assuntos cobrados |
+| 6 | `../migrations/008_seguranca_rls.sql` | **Fecha o gabarito público.** `questoes` tinha `SELECT USING (true)`: qualquer visitante baixava a resposta das 3.247 questões com a chave anônima |
+| 7 | `../migrations/009_simulados_e_gabaritos.sql` | Coluna `tem_comentario`, ano-base de cada concurso e 33 frases motivacionais novas |
 
 A migration 004 já traz os patamares de combo, 70 frases motivacionais, 16
 insígnias, os metadados dos 9 concursos e as tabelas de TAF preenchidas.
+A 009 sobe para 103 frases: `combo_quebrado` tinha só 3, e é justamente
+quem errou vindo de 20 acertos seguidos que mais precisa de variedade.
 
 > **Atenção na 004:** ela agora começa apagando os patamares de combo
 > antigos (pisos 10/20/30/…) para reinstalar os novos (11/21/31/…). Sem
@@ -79,10 +83,14 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_1_0.sql
+versao_2_2_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.
+
+> `versao_2_1_0.sql` continua no diretório só como histórico. Rodar os dois
+> não quebra nada (cada um apaga o registro anterior antes de inserir), mas
+> só o 2.2.0 precisa ser executado.
 
 ---
 

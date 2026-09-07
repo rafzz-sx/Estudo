@@ -32,6 +32,7 @@ interface Questao {
   figura_svg: string | null;
   precisa_resolucao: boolean;
   anulada: boolean | null;
+  tem_comentario: boolean | null;
   vezes_respondida: number | null;
   vezes_acertada: number | null;
   concursos: { sigla: string; nome: string; emoji: string | null; cor_tema: string | null } | null;
@@ -102,6 +103,7 @@ function BancoDeQuestoes() {
     ano: params.get("ano") ?? "todos",
     dificuldade: "todas",
     nao_respondidas: false,
+    comentadas: false,
   });
 
   const [opcoes, setOpcoes] = useState<OpcoesFiltro | null>(null);
@@ -158,6 +160,7 @@ function BancoDeQuestoes() {
           dificuldade: filtros.dificuldade,
         });
         if (filtros.nao_respondidas) qs.set("nao_respondidas", "1");
+        if (filtros.comentadas) qs.set("comentadas", "1");
 
         const res = await fetchWithAuth(`/api/questoes?${qs}`);
         const json = await res.json();
@@ -369,6 +372,26 @@ function BancoDeQuestoes() {
           </span>
         </label>
 
+        {/* Nem toda prova oficial vem com comentário. O ENEM 2024 e 2025
+            divulgaram só a chave de respostas — quem estuda para entender o
+            raciocínio liga isto e não esbarra numa questão que só diz a letra. */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-bat-border bg-bat-bg-card px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={filtros.comentadas}
+            onChange={(e) =>
+              setFiltros({ ...filtros, comentadas: e.target.checked })
+            }
+            className="mt-0.5 accent-bat-gold-400"
+          />
+          <span className="text-xs leading-relaxed text-bat-text-secondary">
+            Só com gabarito comentado
+            <span className="mt-0.5 block text-[10px] text-bat-text-muted">
+              Esconde as que trazem apenas a resposta oficial
+            </span>
+          </span>
+        </label>
+
         {/* ═══ Painel da sessão ═══ */}
         <div className="rounded-xl border border-bat-border bg-bat-bg-card p-4">
           <p className="mb-2.5 text-xs text-bat-text-muted">Nesta sessão</p>
@@ -482,6 +505,14 @@ function BancoDeQuestoes() {
                 {questao.numero_original && (
                   <span className="text-[11px] text-bat-text-muted">
                     Questão {questao.numero_original} da prova original
+                  </span>
+                )}
+                {questao.tem_comentario === false && (
+                  <span
+                    className="rounded-lg border border-bat-warning/25 bg-bat-warning/10 px-2 py-0.5 text-[10px] font-semibold text-bat-warning"
+                    title="A prova oficial divulgou apenas a chave de respostas para esta questão."
+                  >
+                    sem comentário
                   </span>
                 )}
               </div>

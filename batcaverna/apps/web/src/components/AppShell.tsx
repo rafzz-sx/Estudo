@@ -9,6 +9,7 @@ import { useStudySessionStore } from "@/stores/study-session-store";
 import { StudySessionBadge } from "@/components/StudySessionWidget";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { DynamicIsland } from "@/components/DynamicIsland";
+import { usePlayerStore } from "@/stores/player-store";
 import { ConviteFeedback } from "@/components/ConviteFeedback";
 
 // ─── Links do menu ───────────────────────────────────────────
@@ -108,6 +109,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     logout();
     router.push("/auth");
   };
+
+  // Há faixa carregada no player? O <main> usa isto para abrir espaço.
+  const tocandoAlgo = usePlayerStore((s) => s.fila.length > 0);
 
   return (
     <div className="min-h-screen bg-bat-bg flex">
@@ -280,7 +284,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ═══ CONTEÚDO PRINCIPAL ═══ */}
-      <main className="flex-1 lg:ml-64 pt-16 lg:pt-0 min-h-screen">
+      {/* Quando há música tocando, o player flutua sobre o topo. No celular
+          ele cobria o título da página; o respiro extra desce o conteúdo
+          exatamente a altura dele — e some junto com o player. */}
+      <main
+        className={`flex-1 lg:ml-64 min-h-screen ${
+          tocandoAlgo ? "pt-32 lg:pt-20" : "pt-16 lg:pt-0"
+        }`}
+      >
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           {children}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   usePlayerStore,
   formatarTempoMusica,
@@ -119,6 +120,58 @@ export function DynamicIsland() {
   const capaProcessada = useRef<string | null>(null);
   const [arrastando, setArrastando] = useState<number | null>(null);
 
+  // O `onMouseUp`/`onTouchEnd` ficava só no <input>. Quem arrastava e soltava
+  // o dedo fora da barra — o normal num celular, a barra tem 4px de altura —
+  // nunca disparava o evento: a posição congelava no valor arrastado e a
+  // música seguia tocando em outro ponto. Ouvir no documento resolve, porque
+  // o ponteiro sempre é solto em algum lugar.
+  const soltar = useCallback(() => {
+    setArrastando((v) => {
+      if (v != null) irPara(v);
+      return null;
+    });
+  }, [irPara]);
+
+  useEffect(() => {
+    if (arrastando == null) return;
+    window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", soltar);
+    return () => {
+      window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", soltar);
+    };
+  }, [arrastando, soltar]);
+
+  // Espaço e setas controlam o player de qualquer tela — desde que o aluno
+  // não esteja digitando num campo (senão a barra de espaço pausaria a
+  // música no meio de uma mensagem do chat).
+  useEffect(() => {
+    const atalho = (e: KeyboardEvent) => {
+      const alvo = e.target as HTMLElement | null;
+      if (
+        alvo &&
+        (alvo.tagName === "INPUT" ||
+          alvo.tagName === "TEXTAREA" ||
+          alvo.tagName === "SELECT" ||
+          alvo.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.code === "Space") {
+        e.preventDefault();
+        alternarPlay();
+      } else if (e.code === "ArrowRight" && e.shiftKey) {
+        e.preventDefault();
+        proxima();
+      } else if (e.code === "ArrowLeft" && e.shiftKey) {
+        e.preventDefault();
+        anterior();
+      }
+    };
+    window.addEventListener("keydown", atalho);
+    return () => window.removeEventListener("keydown", atalho);
+  }, [alternarPlay, proxima, anterior]);
+
   // Recalcula as cores sempre que a capa muda.
   useEffect(() => {
     if (!musica?.capa_url || capaProcessada.current === musica.capa_url) return;
@@ -139,7 +192,7 @@ export function DynamicIsland() {
     // ficar colado no topo.
     <div
       className={`fixed left-1/2 top-[3.75rem] z-40 -translate-x-1/2 transition-all duration-500 ease-out lg:top-4 ${
-        expandido ? "w-[min(92vw,26rem)]" : "w-[min(88vw,22rem)]"
+        expandido ? "w-[min(94vw,26rem)]" : "w-[min(90vw,22rem)]"
       }`}
     >
       <div
@@ -188,7 +241,7 @@ export function DynamicIsland() {
             </Botao>
             <button
               onClick={alternarPlay}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-sm transition-transform hover:scale-105"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-base transition-transform hover:scale-105 active:scale-95 sm:h-9 sm:w-9 sm:text-sm"
               style={{ background: corPrimaria, color: "#0B0B0F" }}
               aria-label={tocando ? "Pausar" : "Tocar"}
             >
@@ -222,15 +275,9 @@ export function DynamicIsland() {
                 step={0.5}
                 value={arrastando ?? posicao}
                 onChange={(e) => setArrastando(Number(e.target.value))}
-                onMouseUp={() => {
-                  if (arrastando != null) irPara(arrastando);
-                  setArrastando(null);
-                }}
-                onTouchEnd={() => {
-                  if (arrastando != null) irPara(arrastando);
-                  setArrastando(null);
-                }}
-                className="w-full cursor-pointer appearance-none rounded-full bg-white/15 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full"
+                onPointerUp={soltar}
+                onKeyUp={soltar}
+                className="w-full cursor-pointer appearance-none rounded-full bg-white/15 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
                 style={{
                   height: 4,
                   accentColor: corPrimaria,
@@ -296,6 +343,16 @@ export function DynamicIsland() {
                 {indice + 1}/{fila.length}
               </span>
 
+              <Link
+                href="/musica"
+                onClick={() => definirExpandido(false)}
+                className="cursor-pointer rounded-lg px-2 py-1 text-xs text-white/40 no-underline transition-colors hover:text-white"
+                aria-label="Abrir a sala de música"
+                title="Abrir a sala de música"
+              >
+                🎵
+              </Link>
+
               <button
                 onClick={fechar}
                 className="cursor-pointer rounded-lg px-2 py-1 text-xs text-white/40 transition-colors hover:text-white"
@@ -324,7 +381,7 @@ function Botao({
   return (
     <button
       onClick={onClick}
-      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white active:bg-white/20 sm:h-8 sm:w-8 sm:text-xs"
       aria-label={rotulo}
     >
       {children}

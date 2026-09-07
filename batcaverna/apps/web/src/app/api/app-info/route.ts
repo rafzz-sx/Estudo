@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 
+/**
+ * Versão de reserva, usada só quando `app_info` está vazia.
+ * Mantenha em sincronia com o último seed `versao_*.sql`.
+ */
+const VERSAO_APP = '2.2.0';
+
 // GET /api/app-info — Retorna versão atual e data de atualização
 export async function GET() {
   try {
@@ -14,11 +20,13 @@ export async function GET() {
       .single();
 
     if (error || !data) {
-      // Fallback se não houver registro na tabela
+      // Reserva para quando a tabela ainda não foi semeada. Estava fixo em
+      // '1.2.0' desde sempre: com o banco novo e o seed de versão pendente,
+      // o rodapé mostrava uma versão três releases atrás.
       return NextResponse.json({
         success: true,
         data: {
-          versao_atual: '1.2.0',
+          versao_atual: VERSAO_APP,
           atualizado_em: new Date().toISOString(),
         },
       });

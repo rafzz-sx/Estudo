@@ -34,17 +34,46 @@ interface Conversa {
     apelido: string;
     avatar_url: string | null;
     nivel_atual: number;
-    online: boolean;
-    concurso: string;
+    ultimo_login_em: string | null;
+    concurso: string | null;
   };
   ultima_mensagem?: string;
   nao_lidas: number;
+}
+
+/** Considera "por perto" quem entrou nos últimos 10 minutos. */
+function recemVisto(iso: string | null): boolean {
+  if (!iso) return false;
+  return Date.now() - new Date(iso).getTime() < 10 * 60 * 1000;
+}
+
+/**
+ * Presença honesta a partir do último login. Não é presença em tempo real —
+ * e o texto deixa isso claro em vez de inventar um "Online".
+ */
+function textoPresenca(iso: string | null): string {
+  if (!iso) return "Sem registro de acesso";
+  const minutos = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutos < 10) return "Por perto agora";
+  if (minutos < 60) return `Visto há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `Visto há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return "Visto ontem";
+  if (dias < 30) return `Visto há ${dias} dias`;
+  return "Sem entrar há mais de um mês";
 }
 
 export default function ChatPage() {
   const { user } = useAuthStore();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [conversaAtivaId, setConversaAtivaId] = useState<string>("");
+  // No celular a lista e a conversa não cabem lado a lado. Antes as duas
+  // empilhavam: para ler uma mensagem o aluno rolava a lista inteira, e para
+  // trocar de conversa rolava tudo de volta. Agora é uma tela de cada vez,
+  // como em qualquer mensageiro. No desktop os dois painéis convivem e este
+  // estado é ignorado.
+  const [verConversaNoCelular, setVerConversaNoCelular] = useState(false);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [textoMensagem, setTextoMensagem] = useState("");
   const [buscaUsuario, setBuscaUsuario] = useState("");
@@ -362,7 +391,7 @@ export default function ChatPage() {
             </span>
           </div>
           <p className="text-bat-text-secondary text-sm ml-12">
-            Mensagens criptografadas, áudios de voz e fotos exclusivas entre soldados amigos.
+            Texto, áudio e foto — só entre soldados que já são amigos confirmados.
           </p>
         </div>
 
@@ -379,7 +408,11 @@ export default function ChatPage() {
       <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px] shadow-2xl">
         
         {/* ── Coluna Esquerda: Lista de Conversas (4 colunas) ── */}
-        <div className="lg:col-span-4 border-r border-bat-border flex flex-col bg-bat-bg-card/70">
+        <div
+          className={`lg:col-span-4 border-r border-bat-border flex-col bg-bat-bg-card/70 ${
+            verConversaNoCelular ? "hidden lg:flex" : "flex"
+          }`}
+        >
           
           {/* Busca */}
           <div className="p-4 border-b border-bat-border/50">
@@ -422,6 +455,7 @@ export default function ChatPage() {
                     key={conv.id}
                     onClick={() => {
                       setConversaAtivaId(conv.id);
+                      setVerConversaNoCelular(true);
                       setConversas((prev) =>
                         prev.map((c) => (c.id === conv.id ? { ...c, nao_lidas: 0 } : c))
                       );
@@ -432,7 +466,9 @@ export default function ChatPage() {
                         : "hover:bg-bat-bg-tertiary/40"
                     }`}
                   >
-                    {/* Avatar com status online */}
+                    {/* Avatar. A bolinha verde só aparece para quem entrou
+                        de verdade nos últimos 10 minutos — antes era pintada
+                        em todo mundo, o tempo todo. */}
                     <div className="relative flex-shrink-0">
                       <div className="w-12 h-12 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 text-base overflow-hidden">
                         {conv.outro_usuario.avatar_url ? (
@@ -445,7 +481,12 @@ export default function ChatPage() {
                           conv.outro_usuario.apelido[0]?.toUpperCase()
                         )}
                       </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-bat-bg-card" />
+                      {recemVisto(conv.outro_usuario.ultimo_login_em) && (
+                        <span
+                          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-bat-bg-card"
+                          title="Por perto agora"
+                        />
+                      )}
                     </div>
 
                     {/* Dados do usuário */}
@@ -477,13 +518,24 @@ export default function ChatPage() {
         </div>
 
         {/* ── Coluna Direita: Thread da Conversa (8 colunas) ── */}
-        <div className="lg:col-span-8 flex flex-col bg-bat-bg-primary/40">
+        <div
+          className={`lg:col-span-8 flex-col bg-bat-bg-primary/40 ${
+            verConversaNoCelular ? "flex" : "hidden lg:flex"
+          }`}
+        >
           {conversaAtiva ? (
             <>
               {/* Header do Chat Ativo */}
-              <div className="p-4 border-b border-bat-border flex items-center justify-between bg-bat-bg-card/80">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
+              <div className="p-4 border-b border-bat-border flex items-center justify-between gap-2 bg-bat-bg-card/80">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    onClick={() => setVerConversaNoCelular(false)}
+                    className="lg:hidden shrink-0 w-9 h-9 rounded-xl bg-bat-bg-secondary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
+                    aria-label="Voltar para a lista de conversas"
+                  >
+                    ←
+                  </button>
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
                     {conversaAtiva.outro_usuario.avatar_url ? (
                       <img
                         src={conversaAtiva.outro_usuario.avatar_url}
@@ -506,15 +558,34 @@ export default function ChatPage() {
                       )}
                     </div>
                     <p className="text-[11px] text-bat-text-secondary flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      Online · Nível {conversaAtiva.outro_usuario.nivel_atual} · Amigo Oficial
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          recemVisto(conversaAtiva.outro_usuario.ultimo_login_em)
+                            ? "bg-emerald-400"
+                            : "bg-bat-text-muted"
+                        }`}
+                      />
+                      {textoPresenca(conversaAtiva.outro_usuario.ultimo_login_em)} ·
+                      Nível {conversaAtiva.outro_usuario.nivel_atual}
+                      {conversaAtiva.outro_usuario.concurso
+                        ? ` · ${conversaAtiva.outro_usuario.concurso}`
+                        : ""}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-bat-text-muted bg-bat-bg-primary px-3 py-1 rounded-lg border border-bat-border">
-                    🔒 Criptografado Ponta a Ponta
+                {/* O selo dizia "Criptografado Ponta a Ponta". Não é verdade:
+                    as mensagens ficam em texto no banco e a moderação
+                    consegue lê-las pelo painel — inclusive é isso que
+                    permite atender denúncia de assédio. Prometer sigilo que
+                    não existe é o tipo de coisa que faz um adolescente
+                    escrever aqui algo que não escreveria em outro lugar. */}
+                <div className="hidden sm:flex items-center gap-2 shrink-0">
+                  <span
+                    className="text-xs text-bat-text-muted bg-bat-bg-primary px-3 py-1 rounded-lg border border-bat-border"
+                    title="As conversas são privadas entre vocês dois, mas a moderação da BatCaverna pode acessá-las ao apurar uma denúncia."
+                  >
+                    🔒 Conversa privada · sujeita à moderação
                   </span>
                 </div>
               </div>

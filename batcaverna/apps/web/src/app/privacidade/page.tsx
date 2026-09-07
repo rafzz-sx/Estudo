@@ -258,8 +258,18 @@ export default function PrivacidadePage() {
                 suspender uma conta derruba a sessão na hora
               </li>
               <li>
-                Row Level Security ativo no banco: uma conta não alcança os
-                dados de outra
+                Cada requisição confere no servidor de quem é o dado antes de
+                devolvê-lo: uma conta não alcança os dados de outra
+              </li>
+              <li>
+                Row Level Security ativo em todas as tabelas do banco, com
+                negativa por padrão — a chave pública do site não lê nada além
+                do catálogo aberto (concursos, matérias, insígnias)
+              </li>
+              <li>
+                Cabeçalhos de segurança no navegador (CSP, HSTS,
+                anti-enquadramento) e limite de tentativas nas telas de login,
+                cadastro e recuperação de senha
               </li>
               <li>
                 Toda ação administrativa fica registrada em log de auditoria,

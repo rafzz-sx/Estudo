@@ -244,8 +244,8 @@ export async function registrarResposta(
     .from('users')
     .select(
       `xp_total, nivel_atual, combo_atual, maior_combo_pessoal, streak_dias,
-       ultimo_dia_estudado, total_questoes_respondidas, total_acertos,
-       tempo_estudo_total_segundos`
+       maior_streak, ultimo_dia_estudado, total_questoes_respondidas,
+       total_acertos, tempo_estudo_total_segundos`
     )
     .eq('id', userId)
     .single();
@@ -290,7 +290,11 @@ export async function registrarResposta(
       combo_atualizado_em: new Date().toISOString(),
       maior_combo_pessoal: maiorCombo,
       streak_dias: streak,
-      maior_streak: Math.max(user?.streak_dias ?? 0, streak),
+      // O recorde histórico se compara com ele mesmo, não com a sequência
+      // corrente. Comparando com `streak_dias` (que acabou de ser
+      // recalculado), quem tinha recorde de 40 dias e furou a corrente via o
+      // recorde ser reescrito para 1 na resposta seguinte.
+      maior_streak: Math.max(user?.maior_streak ?? 0, streak),
       ultimo_dia_estudado: hoje,
       total_questoes_respondidas: totalRespondidas,
       total_acertos: totalAcertos,

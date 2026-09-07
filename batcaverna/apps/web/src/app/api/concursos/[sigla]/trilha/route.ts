@@ -180,7 +180,11 @@ export async function GET(
       data: {
         concurso,
         materias: resultado,
-        total_questoes: questoes?.length ?? 0,
+        // Era `questoes?.length` — variável que não existe neste escopo. A
+        // contagem real vem do laço que pagina as questões acima. Além de
+        // quebrar a compilação, o número certo é este: `questoes` seria no
+        // máximo uma fatia de 1.000.
+        total_questoes: totalQuestoes,
       },
     });
   } catch (error) {

@@ -19,9 +19,13 @@ Depois, no **SQL Editor do Supabase**, siga
 
 1. `supabase/migrations/004_plataforma_completa.sql` — schema da 2.0
 2. `supabase/migrations/005_estudo_inteligente.sql` — revisão espaçada, caderno de erros, distratores e cronograma
-3. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (3.260 questões)
-4. `teoria_*.sql` e `bizus_01.sql` — conteúdo didático
-5. `versao_2_0_0.sql` — registra a versão exibida no rodapé
+3. `supabase/migrations/006_moderacao_contas.sql` — suspender/desativar conta pelo painel
+4. `supabase/migrations/007_editais_e_assuntos.sql` — edital de cada concurso e assuntos cobrados
+5. `supabase/migrations/008_seguranca_rls.sql` — **obrigatória**: fecha o gabarito, que era legível por qualquer visitante com a chave anônima
+6. `supabase/migrations/009_simulados_e_gabaritos.sql` — `tem_comentario`, ano-base do concurso e frases motivacionais
+7. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
+8. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
+9. `versao_2_2_0.sql` — registra a versão exibida no rodapé
 
 ```bash
 npm run dev:web

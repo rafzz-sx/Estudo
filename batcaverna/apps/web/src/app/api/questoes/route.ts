@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { limparTermoBusca, uuidOuNulo } from '@/lib/seguranca';
 
 /**
  * GET /api/questoes
@@ -17,6 +18,7 @@ import { getAuthUserFromRequest } from '@/lib/auth';
  *   dificuldade   facil | medio | dificil
  *   busca         texto livre no enunciado
  *   nao_respondidas=1   esconde o que o usuário já respondeu
+ *   comentadas=1        só as que têm gabarito comentado escrito
  *   ordem         recentes | antigas | aleatoria
  *   page, per_page
  *
@@ -79,6 +81,7 @@ export async function GET(req: NextRequest) {
         texto_base, enunciado, alternativas,
         ano, banca, dificuldade, dia_prova, numero_ordem, numero_original,
         area_conhecimento, figura_descricao, figura_svg, precisa_resolucao, anulada,
+        tem_comentario,
         vezes_respondida, vezes_acertada,
         concursos (id, sigla, nome, emoji, cor_tema),
         materias  (id, nome, icone_emoji),
@@ -91,7 +94,9 @@ export async function GET(req: NextRequest) {
     if (concursoId) query = query.eq('concurso_id', concursoId);
     if (materiaId) query = query.eq('materia_id', materiaId);
 
-    const assuntoId = searchParams.get('assunto_id');
+    // UUID conferido antes de virar filtro: texto solto aqui faz o PostgREST
+    // devolver 22P02 e a tela inteira quebra por causa de um link ruim.
+    const assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
     if (assuntoId) query = query.eq('assunto_id', assuntoId);
 
     const area = searchParams.get('area');
@@ -105,9 +110,20 @@ export async function GET(req: NextRequest) {
       query = query.eq('dificuldade', dificuldade.toLowerCase());
     }
 
-    const busca = searchParams.get('busca');
-    if (busca && busca.trim().length >= 3) {
-      query = query.ilike('enunciado', `%${busca.trim()}%`);
+    // `%` e `_` são curingas do LIKE: um termo com `%` sozinho força varredura
+    // completa das 3 mil questões a cada tecla digitada. `limparTermoBusca`
+    // também tira os metacaracteres da linguagem de filtro do PostgREST.
+    const busca = limparTermoBusca(searchParams.get('busca'), 80);
+    if (busca.length >= 3) {
+      query = query.ilike('enunciado', `%${busca}%`);
+    }
+
+    // Só as que têm gabarito comentado escrito. As 362 questões do ENEM
+    // 2024/2025 vieram das provas oficiais com a chave de respostas e nenhum
+    // comentário — quem está estudando para entender, e não só para conferir
+    // a letra, liga este filtro e não esbarra nelas.
+    if (searchParams.get('comentadas') === '1') {
+      query = query.not('explicacao', 'is', null);
     }
 
     // ─── Esconde o que o usuário já respondeu ────────────────
@@ -116,7 +132,11 @@ export async function GET(req: NextRequest) {
       // Um `NOT IN` com milhares de UUIDs vira uma URL gigantesca e o
       // PostgREST rejeita. Pegamos as mais recentes, que é o que importa
       // para não repetir questão logo em seguida.
-      const LIMITE_EXCLUSAO = 800;
+      // 800 UUIDs viravam uma querystring de ~30 KB — acima do que o proxy
+      // do Supabase aceita na linha de requisição, e a listagem voltava vazia
+      // exatamente para quem mais usa a plataforma. 200 cabe com folga e
+      // continua cobrindo 20 páginas de 10 questões sem repetir nada.
+      const LIMITE_EXCLUSAO = 200;
 
       const { data: respondidas } = await supabase
         .from('user_questao_respostas')
