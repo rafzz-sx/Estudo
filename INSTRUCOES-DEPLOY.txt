@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 56 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 58 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os principais commits que vão subir (dos 56) -----------------------
+  --- Os principais commits que vão subir (dos 58) -----------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -563,6 +563,27 @@
              SELECT apelido, total_questoes_respondidas, total_acertos
              FROM users WHERE apelido = 'xxx';
 
+  [ ] 6.51 ASSUNTO CERTO NA QUÍMICA · /questoes → matéria Química →
+           filtro de assunto. Tem que existir "Funções Inorgânicas" COM
+           questões (3) e "Ácidos, Bases e pH" (3). Antes da 2.7.1 os dois
+           apareciam vazios e as 14 questões de inorgânica estavam dentro
+           de "Química Orgânica". Confira no banco:
+             SELECT a.nome, COUNT(*) FROM questoes q
+             JOIN assuntos a ON a.id = q.assunto_id
+             JOIN materias m ON m.id = q.materia_id
+             WHERE m.nome = 'Química' GROUP BY a.nome ORDER BY 2 DESC;
+           Em Filosofia, "Estética" tem que ter 1 questão (estava em
+           "Ética e Moral").
+
+  [ ] 6.52 IMPORTAR PELO PAINEL NÃO INVENTA ASSUNTO · /admin → Importar
+           Questões. Use uma prova QUE JÁ ESTÁ no banco e pare no
+           "Conferir antes de importar" (não confirme). Na amostra, o
+           assunto tem que vir canônico — "Geometria Plana", não
+           "Geometria Plana (Triângulo Equilátero e Radiciação)".
+           Depois confirme com uma prova nova de verdade e confira que
+           nenhum assunto novo com parêntese apareceu:
+             SELECT nome FROM assuntos WHERE nome LIKE '%(%';
+
 
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
@@ -664,6 +685,21 @@
     /admin → Importar Questões → escolhe o concurso → carrega o .txt →
     "Conferir antes de importar" → confere a amostra → "Importar"
 
+    O assunto de cada questão passa pela taxonomia canônica, igual ao
+    pipeline do terminal. Até a versão 2.7.1 NÃO passava: o painel gravava
+    o rótulo livre da banca e criava um assunto novo para cada variação,
+    refazendo em silêncio a fragmentação que a migration 011 desfaz. Se
+    você importou alguma prova pelo painel ANTES de aplicar esta versão,
+    confira os assuntos criados:
+
+      SELECT a.nome, COUNT(q.id) AS questoes
+      FROM assuntos a LEFT JOIN questoes q ON q.assunto_id = a.id
+      GROUP BY a.nome HAVING COUNT(q.id) <= 2
+      ORDER BY 2, 1;
+
+    Rótulo comprido e com parênteses, aparecendo 1 ou 2 vezes, é resíduo
+    dessa importação. Rodar a 011 de novo os remapeia.
+
   Acrescentar prova nova — PELO TERMINAL:
     cd batcaverna
     python scripts/parse_questoes.py         # lê os .txt
@@ -673,11 +709,17 @@
     (depois rode no Supabase só os arquivos que mudaram)
 
   Mudar a taxonomia de assuntos (agrupar diferente, criar assunto novo):
-    1. edite scripts/taxonomia.py
-    2. python scripts/parse_questoes.py
-    3. python scripts/gerar_seed_sql.py
-    4. python scripts/gerar_migration_taxonomia.py   # regera a 011
-    5. rode a 011 nova no Supabase
+    1. edite scripts/taxonomia.py                    <- fonte única
+    2. python scripts/gerar_taxonomia_ts.py          <- OBRIGATÓRIO
+    3. python scripts/parse_questoes.py
+    4. python scripts/gerar_seed_sql.py
+    5. python scripts/gerar_migration_taxonomia.py   # regera a 011
+    6. python scripts/checar_paridade_taxonomia.py   # confere os dois lados
+    7. rode a 011 nova no Supabase
+
+    O passo 2 não é opcional. O importador do painel usa
+    apps/web/src/lib/taxonomia.ts, que é GERADO do .py. Pular o passo 2
+    faz o terminal e a tela classificarem diferente, e o passo 6 acusa.
 
   Revalidar as vídeo-aulas (vídeo do YouTube sai do ar):
     python scripts/gerar_videoaulas.py
@@ -685,13 +727,27 @@
   Otimizar foto de concurso nova:
     python scripts/otimizar_imagens.py
 
-  Checagens que rodam sem Node — rode as 4 antes de todo push:
-    python scripts/checar_imports.py          # imports e sintaxe
-    python scripts/checar_referencias.py      # componente usado sem import
-    python scripts/checar_escopo.py           # variável que não existe (*)
-    python scripts/checar_colunas.py          # coluna que não existe no schema
-    python scripts/checar_moderacao.py        # falso positivo no filtro do chat
-    python scripts/checar_streak.py           # lógica do escudo de sequência
+  Checagens que rodam sem Node — rode as 14 antes de todo push:
+    python scripts/checar_imports.py             # imports e sintaxe
+    python scripts/checar_referencias.py         # componente usado sem import
+    python scripts/checar_escopo.py              # variável que não existe (*)
+    python scripts/checar_colunas.py             # coluna que não existe no schema
+    python scripts/checar_classes_tema.py        # classe Tailwind sem token
+    python scripts/checar_moderacao.py           # falso positivo no filtro do chat
+    python scripts/checar_streak.py              # lógica do escudo de sequência
+    python scripts/checar_paridade_hash.py       # mesmo SHA-256 nos dois lados
+    python scripts/checar_hash_senha.py          # PBKDF2 e migração do hash antigo
+    python scripts/checar_contraste_ilha.py      # contraste WCAG da Dynamic Island
+    python scripts/checar_distribuicao.py        # repartição de vagas do simulado
+    python scripts/checar_seeds.py               # SQL dos seeds antes de colar
+    python scripts/checar_taxonomia.py           # assunto inalcançável / meio de palavra
+    python scripts/checar_paridade_taxonomia.py  # taxonomia igual no .py e no .ts
+
+  Ou de uma vez (PowerShell):
+    Get-ChildItem scripts/checar_*.py | ForEach-Object {
+      python $_.FullName > $null
+      if ($?) { "PASSOU  $($_.Name)" } else { "FALHOU  $($_.Name)" }
+    }
 
   Testes do pacote de utilidades:
     >> ESTE COMANDO AINDA NÃO FUNCIONA. Veja a AÇÃO MANUAL A-3 no fim

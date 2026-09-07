@@ -163,5 +163,18 @@ Consulte a tabela completa de variáveis de ambiente no [Manual Geral do Monorep
    `lib/redacao-guia.ts` pode ser inventado: obra, autor, lei e dado
    precisam existir. Repertório falso é o erro mais caro que um aluno
    comete, porque o corretor conhece a obra.
+11. **Regra que classifica não pode errar dizendo que acertou.** O
+   casamento da taxonomia era substring crua, então "organica" casava
+   dentro de "inorganica" — e devolvia `casou_no_dicionario = true`. O
+   erro entrava na métrica de cobertura como acerto, e ficou invisível
+   até alguém contar as questões de "Funções Inorgânicas" e achar zero.
+   Quando uma heurística devolve confiança junto com o resultado, a
+   confiança precisa ser verificada tão a sério quanto o resultado.
+12. **Lógica duplicada entre Python e TypeScript é gerada, nunca copiada.**
+   `lib/taxonomia.ts` sai de `scripts/taxonomia.py` pelo gerador, e
+   `checar_paridade_taxonomia.py` compara os dois sobre o banco real. Foi
+   assim que apareceu o `capitalize()`: o Python abaixa o resto da
+   palavra, o TS preservava, e o mesmo rótulo virava dois assuntos
+   diferentes conforme o caminho da importação.
 
 Para a documentação completa da plataforma, veja o [README Principal da BatCaverna](../../README.md).
