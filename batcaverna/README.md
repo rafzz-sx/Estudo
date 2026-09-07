@@ -23,9 +23,14 @@ Depois, no **SQL Editor do Supabase**, siga
 4. `supabase/migrations/007_editais_e_assuntos.sql` — edital de cada concurso e assuntos cobrados
 5. `supabase/migrations/008_seguranca_rls.sql` — **obrigatória**: fecha o gabarito, que era legível por qualquer visitante com a chave anônima
 6. `supabase/migrations/009_simulados_e_gabaritos.sql` — `tem_comentario`, ano-base do concurso e frases motivacionais
+7. `supabase/migrations/010_alertas_moderacao.sql` — alerta de moderação do chat
+8. `supabase/migrations/011_taxonomia_assuntos.sql` — **unifica 2.452 assuntos em 515** (rode depois dos seeds de questões)
+9. `supabase/migrations/012_escudo_streak_e_simulados.sql` — escudo de sequência
+10. `supabase/migrations/013_taf_treino.sql` — diário de treino do TAF
+11. `supabase/migrations/014_teoria_ligada_ao_assunto.sql` — liga teoria ao assunto
 7. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
 8. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
-9. `versao_2_2_0.sql` — registra a versão exibida no rodapé
+9. `versao_2_4_0.sql` — registra a versão exibida no rodapé
 
 ```bash
 npm run dev:web

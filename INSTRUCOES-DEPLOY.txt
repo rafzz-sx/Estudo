@@ -1,12 +1,12 @@
 ================================================================================
-  BATCAVERNA 2.3.0 — TUDO QUE PRECISA SER FEITO
+  BATCAVERNA 2.4.0 — TUDO QUE PRECISA SER FEITO
   Atualizado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
 ================================================================================
 
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 18 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 27 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, item 0. A chave
      mestra do banco está exposta num repositório público do GitHub.
@@ -49,25 +49,34 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 18 commits que vão subir ------------------------------------------
-     1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
-     2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
-     3. feat(admin)      importador real, fila de resolução, 36 classes mudas
-     4. feat(admin)      moderação de contas + 3 bugs silenciosos
-     5. feat(questoes)   indicador de posição na leva
-     6. fix(seguranca)   código de senha vazando, 178 explicações, assuntos
-     7. docs(seeds)      migration 007 na ordem
-     8. fix(bizus)       filtro por banca de verdade
-     9. docs             contagem correta de seeds
-    10. security         RLS revisado, headers, rate limit, validação upload
-    11. docs(seguranca)  relatório de ações manuais
-    12. docs             lista atualizada dos commits no roteiro
-    13. fix(seguranca)   conversa e ticket alheios eram legíveis e graváveis
-    14. fix(ranking)     "sair do ranking" era ignorado + 5 defeitos
-    15. fix(simulado)    "simulado rápido" do card não gerava simulado
-    16. fix              XP, gabarito comentado, chat no celular, build quebrado
-    17. docs             roteiro e relatório de segurança da 2.2.0
-    18. docs             número exato de questões sem comentário (361)
+  --- Os 27 commits que vão subir ----------------------------------------
+     1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
+     2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
+     3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
+     4. feat(admin): moderacao de contas + tres bugs que falhavam calados
+     5. feat(questoes): indicador de posicao na leva de questoes
+     6. fix(seguranca,dados): codigo de senha vazando na API, 178 explicaco…
+     7. docs(seeds): migration 007 na ordem de execucao
+     8. fix(bizus): filtro por banca de verdade + roteiro de deploy
+     9. docs: contagem correta de seeds no roteiro (22, nao 21)
+    10. security: RLS revisado, headers, rate limiting, validacao de upload…
+    11. docs(seguranca): relatorio de acoes manuais e migration 008 no rote…
+    12. docs: lista atualizada dos 11 commits no roteiro
+    13. fix(seguranca): conversa e ticket alheios eram legiveis e graváveis
+    14. fix(ranking): respeitava "sair do ranking"? nao. e mais cinco defei…
+    15. fix(simulado): "simulado rapido" do card nao gerava simulado nenhum
+    16. fix: XP, gabarito comentado, chat no celular, player e build quebra…
+    17. docs: roteiro e relatorio de seguranca atualizados para a 2.2.0
+    18. docs: numero exato de questoes sem comentario (361, nao 362)
+    19. docs: contagem de commits do roteiro
+    20. feat(moderacao): alerta ao admin com quem escreveu, o que e para qu…
+    21. fix(admin): tres colunas com nome errado deixavam abas do painel va…
+    22. chore(2.3.0): versao, roteiro e ordem das migrations
+    23. feat(taxonomia): 2.452 assuntos viram 515 — o indice que organizava…
+    24. feat(dashboard): tela inicial vira o plano do dia; radar de fraquez…
+    25. feat(gamificacao): escudo de sequencia, XP que premia revisao, hist…
+    26. feat(taf): diario de treino — a tabela diz onde chegar, isto diz on…
+    27. feat(teoria): cobertura de 24% para 43% e o caminho do erro ate o t…
 
 
 ================================================================================
@@ -86,11 +95,26 @@
   [ ] 007_editais_e_assuntos.sql
   [ ] 008_seguranca_rls.sql                << CORRIGIDA, releia abaixo
   [ ] 009_simulados_e_gabaritos.sql
-  [ ] 010_alertas_moderacao.sql            NOVA
+  [ ] 010_alertas_moderacao.sql
+  [ ] 011_taxonomia_assuntos.sql           NOVA — << rode DEPOIS dos seeds
+  [ ] 012_escudo_streak_e_simulados.sql    NOVA
+  [ ] 013_taf_treino.sql                   NOVA
+  [ ] 014_teoria_ligada_ao_assunto.sql     NOVA — << rode DEPOIS das teorias
 
        A 010 começa com um ALTER TYPE solto (igual à 006). Se o SQL Editor
        reclamar, rode esta linha sozinha primeiro e depois o resto:
          ALTER TYPE notificacao_tipo ADD VALUE IF NOT EXISTS 'moderacao';
+
+       ORDEM IMPORTA em duas delas:
+
+       • A 011 (224 KB) REMAPEIA os assuntos que já estão no banco. Se o
+         banco estiver vazio, rode primeiro os seeds de questões (3.2) e
+         depois volte aqui. Ela unifica 2.452 assuntos em 515 — é a mudança
+         mais importante desta versão.
+
+       • A 014 casa o nome do tema da teoria com o nome do assunto. Rode
+         depois da 011 E depois dos seeds de teoria (3.3), senão não casa
+         nada e o radar de fraqueza fica sem o botão "ler a teoria".
 
        Por que rodar a 004 de novo:
          - ganhou a coluna `anulada`
@@ -138,6 +162,9 @@
   [ ] teoria_04_humanas.sql               História, Geografia, Filosofia, Sociologia
   [ ] teoria_05_redacao_literatura.sql    Redação + Literatura
   [ ] teoria_06_gramatica.sql             crase, concordância, regência
+  [ ] teoria_07_sociologia_filosofia.sql  NOVO — 6 temas
+  [ ] teoria_08_ingles.sql                NOVO — 6 temas (Inglês tinha ZERO)
+  [ ] teoria_09_historia_artes_edfisica.sql  NOVO — 8 temas
   [ ] bizus_01.sql                        31 bizus
   [ ] videoaulas_01.sql                   72 vídeos  << depois das teorias >>
   [ ] musicas_01.sql                      46 faixas em domínio público
@@ -147,9 +174,9 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_3_0.sql
+  [ ] versao_2_4_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
-       (versao_2_1_0 e versao_2_2_0 ficam só como histórico.)
+       (as versões anteriores ficam só como histórico.)
 
   ---- 3.5 CONFERÊNCIA -----------------------------------------------------
 
@@ -191,6 +218,23 @@
     -- a fila de moderação tem que existir e voltar vazia num banco novo
     SELECT gravidade_moderacao, COUNT(*) FROM moderacao_fila
     WHERE revisada_em IS NULL GROUP BY gravidade_moderacao;
+
+    -- ~515 assuntos, NÃO 2.452 (se der 2.452, a 011 não rodou)
+    SELECT COUNT(*) FROM assuntos;
+
+    -- Geometria Plana tem que aparecer com ~134, não com 23
+    SELECT m.nome, a.nome, COUNT(*) FROM questoes q
+    JOIN assuntos a ON a.id = q.assunto_id
+    JOIN materias m ON m.id = a.materia_id
+    WHERE q.ativa GROUP BY 1,2 ORDER BY 3 DESC LIMIT 10;
+
+    -- textos de teoria ligados a um assunto (0 = a 014 não rodou)
+    SELECT COUNT(*) FILTER (WHERE assunto_id IS NOT NULL) AS ligados,
+           COUNT(*) AS total FROM teoria_conteudo;
+
+    >> OU, MAIS FÁCIL: entre em /admin -> aba "🩺 Diagnóstico".
+       Ela roda todas essas conferências sozinha e diz em vermelho
+       qual migration não chegou ao banco.
 
 
 ================================================================================
@@ -273,7 +317,30 @@
   [ ] 6.11 PAINEL · Abra "🟢 Usuários Online Agora" com alguém estudando.
            Tem que listar. Antes vinha sempre vazia por nome de coluna.
 
-  [ ] 6.12 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
+  [ ] 6.12 TELA INICIAL · Entre e veja /dashboard. Tem que abrir com "Por
+           onde começar" e os seus pontos fracos — não com Streak e Tempo
+           Total (isso mudou para /progresso, no menu "Meu Progresso").
+
+  [ ] 6.13 RADAR · Responda ~20 questões de um concurso, erre algumas de
+           propósito. Volte ao /dashboard: os assuntos errados têm que
+           aparecer em "Seus pontos fracos", ordenados por prioridade, com
+           os botões "Resolver questões" e "Ler a teoria antes".
+
+  [ ] 6.14 REFAZER ERROS · Com 5+ erros em aberto, o /dashboard oferece
+           "Refazer N erros". A prova tem que vir SÓ com questões que você
+           errou.
+
+  [ ] 6.15 ESCUDO · Difícil de testar sem esperar. Confira no banco:
+           SELECT escudos_streak, escudo_recarregado_em FROM users LIMIT 5;
+           Todo mundo tem que ter 1 e uma data.
+
+  [ ] 6.16 TAF · Em um concurso militar, abra o card do TAF e registre uma
+           marca. Tem que aparecer a barra e a distância até o índice.
+
+  [ ] 6.17 DIAGNÓSTICO · /admin -> "🩺 Diagnóstico". Todas as linhas verdes.
+           Qualquer vermelha aponta a migration que faltou rodar.
+
+  [ ] 6.18 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
            progresso soltando o dedo FORA dela. A música tem que pular para
            onde você soltou. Antes travava.
 
@@ -312,7 +379,27 @@
          errada faria o aluno treinar para o alvo errado. Se você tiver a
          tabela do edital, me passa que eu cadastro.
 
-  ! 7.5  Conteúdo programático transcrito do edital
+  ! 7.5  Teoria: 43% das questões têm texto do assunto (era 24%)
+         Subiu muito nesta versão — Inglês foi de 0% para 78%, História de
+         0% para 42%. As matérias que ainda estão baixas:
+           Geografia 19% · Literatura 11% · Artes 13% · Atualidades 0%
+           Ciências Humanas e da Natureza 0% (são as guarda-chuva do ENEM;
+           o texto existe sob a disciplina específica, e o radar já encontra
+           por nome — o número aqui é só do vínculo formal)
+         Me peça a matéria que quiser e eu escrevo.
+
+  ! 7.6  Nota de corte é FAIXA DE REFERÊNCIA, não promessa
+         O histórico de simulados compara sua nota com uma faixa histórica.
+         Nota de corte real muda todo ano, muda por especialidade e nesses
+         concursos sai da classificação e do número de vagas. Se você tiver
+         o corte oficial de algum edital, me passa que eu troco.
+
+  ! 7.7  Formato oficial cadastrado para 8 concursos
+         O modo "Formato da banca" tem quantidade e duração de EEAR, ESA,
+         EPCAR, CN, EFOMM, EAM, EsPCEx e ENEM. Confira contra o edital que
+         você tem em mãos — se algum estiver errado, me avise.
+
+  ! 7.8  Conteúdo programático transcrito do edital
          Não consegui fonte verificável. Em vez disso, o card "Assuntos que
          caem" lista o que realmente caiu nas provas oficiais, com
          frequência e ano — e linka o edital oficial no topo.
@@ -320,15 +407,15 @@
          calculado do próprio banco, não afirmado: ele se corrige sozinho
          quando você importa uma prova nova.
 
-  ! 7.6  Aba "Banners & Temas" do admin é só informativa
+  ! 7.9  Aba "Banners & Temas" do admin é só informativa
          Não faz nada. Me diga o que ela deveria controlar.
 
-  ! 7.7  npm run build nunca foi executado
+  ! 7.10 npm run build nunca foi executado
          Node não está instalado aqui. Validei com 7 checagens estáticas
          (149 arquivos). Elas acharam 2 erros que quebrariam a compilação,
          já corrigidos — mas quem confirma é o Vercel ou o passo 4.5.
 
-  ! 7.8  Presença em tempo real no chat
+  ! 7.11 Presença em tempo real no chat
          O "Online" verde era escrito na mão para todo mundo. Agora mostra
          o último acesso de verdade ("Visto há 20 min"). Presença ao vivo
          exigiria websocket/Realtime — dá para fazer, é só pedir.
@@ -350,6 +437,13 @@
     python scripts/checar_seeds.py           # confere antes de colar
     (depois rode no Supabase só os arquivos que mudaram)
 
+  Mudar a taxonomia de assuntos (agrupar diferente, criar assunto novo):
+    1. edite scripts/taxonomia.py
+    2. python scripts/parse_questoes.py
+    3. python scripts/gerar_seed_sql.py
+    4. python scripts/gerar_migration_taxonomia.py   # regera a 011
+    5. rode a 011 nova no Supabase
+
   Revalidar as vídeo-aulas (vídeo do YouTube sai do ar):
     python scripts/gerar_videoaulas.py
 
@@ -362,6 +456,7 @@
     python scripts/checar_escopo.py           # variável que não existe (*)
     python scripts/checar_colunas.py          # coluna que não existe no schema
     python scripts/checar_moderacao.py        # falso positivo no filtro do chat
+    python scripts/checar_streak.py           # lógica do escudo de sequência
     python scripts/checar_classes_tema.py     # classes de cor inexistentes
     python scripts/checar_seeds.py            # SQL antes de colar
     python scripts/checar_paridade_hash.py    # dedup do importador

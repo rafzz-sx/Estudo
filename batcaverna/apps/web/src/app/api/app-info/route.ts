@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
  * Versão de reserva, usada só quando `app_info` está vazia.
  * Mantenha em sincronia com o último seed `versao_*.sql`.
  */
-const VERSAO_APP = '2.3.0';
+const VERSAO_APP = '2.4.0';
 
 // GET /api/app-info — Retorna versão atual e data de atualização
 export async function GET() {

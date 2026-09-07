@@ -78,20 +78,23 @@ def sem_texto(codigo: str) -> str:
                     i += 1
                     break
                 if aspa == "`" and codigo[i] == "$" and codigo[i + 1 : i + 2] == "{":
+                    # O miolo de `${...}` é código de verdade — mas pode ter
+                    # STRING dentro ("${n === 1 ? 'revisão' : 'revisões'}").
+                    # Sem tratar isso, cada palavra em português dessas
+                    # strings virava um "identificador não declarado".
                     prof = 1
-                    saida.append(" ")
                     i += 2
+                    inicio = i
                     while i < n and prof:
                         if codigo[i] == "{":
                             prof += 1
                         elif codigo[i] == "}":
                             prof -= 1
                             if prof == 0:
-                                i += 1
                                 break
-                        saida.append(codigo[i])
                         i += 1
-                    saida.append(" ")
+                    saida.append(" " + sem_texto(codigo[inicio:i]) + " ")
+                    i += 1
                     continue
                 i += 1
             saida.append(" ")
@@ -165,12 +168,28 @@ def declarados(codigo: str) -> set[str]:
         rf"[({{,]\s*({IDENT})\s*(?::|=|,|\)|}}|$)",
         rf":\s*({IDENT})\s*[,}}]",  # { data: questoes }
         rf"\.\.\.\s*({IDENT})",
+        # arrow sem parênteses: `byte => byte.toString(16)`
+        rf"\b({IDENT})\s*=>",
         # desestruturação de array: for (const [termo, canonica] of ...)
         rf"\[\s*({IDENT})\s*(?:,|\])",
         rf",\s*({IDENT})\s*\]",
     ]
     for p in padroes:
         nomes.update(re.findall(p, codigo, re.M))
+
+    # Listas separadas por vírgula dentro de () e []: parâmetros de função e
+    # desestruturação. `re.findall` não devolve casamentos sobrepostos, então
+    # em `(item, index) =>` ele achava `item` (consumindo a vírgula) e perdia
+    # `index`. Aqui a lista é fatiada de uma vez.
+    # `{}` entra junto: `const { nome, apelido, bio } = body`. Literal de
+    # objeto não polui porque `a: 1` não passa no fullmatch de identificador.
+    for grupo in re.findall(r"[\[({]([^\[\](){}]*)[\])}]", codigo):
+        if "," not in grupo:
+            continue
+        for parte in grupo.split(","):
+            parte = parte.strip()
+            if re.fullmatch(IDENT, parte):
+                nomes.add(parte)
 
     # rótulos de objeto literal e assinaturas de tipo entram como declarados:
     # não são referências a valores e só gerariam ruído.

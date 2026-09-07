@@ -6,6 +6,7 @@ import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { formatarDataHoraVersao } from "@batcaverna/utils";
 import { PainelAvisos } from "@/components/admin/PainelAvisos";
 import { PainelModeracao } from "@/components/admin/PainelModeracao";
+import { PainelSaude } from "@/components/admin/PainelSaude";
 import { PainelFeedback } from "@/components/admin/PainelFeedback";
 import { PainelSessoes } from "@/components/admin/PainelSessoes";
 import { PainelImportacao } from "@/components/admin/PainelImportacao";
@@ -48,6 +49,7 @@ type AbaAdmin =
   | "tickets"
   | "moderacao"
   | "alertas"
+  | "saude"
   | "armazem"
   | "resolucoes"
   | "auditoria"
@@ -337,6 +339,7 @@ export default function AdminPage() {
           { key: "usuarios", label: "👥 Contas & Apelidos" },
           { key: "tickets", label: `🎫 Tickets (${tickets.filter((t) => t.status === "aberto").length} novos)` },
           { key: "alertas", label: "🚨 Alertas de Moderação" },
+          { key: "saude", label: "🩺 Diagnóstico" },
           { key: "moderacao", label: "🛡️ Conversas do Chat" },
           { key: "armazem", label: "📥 Importar Questões" },
           { key: "resolucoes", label: "✍️ Fila de Resolução" },
@@ -684,6 +687,12 @@ export default function AdminPage() {
       )}
 
       {/* ═══ TAB 5: MODERAÇÃO DO CHAT ═══ */}
+      {aba === "saude" && (
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
+          <PainelSaude />
+        </div>
+      )}
+
       {aba === "alertas" && (
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
           <PainelModeracao />

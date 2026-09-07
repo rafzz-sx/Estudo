@@ -51,16 +51,23 @@ def sem_texto(codigo: str) -> str:
                     break
                 # `${...}` dentro de template ainda é código de verdade
                 if aspa == "`" and codigo[i] == "$" and codigo[i + 1 : i + 2] == "{":
-                    profundidade = 1
-                    saida.append("${")
+                    # O miolo de `${...}` é código de verdade — mas pode ter
+                    # STRING dentro ("${n === 1 ? 'revisão' : 'revisões'}").
+                    # Sem tratar isso, cada palavra em português dessas
+                    # strings virava um "identificador não declarado".
+                    prof = 1
                     i += 2
-                    while i < n and profundidade:
+                    inicio = i
+                    while i < n and prof:
                         if codigo[i] == "{":
-                            profundidade += 1
+                            prof += 1
                         elif codigo[i] == "}":
-                            profundidade -= 1
-                        saida.append(codigo[i])
+                            prof -= 1
+                            if prof == 0:
+                                break
                         i += 1
+                    saida.append(" " + sem_texto(codigo[inicio:i]) + " ")
+                    i += 1
                     continue
                 i += 1
             saida.append('""')
