@@ -32,6 +32,12 @@ interface PlayerState {
   aleatorio: boolean;
   repetir: 'nao' | 'uma' | 'todas';
   expandido: boolean;
+  /**
+   * Recolhido: a ilha vira uma pastilha pequena, sem perder a fila.
+   * Antes só havia "aberto" ou "fechado" — quem queria a tela livre tinha
+   * de fechar o player e perder a fila inteira.
+   */
+  minimizado: boolean;
   // Cores extraídas da capa — alimentam o gradiente do Dynamic Island
   corPrimaria: string;
   corSecundaria: string;
@@ -45,6 +51,7 @@ interface PlayerState {
   alternarAleatorio: () => void;
   alternarRepetir: () => void;
   definirExpandido: (v: boolean) => void;
+  alternarMinimizado: () => void;
   definirCores: (primaria: string, secundaria: string) => void;
   _sincronizar: (posicao: number, duracao: number) => void;
   _aoTerminar: () => void;
@@ -143,6 +150,7 @@ export const usePlayerStore = create<PlayerState>()(
       aleatorio: false,
       repetir: 'nao',
       expandido: false,
+      minimizado: false,
       corPrimaria: '#F5C518',
       corSecundaria: '#0B0B0F',
 
@@ -252,7 +260,12 @@ export const usePlayerStore = create<PlayerState>()(
             s.repetir === 'nao' ? 'todas' : s.repetir === 'todas' ? 'uma' : 'nao',
         })),
 
-      definirExpandido: (v) => set({ expandido: v }),
+      definirExpandido: (v) => set({ expandido: v, minimizado: false }),
+
+      // Recolher fecha o painel expandido junto: a pastilha não tem espaço
+      // para os controles secundários.
+      alternarMinimizado: () =>
+        set((e) => ({ minimizado: !e.minimizado, expandido: false })),
 
       definirCores: (primaria, secundaria) =>
         set({ corPrimaria: primaria, corSecundaria: secundaria }),
@@ -274,7 +287,17 @@ export const usePlayerStore = create<PlayerState>()(
           el.pause();
           el.src = '';
         }
-        set({ fila: [], indice: 0, tocando: false, posicao: 0, duracao: 0 });
+        // `minimizado` volta ao normal: senão a próxima música que o aluno
+        // tocasse já abriria recolhida, sem ele ter pedido.
+        set({
+          fila: [],
+          indice: 0,
+          tocando: false,
+          posicao: 0,
+          duracao: 0,
+          minimizado: false,
+          expandido: false,
+        });
       },
     }),
     {
