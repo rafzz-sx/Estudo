@@ -32,6 +32,9 @@ import unicodedata
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from taxonomia import canonizar as canonizar_assunto  # noqa: E402
+
 # ══════════════════════════════════════════════════════════════════
 # Mapeamento arquivo → concurso da plataforma
 # ══════════════════════════════════════════════════════════════════
@@ -268,6 +271,7 @@ class Questao:
     numero_original: str | None
     materia: str
     assunto: str
+    assunto_original: str
     area_enem: str | None
     dificuldade: str
     texto_base: str | None
@@ -409,7 +413,17 @@ def montar_questao(
         return limpar(m.group(1)) if m else padrao
 
     materia = canonizar_materia(campo("materia") or ctx.get("materia_secao", ""))
-    assunto = campo("assunto") or "Geral"
+
+    # O rótulo de assunto vem livre nos .txt e cada prova escreve do seu
+    # jeito: "Geometria Plana", "Geometria plana", "Geometria Plana (Áreas)",
+    # "Geometria Plana e Trigonometria". Sem canonizar, viravam quatro
+    # assuntos distintos — e o card "Assuntos que caem" mostrava 23 questões
+    # de Geometria Plana quando o número real é 132.
+    #
+    # `assunto_original` fica guardado: se um dia a taxonomia agrupar algo
+    # errado, dá para reprocessar sem voltar aos .txt.
+    assunto_original = campo("assunto") or "Geral"
+    assunto, _casou = canonizar_assunto(materia, assunto_original)
     ano = campo("ano")
     anos = re.findall(r"\d{4}", ano)
     # Em "2018/2019" vale o ano de ingresso (o último), que é também o que
@@ -492,6 +506,7 @@ def montar_questao(
         numero_original=campo("original") or None,
         materia=materia,
         assunto=assunto,
+        assunto_original=assunto_original,
         area_enem=AREA_POR_MATERIA.get(materia) if ctx["concurso"] == "ENEM" else None,
         dificuldade=canonizar_dificuldade(campo("dificuldade")),
         texto_base=texto_base,
