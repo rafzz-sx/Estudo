@@ -68,10 +68,28 @@ interface MateriaOpcao {
   total_questoes: number;
 }
 
+/**
+ * Formato real de cada banca — espelha FORMATO_OFICIAL do servidor.
+ * Serve só para a tela mostrar o número antes de começar; quem decide é o
+ * back-end.
+ */
+const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
+  EEAR: { questoes: 60, minutos: 240 },
+  ESA: { questoes: 50, minutos: 240 },
+  EPCAR: { questoes: 60, minutos: 240 },
+  CN: { questoes: 60, minutos: 240 },
+  EFOMM: { questoes: 40, minutos: 240 },
+  EAM: { questoes: 50, minutos: 240 },
+  ESPCEX: { questoes: 60, minutos: 240 },
+  ENEM: { questoes: 45, minutos: 270 },
+};
+
 const MODOS = [
   { tipo: "rapido", rotulo: "Rápido", questoes: 10, minutos: 20, desc: "Aquecimento de 20 minutos" },
+  { tipo: "oficial", rotulo: "Formato da banca", questoes: 60, minutos: 240, desc: "A prova como ela é" },
+  { tipo: "erros", rotulo: "Refazer meus erros", questoes: 20, minutos: 50, desc: "Só o que você errou" },
   { tipo: "materia", rotulo: "Por matéria", questoes: 20, minutos: 40, desc: "Foco numa disciplina" },
-  { tipo: "completo", rotulo: "Prova completa", questoes: 45, minutos: 150, desc: "Simula o dia da prova" },
+  { tipo: "completo", rotulo: "Prova completa", questoes: 45, minutos: 150, desc: "Volume de treino" },
   { tipo: "personalizado", rotulo: "Personalizado", questoes: 20, minutos: 45, desc: "Você define tudo" },
 ];
 
@@ -301,8 +319,20 @@ function Simulado() {
     const modo = MODOS.find((m) => m.tipo === config.tipo)!;
     const personalizado = config.tipo === "personalizado";
     const porMateria = config.tipo === "materia";
-    const qtd = personalizado ? config.total_questoes : modo.questoes;
-    const min = personalizado ? config.duracao_minutos : modo.minutos;
+    const modoErros = config.tipo === "erros";
+    const oficial = config.tipo === "oficial";
+
+    const formato = FORMATO_OFICIAL[config.concurso?.toUpperCase()];
+    const qtd = personalizado
+      ? config.total_questoes
+      : oficial && formato
+      ? formato.questoes
+      : modo.questoes;
+    const min = personalizado
+      ? config.duracao_minutos
+      : oficial && formato
+      ? formato.minutos
+      : modo.minutos;
 
     // Quantas questões existem de fato no recorte escolhido. Prometer 45
     // questões de uma matéria que só tem 12 é frustrar o aluno na largada.
@@ -310,7 +340,9 @@ function Simulado() {
     const disponiveis = materiaEscolhida
       ? materiaEscolhida.total_questoes
       : concursos.find((c) => c.sigla === config.concurso)?.total_questoes ?? 0;
-    const vaiFaltar = disponiveis > 0 && disponiveis < qtd;
+    // No modo "erros" o pool é a lista de erros do próprio aluno, não o
+    // banco do concurso: comparar com `disponiveis` daria um aviso falso.
+    const vaiFaltar = !modoErros && disponiveis > 0 && disponiveis < qtd;
 
     return (
       <div className="mx-auto max-w-2xl">
@@ -353,7 +385,7 @@ function Simulado() {
             <label className="mb-2 block text-sm font-medium text-bat-text">
               Modo
             </label>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
               {MODOS.map((m) => (
                 <button
                   key={m.tipo}
@@ -375,6 +407,15 @@ function Simulado() {
                   <p className="mt-1.5 text-[11px] text-bat-text-secondary">
                     {m.tipo === "personalizado"
                       ? "Você escolhe"
+                      : m.tipo === "erros"
+                      ? "Até 20 dos seus erros"
+                      : m.tipo === "oficial"
+                      ? (() => {
+                          const f = FORMATO_OFICIAL[config.concurso?.toUpperCase()];
+                          return f
+                            ? `${f.questoes} questões · ${f.minutos} min`
+                            : "Formato da prova";
+                        })()
                       : `${m.questoes} questões · ${m.minutos} min`}
                   </p>
                 </button>
@@ -465,6 +506,36 @@ function Simulado() {
                 sufixo="minutos"
                 onChange={(v) => setConfig({ ...config, duracao_minutos: v })}
               />
+            </div>
+          )}
+
+          {modoErros && (
+            <div className="rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
+              🎯 A prova é montada só com questões que você{" "}
+              <strong className="text-bat-gold-400">errou e ainda não refez</strong>.
+              É o treino de maior rendimento que existe aqui — e o que quase
+              ninguém faz sozinho, porque dói mais que resolver questão nova.
+              Acertar aqui tira a questão da sua fila.
+            </div>
+          )}
+
+          {oficial && (
+            <div className="rounded-xl border border-bat-info/25 bg-bat-info/5 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
+              {formato ? (
+                <>
+                  📋 Formato real do {config.concurso}:{" "}
+                  <strong className="text-bat-text">{formato.questoes} questões</strong>{" "}
+                  em <strong className="text-bat-text">{Math.round(formato.minutos / 60)} horas</strong>.
+                  Treinar no formato errado ensina um ritmo que não serve no dia
+                  da prova.
+                </>
+              ) : (
+                <>
+                  📋 Ainda não tenho o formato oficial deste concurso cadastrado.
+                  A prova sai no preset genérico — se você tiver o edital com a
+                  quantidade de questões e a duração, me passe que eu cadastro.
+                </>
+              )}
             </div>
           )}
 

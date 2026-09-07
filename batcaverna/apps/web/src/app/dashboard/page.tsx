@@ -1,354 +1,284 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { BatLogo } from "@/components/BatLogo";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
-import { useStudySessionStore, formatarTempoLegivel } from "@/stores/study-session-store";
-import { StudySessionBadge } from "@/components/StudySessionWidget";
-import { ComboBanner, patamarDe } from "@/components/questoes/ComboBadge";
-import { calcularNivel } from "@batcaverna/utils";
+import { RadarFraqueza } from "@/components/estudo/RadarFraqueza";
+import { GraficoEvolucao } from "@/components/estudo/GraficoEvolucao";
 
-// ─── Barra de progresso XP ───────────────────────────────────
-function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
-  const progresso = proximo > 0 ? Math.min(100, (atual / proximo) * 100) : 0;
+// ═══════════════════════════════════════════════════════════════
+// PLANO DO DIA — a primeira tela de quem entra
+// ═══════════════════════════════════════════════════════════════
+// A tela inicial anterior (que virou /progresso) mostrava Streak, Tempo
+// Total, Questões e Maior Combo. É uma vitrine de troféus: conta o que o
+// aluno já fez e nunca o que fazer em seguida.
+//
+// Quem abre a plataforma às 20h de uma terça não está perguntando "quanto eu
+// já estudei". Está perguntando "por onde eu começo hoje" — e essa pergunta
+// a plataforma tinha todos os dados para responder e não respondia.
+//
+// A ordem daqui até o fim da tela É a recomendação:
+//   1. o que está vencido (revisão, erro em aberto)
+//   2. onde a próxima hora rende mais ponto (radar de fraqueza)
+//   3. o que você nunca abriu (ponto cego)
+//   4. como você está evoluindo
+// ═══════════════════════════════════════════════════════════════
 
-  return (
-    <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="heading text-bat-gold-400 text-lg font-bold">Nv. {nivel}</span>
-          <span className="text-bat-text-secondary text-sm">{titulo}</span>
-        </div>
-        <span className="text-bat-text-muted text-xs">{atual} / {proximo} XP</span>
-      </div>
-      <div className="w-full h-3 bg-bat-bg-secondary rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-1000 ease-out"
-          style={{
-            width: `${progresso}%`,
-            background: "linear-gradient(90deg, #F5C518, #FFD700, #EAB308)",
-            boxShadow: "0 0 12px rgba(245, 197, 24, 0.5)",
-          }}
-        />
-      </div>
-    </div>
-  );
+interface Acao {
+  chave: string;
+  titulo: string;
+  descricao: string;
+  href: string;
+  emoji: string;
+  urgencia: "alta" | "media" | "baixa";
 }
 
-// ─── Card estatístico ────────────────────────────────────────
-function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-  glowColor = "gold",
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  sub?: string;
-  glowColor?: "gold" | "green" | "blue";
-}) {
-  const glowMap = {
-    gold: "hover:border-bat-gold-400/40 hover:shadow-[0_0_20px_rgba(245,197,24,0.2)]",
-    green: "hover:border-bat-success/40 hover:shadow-[0_0_20px_rgba(34,197,94,0.2)]",
-    blue: "hover:border-bat-info/40 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]",
+interface AssuntoRadar {
+  assunto_id: string;
+  assunto: string;
+  materia: string;
+  materia_emoji: string | null;
+  questoes_no_concurso: number;
+  respondidas: number;
+  acertos: number;
+  taxa: number;
+  prioridade: number;
+  situacao: "critico" | "atencao" | "dominado" | "nao_testado";
+  confiavel: boolean;
+}
+
+interface PontoEvolucao {
+  semana: string;
+  respondidas: number;
+  acertos: number;
+  taxa: number;
+}
+
+interface Painel {
+  concurso: {
+    id: string;
+    sigla: string;
+    nome: string;
+    emoji: string | null;
+    cor_tema: string | null;
+  } | null;
+  plano: { id: string; nome: string; data_prova: string } | null;
+  dias_para_prova: number | null;
+  revisoes_hoje: number;
+  erros_abertos: number;
+  acoes: Acao[];
+  radar?: {
+    fracos: AssuntoRadar[];
+    pontos_cegos: AssuntoRadar[];
+    total_assuntos: number;
+    dominados: number;
+    respondidas: number;
+    acertos: number;
+    taxa: number;
   };
-
-  return (
-    <div className={`bg-bat-bg-card border border-bat-border rounded-2xl p-5 transition-all duration-300 ${glowMap[glowColor]}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-bat-text-muted text-xs mb-1">{label}</p>
-          <p className="heading text-2xl text-bat-text font-bold">{value}</p>
-          {sub && <p className="text-bat-text-secondary text-xs mt-1">{sub}</p>}
-        </div>
-        <span className="text-2xl">{icon}</span>
-      </div>
-    </div>
-  );
+  evolucao?: PontoEvolucao[];
 }
 
-// ═══════════════════════════════════════════════════════════════
-// DASHBOARD PAGE
-// ═══════════════════════════════════════════════════════════════
-interface ConcursoFavorito {
-  sigla: string;
-  nome: string;
-  emoji: string | null;
-}
+const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
+  alta: "#EF4444",
+  media: "#F5C518",
+  baixa: "#22C55E",
+};
 
-interface QuestaoDoDia {
-  id: string;
-  enunciado: string;
-  ano: number | null;
-  concursos: { sigla: string } | null;
-  materias: { nome: string } | null;
-  assuntos: { nome: string } | null;
+function saudacao(): string {
+  const h = new Date().getHours();
+  if (h < 5) return "Ainda de pé";
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
 }
 
 export default function DashboardPage() {
-  const [visible, setVisible] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const [favoritos, setFavoritos] = useState<ConcursoFavorito[]>([]);
-  const [questaoDoDia, setQuestaoDoDia] = useState<QuestaoDoDia | null>(null);
+  const user = useAuthStore((s) => s.user);
+  const [painel, setPainel] = useState<Painel | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
-  // Sessão de estudo automática (limite 8h)
-  const tempoEstudoTotal = useStudySessionStore((state) => state.tempoEstudoTotal);
-  const tempoEstudoHoje = useStudySessionStore((state) => state.tempoEstudoHoje);
-
-  useEffect(() => {
-    setTimeout(() => setVisible(true), 100);
-
-    // Buscar tempo total e status de estudo atualizados do Supabase
-    const fetchStudyStats = async () => {
-      try {
-        const res = await fetchWithAuth('/api/study-sessions/status');
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            useStudySessionStore.setState({
-              tempoEstudoTotal: json.data.tempo_estudo_total_segundos || 0,
-              tempoEstudoHoje: json.data.tempo_estudo_hoje_segundos || 0,
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao atualizar estatísticas de estudo:', e);
-      }
-    };
-
-    fetchStudyStats();
-
-    // Concursos alvo do aluno
-    fetchWithAuth("/api/usuarios/me/concursos-favoritos")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json?.success && Array.isArray(json.data)) {
-          setFavoritos(
-            json.data
-              .map((f: any) => f.concursos ?? f)
-              .filter((c: any) => c?.sigla)
-          );
-        }
-      })
-      .catch(() => undefined);
-
-    // Questão do dia
-    fetchWithAuth("/api/questoes/do-dia")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json?.success && json.data) setQuestaoDoDia(json.data);
-      })
-      .catch(() => undefined);
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    setErro(null);
+    try {
+      const res = await fetchWithAuth("/api/estudo/painel");
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setPainel(json.data);
+    } catch {
+      setErro("Não consegui montar seu plano agora. Recarregue a página.");
+    } finally {
+      setCarregando(false);
+    }
   }, []);
 
-  // Dados REAIS do usuário autenticado com 15 níveis oficiais
-  const apelido = user?.apelido || user?.nome || "Soldado";
-  const role = user?.role || "user";
-  const xp = user?.xp_total ?? 0;
-  const nivelInfo = calcularNivel(xp);
-  const nivel = nivelInfo.nivel;
-  const xpProximo = nivelInfo.xp_necessario_proximo;
-  const titulo = nivelInfo.titulo;
-  const streak = user?.streak_dias ?? 0;
-  const maiorCombo = user?.maior_combo_pessoal ?? 0;
-  const comboAtual = user?.combo_atual ?? 0;
-  const questoesRespondidas = user?.questoes_respondidas ?? 0;
-  const taxaAcerto = user?.taxa_acerto ?? 0;
-  const patamarMaior = patamarDe(maiorCombo);
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const primeiroNome = (user?.nome ?? user?.apelido ?? "soldado").split(" ")[0];
+
+  // ─── Carregando ────────────────────────────────────────────
+  if (carregando) {
+    return (
+      <div className="space-y-6">
+        <div className="skeleton h-28 w-full rounded-3xl" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="skeleton h-36 rounded-2xl" />
+          <div className="skeleton h-36 rounded-2xl" />
+        </div>
+        <div className="skeleton h-72 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (erro || !painel) {
+    return (
+      <div className="rounded-2xl border border-bat-error/30 bg-bat-error/10 px-5 py-6 text-center">
+        <p className="text-sm text-bat-error">{erro ?? "Painel indisponível."}</p>
+        <button onClick={carregar} className="btn-secondary mt-4 px-5 py-2 text-xs">
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
+
+  const { concurso, radar, evolucao = [], dias_para_prova: dias } = painel;
+  const cor = concurso?.cor_tema ?? "#F5C518";
 
   return (
-    <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO COM BADGE DE SESSÃO AUTOMÁTICA (8H) ═══ */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <BatLogo size={36} glow />
-            <h1 className="heading text-2xl sm:text-3xl text-bat-text font-bold">
-              Bem-vindo à <span className="text-white">Bat</span><span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {apelido}
+    <div className="space-y-7">
+      {/* ═══════════ CABEÇALHO ═══════════ */}
+      <header className="relative overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 sm:p-7">
+        <div
+          className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full opacity-20 blur-3xl"
+          style={{ background: cor }}
+        />
+
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-bat-text-muted">
+              {saudacao()}, <strong className="text-bat-text">{primeiroNome}</strong>
+            </p>
+            <h1 className="heading mt-1 text-2xl font-bold text-bat-text sm:text-3xl">
+              {concurso ? (
+                <>
+                  Seu plano de hoje{" "}
+                  <span style={{ color: cor }}>
+                    {concurso.emoji} {concurso.sigla}
+                  </span>
+                </>
+              ) : (
+                "Vamos começar"
+              )}
             </h1>
-            {role === "admin" && (
-              <Link href="/admin" className="badge-admin no-underline">
-                ADMIN
-              </Link>
-            )}
           </div>
-          <p className="text-bat-text-secondary text-sm ml-10">
-            Vamos dominar mais um dia de estudos? 💪
+
+          {/* Contagem regressiva — o número mais motivador que existe para
+              quem presta concurso, e que estava gravado no banco sem
+              aparecer em lugar nenhum. */}
+          {dias !== null && dias >= 0 && (
+            <Link
+              href="/cronograma"
+              className="shrink-0 rounded-2xl border px-5 py-3 text-center no-underline transition-transform hover:scale-105"
+              style={{ borderColor: `${cor}55`, background: `${cor}12` }}
+            >
+              <p className="heading text-3xl font-extrabold tabular-nums" style={{ color: cor }}>
+                {dias}
+              </p>
+              <p className="text-[10px] uppercase tracking-wider text-bat-text-muted">
+                {dias === 1 ? "dia para a prova" : "dias para a prova"}
+              </p>
+            </Link>
+          )}
+        </div>
+
+        {/* Resumo do concurso em foco */}
+        {radar && radar.respondidas > 0 && (
+          <div className="relative mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-bat-text-secondary">
+            <span>
+              <strong className="text-bat-text">{radar.respondidas}</strong> questões
+              respondidas no {concurso?.sigla}
+            </span>
+            <span>
+              <strong className="text-bat-gold-400">{radar.taxa}%</strong> de acerto
+            </span>
+            <span>
+              <strong className="text-bat-success">{radar.dominados}</strong> de{" "}
+              {radar.total_assuntos} assuntos dominados
+            </span>
+          </div>
+        )}
+      </header>
+
+      {/* ═══════════ O QUE FAZER AGORA ═══════════ */}
+      <section>
+        <h2 className="heading mb-3 text-lg text-bat-text">
+          Por onde começar
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {painel.acoes.map((a) => (
+            <Link
+              key={a.chave}
+              href={a.href}
+              className="group relative overflow-hidden rounded-2xl border border-bat-border bg-bat-bg-card p-5 no-underline transition-all duration-300 hover:scale-[1.01] hover:border-bat-gold-400/40"
+            >
+              <div
+                className="absolute bottom-0 left-0 top-0 w-1"
+                style={{ background: CORES_URGENCIA[a.urgencia] }}
+              />
+              <div className="pl-2">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-2xl">{a.emoji}</span>
+                  {a.urgencia === "alta" && (
+                    <span className="rounded-md bg-bat-error/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-bat-error">
+                      agora
+                    </span>
+                  )}
+                </div>
+                <h3 className="heading text-base font-bold text-bat-text transition-colors group-hover:text-bat-gold-400">
+                  {a.titulo}
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-bat-text-secondary">
+                  {a.descricao}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ═══════════ RADAR DE FRAQUEZA ═══════════ */}
+      {concurso && radar && (
+        <RadarFraqueza
+          fracos={radar.fracos}
+          pontosCegos={radar.pontos_cegos}
+          sigla={concurso.sigla}
+          totalAssuntos={radar.total_assuntos}
+          dominados={radar.dominados}
+        />
+      )}
+
+      {/* ═══════════ EVOLUÇÃO ═══════════ */}
+      {evolucao.length >= 2 && (
+        <GraficoEvolucao pontos={evolucao} compacto />
+      )}
+
+      {/* ═══════════ ATALHO PARA O HISTÓRICO ═══════════ */}
+      <Link
+        href="/progresso"
+        className="flex items-center justify-between rounded-2xl border border-bat-border bg-bat-bg-card px-5 py-4 no-underline transition-all hover:border-bat-gold-400/40"
+      >
+        <div>
+          <p className="text-sm font-bold text-bat-text">📊 Meu progresso</p>
+          <p className="mt-0.5 text-xs text-bat-text-secondary">
+            Streak, tempo de estudo, XP, insígnias e a evolução completa.
           </p>
         </div>
-
-        {/* Widget de Sessão Automática de 8h */}
-        <div className="self-start sm:self-center">
-          <StudySessionBadge variant="full" />
-        </div>
-      </div>
-
-      {/* ═══ SEQUÊNCIA ATIVA (persistida no banco) ═══ */}
-      {comboAtual >= 3 && <ComboBanner combo={comboAtual} />}
-
-      {/* ═══ BARRA DE XP ═══ */}
-      <XpBar
-        atual={xp}
-        proximo={xpProximo}
-        nivel={nivel}
-        titulo={titulo}
-      />
-
-      {/* ═══ CARDS ESTATÍSTICOS (DADOS REAIS COM TEMPO AUTOMÁTICO) ═══ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon="🔥"
-          label="Streak"
-          value={streak > 0 ? `${streak} dias` : "0 dias"}
-          sub={streak > 0 ? "Não perca a sequência!" : "Estude hoje para pontuar!"}
-          glowColor="gold"
-        />
-        <StatCard
-          icon="⏱️"
-          label="Tempo Total"
-          value={formatarTempoLegivel(tempoEstudoTotal)}
-          sub={tempoEstudoHoje > 0 ? `Hoje: ${formatarTempoLegivel(tempoEstudoHoje)}` : "Acumule tempo estudando"}
-          glowColor="gold"
-        />
-        <StatCard
-          icon="❓"
-          label="Questões"
-          value={questoesRespondidas.toLocaleString("pt-BR")}
-          sub={
-            questoesRespondidas > 0
-              ? `${taxaAcerto}% de acerto`
-              : "Resolva sua primeira questão"
-          }
-          glowColor="blue"
-        />
-        <StatCard
-          icon="⚡"
-          label="Maior Combo"
-          value={maiorCombo > 0 ? `x${maiorCombo}` : "x0"}
-          sub={
-            patamarMaior
-              ? `${patamarMaior.emoji} ${patamarMaior.rotulo}`
-              : maiorCombo > 0
-              ? "Acertos seguidos"
-              : "Acerte questões em sequência"
-          }
-          glowColor="green"
-        />
-      </div>
-
-      {/* ═══ PROGRESSO POR CONCURSO + QUESTÃO DO DIA ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Concursos favoritos */}
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-          <h2 className="heading text-lg text-bat-text mb-4">Seus Concursos</h2>
-
-          {favoritos.length > 0 ? (
-            <div className="space-y-2.5">
-              {favoritos.map((c) => (
-                <Link
-                  key={c.sigla}
-                  href={`/concursos/${c.sigla.toLowerCase()}`}
-                  className="flex items-center gap-3 rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-4 py-3 no-underline transition-all hover:border-bat-gold-400/40"
-                >
-                  <span className="text-2xl">{c.emoji ?? "🎯"}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-bat-text">{c.sigla}</p>
-                    <p className="truncate text-xs text-bat-text-muted">{c.nome}</p>
-                  </div>
-                  <span className="text-bat-gold-400">→</span>
-                </Link>
-              ))}
-              <Link
-                href="/perfil"
-                className="mt-2 block text-center text-xs text-bat-text-muted no-underline hover:text-bat-gold-400"
-              >
-                Gerenciar concursos alvo
-              </Link>
-            </div>
-          ) : (
-            <div className="py-6 text-center">
-              <p className="text-bat-text-muted text-sm mb-3">
-                Você ainda não escolheu um concurso alvo.
-              </p>
-              <Link
-                href="/concursos"
-                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-              >
-                Explorar concursos →
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Questão do dia */}
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="heading text-lg text-bat-text">🎲 Questão do Dia</h2>
-            {questaoDoDia?.concursos?.sigla && (
-              <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2.5 py-1 rounded-lg">
-                {questaoDoDia.concursos.sigla}
-                {questaoDoDia.ano ? ` · ${questaoDoDia.ano}` : ""}
-              </span>
-            )}
-          </div>
-
-          {questaoDoDia ? (
-            <>
-              <p className="mb-2 text-xs text-bat-text-muted">
-                {questaoDoDia.materias?.nome}
-                {questaoDoDia.assuntos?.nome ? ` · ${questaoDoDia.assuntos.nome}` : ""}
-              </p>
-              <p className="mb-4 line-clamp-4 text-sm leading-relaxed text-bat-text-secondary">
-                {questaoDoDia.enunciado}
-              </p>
-              <Link
-                href={`/questoes?concurso=${questaoDoDia.concursos?.sigla ?? "todos"}`}
-                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-              >
-                Resolver agora →
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className="text-bat-text-secondary text-sm mb-4">
-                Carregando uma questão oficial para você começar o dia...
-              </p>
-              <Link
-                href="/questoes"
-                className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
-              >
-                Ver banco de questões
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ═══ AÇÕES RÁPIDAS ═══ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { href: "/questoes", label: "Banco de Questões", icon: "📝", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
-          { href: "/revisoes", label: "Revisar Erros", icon: "🔁", cor: "border-bat-purple-500/20 hover:border-bat-purple-500/50" },
-          { href: "/caderno", label: "Caderno de Erros", icon: "📓", cor: "border-bat-error/20 hover:border-bat-error/40" },
-          { href: "/cronograma", label: "Cronograma", icon: "🗓️", cor: "border-bat-info/20 hover:border-bat-info/40" },
-          { href: "/simulado", label: "Simulado", icon: "⏱️", cor: "border-bat-gold-400/20 hover:border-bat-gold-400/50" },
-          { href: "/bizus", label: "Bizus", icon: "💡", cor: "border-bat-success/20 hover:border-bat-success/40" },
-          { href: "/ranking", label: "Ranking", icon: "🏆", cor: "border-bat-info/20 hover:border-bat-info/40" },
-          { href: "/musica", label: "Música", icon: "🎧", cor: "border-bat-purple-500/20 hover:border-bat-purple-500/50" },
-        ].map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className={`bg-bat-bg-card border ${a.cor} rounded-2xl p-4 flex flex-col items-center gap-2 text-center no-underline transition-all duration-300 hover:transform hover:scale-[1.02]`}
-          >
-            <span className="text-2xl">{a.icon}</span>
-            <span className="text-bat-text text-sm font-medium">{a.label}</span>
-          </Link>
-        ))}
-      </div>
+        <span className="text-bat-gold-400">→</span>
+      </Link>
     </div>
   );
 }

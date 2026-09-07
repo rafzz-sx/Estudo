@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { uuidOuNulo } from '@/lib/seguranca';
+import { errosEmAberto } from '@/lib/diagnostico';
 
 /**
  * POST /api/simulados/start
@@ -24,6 +25,33 @@ const PRESETS: Record<string, { questoes: number; minutos: number }> = {
   materia: { questoes: 20, minutos: 40 },
   completo: { questoes: 45, minutos: 150 },
   personalizado: { questoes: 20, minutos: 45 },
+  // Refazer o que já errou. Mais tempo por questão de propósito: aqui o
+  // objetivo não é treinar velocidade, é o assunto finalmente grudar.
+  erros: { questoes: 20, minutos: 50 },
+  // Prova no formato da banca: quantidade e duração vêm do próprio concurso.
+  oficial: { questoes: 45, minutos: 180 },
+};
+
+/**
+ * Formato real de cada prova.
+ *
+ * Um simulado de 45 questões genéricas não treina a prova da EEAR: são 60
+ * questões em 4 horas, com peso diferente por matéria. Treinar no formato
+ * errado ensina um ritmo que não serve no dia.
+ *
+ * Os números abaixo são os do formato consolidado de cada banca. Quando o
+ * concurso não está aqui, o modo "oficial" cai no preset genérico — melhor
+ * que inventar um formato.
+ */
+const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
+  EEAR: { questoes: 60, minutos: 240 },
+  ESA: { questoes: 50, minutos: 240 },
+  EPCAR: { questoes: 60, minutos: 240 },
+  CN: { questoes: 60, minutos: 240 },
+  EFOMM: { questoes: 40, minutos: 240 },
+  EAM: { questoes: 50, minutos: 240 },
+  ESPCEX: { questoes: 60, minutos: 240 },
+  ENEM: { questoes: 45, minutos: 270 },
 };
 
 export async function POST(req: NextRequest) {
@@ -40,12 +68,20 @@ export async function POST(req: NextRequest) {
     const tipo: string = PRESETS[body?.tipo] ? body.tipo : 'personalizado';
     const preset = PRESETS[tipo];
 
-    const quantidade = Math.min(
-      100,
-      Math.max(5, Number(body?.total_questoes) || preset.questoes)
-    );
-    const duracaoMinutos =
-      Math.max(5, Number(body?.duracao_minutos) || preset.minutos);
+    // No modo "oficial" quem manda é o formato da banca, não o que o
+    // cliente pediu: o valor do treino está justamente em ser o formato real.
+    const formato =
+      tipo === 'oficial'
+        ? FORMATO_OFICIAL[String(body?.concurso ?? '').toUpperCase()] ?? preset
+        : null;
+
+    const quantidade = formato
+      ? formato.questoes
+      : Math.min(100, Math.max(5, Number(body?.total_questoes) || preset.questoes));
+
+    const duracaoMinutos = formato
+      ? formato.minutos
+      : Math.max(5, Number(body?.duracao_minutos) || preset.minutos);
 
     const supabase = createServerSupabaseClient();
 
@@ -71,6 +107,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ─── Modo "erros": o pool é o que o aluno já errou ───────
+    // Não sorteia sobre o banco: sorteia sobre a lista de questões cuja
+    // ÚLTIMA resposta continua errada. A regra mora em `diagnostico.ts`,
+    // a mesma de /caderno e do painel — três telas, uma definição.
+    let idsErrados: string[] | null = null;
+    if (tipo === 'erros') {
+      const erros = await errosEmAberto(supabase, user.id, concursoId);
+      if (erros.total < 5) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Você ainda não tem erros suficientes para montar este treino. Resolva mais questões primeiro.',
+          },
+          { status: 400 }
+        );
+      }
+      idsErrados = erros.ids;
+    }
+
     // ─── Sorteio sobre o pool inteiro ────────────────────────
     // Validados antes de virar filtro: `materia_id` chega do cliente e um
     // texto solto no lugar de um UUID faz o PostgREST estourar 22P02.
@@ -87,9 +143,11 @@ export async function POST(req: NextRequest) {
       return r;
     };
 
-    const { count } = await filtrar(
-      supabase.from('questoes').select('id', { count: 'exact', head: true })
-    );
+    const { count } = idsErrados
+      ? { count: idsErrados.length }
+      : await filtrar(
+          supabase.from('questoes').select('id', { count: 'exact', head: true })
+        );
 
     if (!count || count < 5) {
       return NextResponse.json(
@@ -108,14 +166,19 @@ export async function POST(req: NextRequest) {
     const offsetMax = Math.max(0, count - janela);
     const offset = Math.floor(Math.random() * (offsetMax + 1));
 
-    const { data: pool } = await filtrar(
-      supabase.from('questoes').select('id')
-    ).range(offset, offset + janela - 1);
+    const pool = idsErrados
+      ? idsErrados.map((id) => ({ id }))
+      : (
+          await filtrar(supabase.from('questoes').select('id')).range(
+            offset,
+            offset + janela - 1
+          )
+        ).data ?? [];
 
-    const ids = (pool ?? [])
+    const ids = pool
       .map((q) => q.id)
       .sort(() => Math.random() - 0.5)
-      .slice(0, Math.min(quantidade, pool?.length ?? 0));
+      .slice(0, Math.min(quantidade, pool.length));
 
     // ─── Cria o simulado ─────────────────────────────────────
     const { data: simulado, error: sErr } = await supabase

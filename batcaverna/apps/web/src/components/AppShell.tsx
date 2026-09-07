@@ -22,7 +22,10 @@ interface NavLink {
 }
 
 const navLinksBase: NavLink[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "🏠" },
+  // "Plano de Hoje" e não "Dashboard": o nome é a promessa da tela. Quem
+  // abre a plataforma às 20h de uma terça quer saber por onde começar.
+  { href: "/dashboard", label: "Plano de Hoje", icon: "🏠" },
+  { href: "/progresso", label: "Meu Progresso", icon: "📊" },
   { href: "/concursos", label: "Concursos", icon: "🎯" },
   { href: "/questoes", label: "Questões", icon: "❓" },
   { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
