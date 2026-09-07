@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+// Módulo sem dependências (nem de stores): importar aqui não cria ciclo.
+import { apagarProvaSalva } from '@/lib/prova-em-andamento';
 
 // ─── Tipo do usuário no client ───────────────────────────────
 interface AuthUser {
@@ -77,6 +79,10 @@ export const useAuthStore = create<AuthState>()(
         if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
           navigator.serviceWorker.controller.postMessage({ tipo: 'LIMPAR_CACHE' });
         }
+        // A prova em andamento também é da sessão que acabou. Ela já carrega o
+        // dono e é recusada na leitura, mas não há motivo para deixá-la no
+        // aparelho: quem sai não volta para a mesma prova.
+        apagarProvaSalva();
       },
 
       updateUser: (partial) =>

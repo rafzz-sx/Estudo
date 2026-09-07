@@ -10,6 +10,11 @@ import {
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
 import { formatarCronometro } from "@batcaverna/utils";
+import {
+  lerProvaSalva,
+  gravarProvaSalva,
+  apagarProvaSalva,
+} from "@/lib/prova-em-andamento";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface QuestaoSim {
@@ -84,61 +89,6 @@ const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
   ENEM: { questoes: 45, minutos: 270 },
 };
 
-/**
- * Prova em andamento, guardada no aparelho.
- *
- * Antes, todo o estado da prova vivia em useState: recarregar a página no
- * meio de um simulado de 60 questões perdia tudo, e o registro ficava órfão
- * no banco. O `beforeunload` avisava, mas não protege contra o navegador
- * travar, a bateria acabar ou — o caso mais comum no app — o Android matar
- * a WebView em segundo plano.
- *
- * O relógio NÃO é salvo: ele é recalculado a partir do `iniciado_em` que o
- * servidor devolveu. Fechar a aba e voltar não ganha tempo — igual à prova
- * real. Se o tempo já acabou quando a pessoa volta, a prova é entregue com
- * as respostas que ela tinha marcado.
- *
- * As questões vão sem gabarito (o servidor nunca o envia antes de
- * finalizar), então guardá-las localmente não abre brecha nenhuma.
- */
-const CHAVE_PROVA_ATIVA = "batcaverna-simulado-em-andamento";
-
-interface ProvaSalva {
-  simuladoId: string;
-  questoes: QuestaoSim[];
-  respostas: Record<string, string>;
-  iniciadoEm: string;
-  duracaoMinutos: number;
-}
-
-function lerProvaSalva(): ProvaSalva | null {
-  try {
-    const bruto = localStorage.getItem(CHAVE_PROVA_ATIVA);
-    if (!bruto) return null;
-    const p = JSON.parse(bruto) as ProvaSalva;
-    if (!p?.simuladoId || !Array.isArray(p.questoes) || !p.iniciadoEm) return null;
-    return p;
-  } catch {
-    return null;
-  }
-}
-
-function gravarProvaSalva(p: ProvaSalva) {
-  try {
-    localStorage.setItem(CHAVE_PROVA_ATIVA, JSON.stringify(p));
-  } catch {
-    /* sem espaço ou modo privado: a prova segue só em memória */
-  }
-}
-
-function apagarProvaSalva() {
-  try {
-    localStorage.removeItem(CHAVE_PROVA_ATIVA);
-  } catch {
-    /* idem */
-  }
-}
-
 const MODOS = [
   { tipo: "rapido", rotulo: "Rápido", questoes: 10, minutos: 20, desc: "Aquecimento de 20 minutos" },
   { tipo: "oficial", rotulo: "Formato da banca", questoes: 60, minutos: 240, desc: "A prova como ela é" },
@@ -156,6 +106,9 @@ const LIMITES = { questoesMin: 5, questoesMax: 100, minutosMin: 5, minutosMax: 3
 function Simulado() {
   const params = useSearchParams();
   const updateUser = useAuthStore((s) => s.updateUser);
+  // A prova guardada no aparelho carrega o dono: sem isso, num computador
+  // compartilhado o próximo aluno caía dentro da prova do anterior.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
 
   const [fase, setFase] = useState<"config" | "prova" | "resultado">("config");
   const [concursos, setConcursos] = useState<ConcursoOpcao[]>([]);
@@ -272,9 +225,11 @@ function Simulado() {
       const iniciadoEm: string = json.data.iniciado_em ?? new Date().toISOString();
       inicioProva.current = new Date(iniciadoEm).getTime();
       gravarProvaSalva({
+        userId: userId ?? "",
         simuladoId: json.data.simulado_id,
         questoes: json.data.questoes,
         respostas: {},
+        indice: 0,
         iniciadoEm,
         duracaoMinutos: json.data.duracao_minutos,
       });
@@ -298,7 +253,10 @@ function Simulado() {
   const restaurou = useRef(false);
   useEffect(() => {
     if (restaurou.current) return;
-    const salva = lerProvaSalva();
+    // Só espera pelo usuário; sem ele não dá para saber se a prova é dele.
+    if (!userId) return;
+    // `lerProvaSalva` recusa (e apaga) a prova de outra conta.
+    const salva = lerProvaSalva(userId);
     if (!salva) return;
     restaurou.current = true;
 
@@ -308,23 +266,28 @@ function Simulado() {
     setSimuladoId(salva.simuladoId);
     setQuestoes(salva.questoes);
     setRespostas(salva.respostas ?? {});
-    setIndice(0);
+    // Volta para onde a pessoa parou. Antes era sempre 0: quem recarregava na
+    // questão 47 de 60 voltava para a primeira e navegava tudo de novo.
+    setIndice(
+      Math.min(Math.max(0, salva.indice ?? 0), Math.max(0, salva.questoes.length - 1))
+    );
     inicioProva.current = new Date(salva.iniciadoEm).getTime();
     // Tempo esgotado enquanto a aba estava fechada: entra com 1 s para o
     // cronômetro entregar a prova pelo caminho normal, com o que foi
     // respondido. Não devolve o tempo perdido — a prova real também não.
     setSegundosRestantes(Math.max(1, restante));
     setFase("prova");
-  }, []);
+  }, [userId]);
 
-  // Cada resposta marcada vai para o aparelho na hora. É pouco dado (um
-  // mapa id -> letra), então não há por que adiar.
+  // Cada resposta marcada — e cada troca de questão — vai para o aparelho na
+  // hora. É pouco dado (um mapa id -> letra e um número), então não há por que
+  // adiar.
   useEffect(() => {
     if (fase !== "prova" || !simuladoId) return;
-    const salva = lerProvaSalva();
+    const salva = lerProvaSalva(userId);
     if (!salva || salva.simuladoId !== simuladoId) return;
-    gravarProvaSalva({ ...salva, respostas });
-  }, [fase, simuladoId, respostas]);
+    gravarProvaSalva({ ...salva, respostas, indice });
+  }, [fase, simuladoId, respostas, indice, userId]);
 
   const autoDisparado = useRef(false);
   useEffect(() => {
@@ -339,6 +302,8 @@ function Simulado() {
   const finalizar = useCallback(async () => {
     if (!simuladoId || ocupado) return;
     setOcupado(true);
+    // Nova tentativa começa sem o erro da anterior na tela.
+    setErro(null);
 
     const tempo = Math.round((Date.now() - inicioProva.current) / 1000);
 
@@ -350,10 +315,24 @@ function Simulado() {
       const json = await res.json();
 
       if (!json.success) {
-        // "Já foi finalizado" = a cópia local é de uma prova que o servidor
-        // já fechou (outra aba, outro aparelho). Não há o que retomar.
-        if (String(json.error ?? "").toLowerCase().includes("finalizado")) {
+        // A cópia local não corresponde a nenhuma prova aberta do usuário: ou
+        // o servidor já a fechou (outra aba, outro aparelho), ou ela não
+        // existe / não é dele — a rota devolve 404 "Simulado não encontrado".
+        //
+        // Antes só o primeiro caso limpava, porque a comparação procurava a
+        // palavra "finalizado". No segundo, a prova morta era restaurada a
+        // cada visita e o aluno ficava preso nela sem saída.
+        const jaEra =
+          res.status === 404 ||
+          /finalizad|não encontrad|nao encontrad/i.test(String(json.error ?? ""));
+
+        if (jaEra) {
           apagarProvaSalva();
+          restaurou.current = false;
+          setFase("config");
+          setSimuladoId(null);
+          setQuestoes([]);
+          setRespostas({});
         }
         setErro(json.error ?? "Erro ao corrigir o simulado.");
         return;
@@ -683,6 +662,24 @@ function Simulado() {
 
     return (
       <div className="mx-auto max-w-3xl">
+        {/* Falha ao entregar.
+            O bloco de erro só existia na tela de configuração. Uma queda de
+            rede na hora de entregar não mostrava NADA: o botão voltava a ficar
+            clicável e o aluno concluía que estava quebrado — depois de 60
+            questões. É o pior momento possível para um erro mudo. */}
+        {erro && (
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-bat-error/30 bg-bat-error/10 px-4 py-3 text-sm text-bat-error"
+          >
+            <p className="font-semibold">{erro}</p>
+            <p className="mt-1 text-xs text-bat-error/80">
+              Suas respostas continuam salvas neste aparelho. Confira a conexão
+              e toque em entregar de novo.
+            </p>
+          </div>
+        )}
+
         {/* Barra fixa: cronômetro + progresso */}
         <div className="sticky top-16 z-20 mb-5 rounded-2xl border border-bat-border bg-bat-bg-card/95 p-4 backdrop-blur-md lg:top-0">
           <div className="mb-3 flex items-center justify-between gap-3">
