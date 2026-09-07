@@ -65,12 +65,19 @@ export const useAuthStore = create<AuthState>()(
       setAccessToken: (token) =>
         set({ accessToken: token }),
 
-      logout: () =>
+      logout: () => {
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
-        }),
+        });
+        // Nada da sessão que acabou pode ficar no cache do service worker
+        // para a próxima pessoa que abrir este navegador. O SW responde a
+        // esta mensagem apagando todos os caches (ver public/sw.js).
+        if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ tipo: 'LIMPAR_CACHE' });
+        }
+      },
 
       updateUser: (partial) =>
         set((state) => ({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { calcularNivel } from '@batcaverna/utils';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { uuidOuNulo } from '@/lib/seguranca';
 
 async function getUserFromRequest(req: NextRequest) {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -14,8 +15,55 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    // A rota era PÚBLICA: chamava getUserFromRequest só para calcular o
+    // status de amizade e não bloqueava quando não havia ninguém logado.
+    // Com um UUID em mãos, qualquer pessoa na internet obtinha nome real,
+    // foto, banner, bio, XP, sequência e tempo de estudo — de menores de
+    // idade. O mini-perfil é uma tela de dentro da plataforma; exigir login
+    // é o mínimo.
+    const viewer = await getUserFromRequest(req);
+    if (!viewer) {
+      return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const { id: idBruto } = await params;
+    const id = uuidOuNulo(idBruto);
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
     const supabase = createServerSupabaseClient();
+
+    // Quem pediu para sair do ranking também não deve ter o cartão aberto a
+    // estranhos — a preferência era respeitada no ranking e ignorada aqui.
+    // O próprio dono e os amigos confirmados continuam vendo.
+    if (viewer.id !== id) {
+      const { data: priv } = await supabase
+        .from('user_privacy_settings')
+        .select('ocultar_do_ranking')
+        .eq('user_id', id)
+        .maybeSingle();
+
+      if (priv?.ocultar_do_ranking) {
+        const { data: amigo } = await supabase
+          .from('amizades')
+          .select('id')
+          .eq('status', 'aceita')
+          .or(
+            `and(user_id_solicitante.eq.${viewer.id},user_id_destinatario.eq.${id}),` +
+            `and(user_id_solicitante.eq.${id},user_id_destinatario.eq.${viewer.id})`
+          )
+          .limit(1)
+          .maybeSingle();
+
+        if (!amigo) {
+          return NextResponse.json(
+            { success: false, error: 'Este perfil é privado.' },
+            { status: 403 }
+          );
+        }
+      }
+    }
 
     const { data: user, error } = await supabase
       .from('users')
@@ -35,7 +83,6 @@ export async function GET(
     const nivelInfo = calcularNivel(user.xp_total || 0);
 
     // Verificar status de amizade com quem está visualizando
-    const viewer = await getUserFromRequest(req);
     let amizade_status: string | null = null;
     let amizade_id: string | null = null;
 
