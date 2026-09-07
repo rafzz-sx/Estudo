@@ -20,6 +20,7 @@ const PROTECTED_ROUTES = [
   '/concursos',
   '/questoes',
   '/simulado',
+  '/redacao',
   '/revisoes',
   '/caderno',
   '/cronograma',

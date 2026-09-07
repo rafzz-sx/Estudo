@@ -32,6 +32,7 @@ const navLinksBase: NavLink[] = [
   { href: "/caderno", label: "Caderno de Erros", icon: "📓" },
   { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
   { href: "/simulado", label: "Simulado", icon: "⏱️" },
+  { href: "/redacao", label: "Redação", icon: "✍️" },
   { href: "/bizus", label: "Bizus", icon: "💡" },
   { href: "/ranking", label: "Ranking", icon: "🏆" },
   { href: "/chat", label: "Chat & Squad", icon: "💬" },
