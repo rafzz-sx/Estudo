@@ -31,6 +31,9 @@ interface Resumo {
   com_teoria: number;
   sem_teoria: number;
   cobertura: number;
+  janela_dias?: number;
+  respostas_analisadas?: number;
+  amostra_truncada?: boolean;
 }
 
 export function PainelLacunasTeoria() {
@@ -96,6 +99,12 @@ export function PainelLacunasTeoria() {
           <span className="rounded-lg bg-bat-bg-secondary px-3 py-1.5 text-bat-text-secondary">
             {resumo.cobertura}% de cobertura
           </span>
+          {resumo.respostas_analisadas != null && (
+            <span className="rounded-lg bg-bat-bg-secondary px-3 py-1.5 text-bat-text-muted">
+              {resumo.respostas_analisadas.toLocaleString("pt-BR")} respostas
+              dos últimos {resumo.janela_dias} dias
+            </span>
+          )}
         </div>
       )}
 
@@ -197,7 +206,13 @@ export function PainelLacunasTeoria() {
             A prioridade combina <strong>frequência</strong> (raiz quadrada, para
             um assunto de 134 questões não esmagar um de 30) com{" "}
             <strong>erro coletivo suavizado</strong> (assunto com poucas
-            respostas não sobe ao topo por acaso). O texto entra pelos seeds em{" "}
+            respostas não sobe ao topo por acaso). A taxa de erro vem das
+            respostas dos últimos {resumo?.janela_dias ?? 180} dias — é a que
+            interessa para decidir o que escrever agora
+            {resumo?.amostra_truncada
+              ? ", e a amostra foi truncada no teto de segurança"
+              : ""}
+            . O texto entra pelos seeds em{" "}
             <code className="rounded bg-bat-bg-secondary px-1">
               supabase/seeds/teoria_*.sql
             </code>

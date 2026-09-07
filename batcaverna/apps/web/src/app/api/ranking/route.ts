@@ -38,6 +38,9 @@ interface UsuarioRanking {
   xp_total: number | null;
   ativo: boolean | null;
   suspenso_ate: string | null;
+  /** Contadores mantidos a cada resposta em `gamificacao.ts`. */
+  total_questoes_respondidas: number | null;
+  total_acertos: number | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -122,7 +125,8 @@ export async function GET(req: NextRequest) {
       supabase
         .from('users')
         .select(
-          'id, nome, apelido, avatar_url, nivel_atual, xp_total, ativo, suspenso_ate'
+          `id, nome, apelido, avatar_url, nivel_atual, xp_total, ativo, suspenso_ate,
+           total_questoes_respondidas, total_acertos`
         )
     );
 
@@ -157,16 +161,37 @@ export async function GET(req: NextRequest) {
         valorPorUsuario[s.user_id] =
           (valorPorUsuario[s.user_id] ?? 0) + (s.duracao_segundos ?? 0);
       }
+    } else if (!dataCorte) {
+      // ─── Geral: os contadores já existem ──────────────────
+      //
+      // `users.total_questoes_respondidas` e `total_acertos` são
+      // incrementados a cada resposta em `gamificacao.ts`. O ranking geral
+      // varria `user_questao_respostas` INTEIRA para recalcular o que já
+      // estava somado — uma tabela que cresce com o produto (alunos ×
+      // questões respondidas). Com cem mil respostas eram cem viagens ao
+      // banco, na aba que abre por padrão.
+      //
+      // Os números vêm na mesma consulta que já carrega os usuários: zero
+      // requisição a mais.
+      for (const u of elegiveis) {
+        const total = u.total_questoes_respondidas ?? 0;
+        if (total <= 0) continue;
+        acertoPorUsuario[u.id] = { total, acertos: u.total_acertos ?? 0 };
+        valorPorUsuario[u.id] = total;
+      }
     } else {
+      // ─── Semanal e mensal: precisa da data ────────────────
+      // O contador é acumulado desde sempre; recorte por período só sai da
+      // tabela de respostas. O filtro de data limita a leitura.
       const respostas = await lerTudo<{
         user_id: string | null;
         correta: boolean | null;
-      }>(() => {
-        const q = supabase
+      }>(() =>
+        supabase
           .from('user_questao_respostas')
-          .select('user_id, correta');
-        return dataCorte ? q.gte('respondido_em', dataCorte.toISOString()) : q;
-      });
+          .select('user_id, correta')
+          .gte('respondido_em', dataCorte.toISOString())
+      );
 
       for (const r of respostas) {
         if (!r.user_id || !idsElegiveis.has(r.user_id)) continue;

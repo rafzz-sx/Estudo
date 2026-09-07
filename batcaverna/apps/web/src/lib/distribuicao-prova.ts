@@ -52,7 +52,45 @@ interface LinhaMateria {
  * vagas de Física numa prova se não há Física cadastrada — o sorteio devolveria
  * menos questões que o prometido.
  */
+/**
+ * Cache da distribuição, por concurso.
+ *
+ * A conta varre TODAS as questões do concurso — 1.656 no ENEM, duas páginas
+ * de 1.000 no PostgREST — e ela é pedida em dois caminhos quentes: a cada
+ * carga do dashboard (via `projetarNota`) e a cada simulado no formato da
+ * banca. Sem cache, seriam duas viagens ao banco por visita ao dashboard,
+ * para um número que só muda quando alguém importa uma prova nova.
+ *
+ * 30 minutos: importar prova é evento raro, e meia hora de defasagem não
+ * muda nada para o aluno. Cache por instância serverless, como o das frases
+ * motivacionais — é leitura, várias cópias não fazem mal.
+ */
+const CACHE_MS = 30 * 60 * 1000;
+const cacheDistribuicao = new Map<
+  string,
+  { fatias: FatiaMateria[]; validoAte: number }
+>();
+
 export async function distribuicaoDaProva(
+  supabase: SupabaseClient,
+  concursoId: string
+): Promise<FatiaMateria[]> {
+  const agora = Date.now();
+  const guardado = cacheDistribuicao.get(concursoId);
+  if (guardado && guardado.validoAte > agora) return guardado.fatias;
+
+  const fatias = await calcularDistribuicao(supabase, concursoId);
+
+  // Só guarda resultado útil: um erro passageiro de rede não pode deixar o
+  // concurso sem distribuição por meia hora.
+  if (fatias.length > 0) {
+    cacheDistribuicao.set(concursoId, { fatias, validoAte: agora + CACHE_MS });
+  }
+
+  return fatias;
+}
+
+async function calcularDistribuicao(
   supabase: SupabaseClient,
   concursoId: string
 ): Promise<FatiaMateria[]> {

@@ -36,6 +36,17 @@ const K_SUAVIZACAO = 20;
 /** Abaixo disto o assunto é pequeno demais para valer um texto. */
 const MINIMO_QUESTOES = 5;
 
+/**
+ * Janela do erro coletivo.
+ *
+ * A taxa de erro do último semestre é a que interessa para decidir o que
+ * escrever agora — e limita a leitura de uma tabela que cresce sem teto.
+ */
+const DIAS_DA_JANELA = 180;
+
+/** Rede de segurança: no máximo 40 páginas do PostgREST. */
+const TETO_RESPOSTAS = 40_000;
+
 interface LinhaQuestao {
   id: string;
   assunto_id: string | null;
@@ -77,10 +88,27 @@ export async function GET(req: NextRequest) {
     }
 
     // ─── 2. Erro coletivo por assunto ────────────────────────
-    const respostas = await lerTudo<LinhaResposta>(() =>
-      supabase
-        .from('user_questao_respostas')
-        .select('correta, questoes!inner (assunto_id)')
+    //
+    // `user_questao_respostas` cresce sem teto: é uma linha por questão
+    // respondida por CADA aluno. A primeira versão desta rota lia a tabela
+    // inteira — com cem mil respostas seriam 100 viagens ao banco e a página
+    // estouraria o tempo antes de desenhar.
+    //
+    // A janela resolve sem perder o sentido da conta: a taxa de erro do
+    // último semestre é a que interessa para decidir o que escrever agora, e
+    // uma amostra dessa ordem já é estatisticamente sólida. O teto é a rede
+    // de segurança para o dia em que a plataforma crescer.
+    const inicioJanela = new Date();
+    inicioJanela.setDate(inicioJanela.getDate() - DIAS_DA_JANELA);
+
+    const respostas = await lerTudo<LinhaResposta>(
+      () =>
+        supabase
+          .from('user_questao_respostas')
+          .select('correta, questoes!inner (assunto_id)')
+          .gte('respondido_em', inicioJanela.toISOString())
+          .order('respondido_em', { ascending: false }),
+      TETO_RESPOSTAS
     );
 
     const desempenho = new Map<string, { total: number; acertos: number }>();
@@ -194,6 +222,11 @@ export async function GET(req: NextRequest) {
         resumo: {
           com_teoria: comTeoria,
           sem_teoria: semTeoria,
+          // A tela diz de onde veio a taxa de erro: número sem procedência
+          // vira decisão de conteúdo tomada no escuro.
+          janela_dias: DIAS_DA_JANELA,
+          respostas_analisadas: respostas.length,
+          amostra_truncada: respostas.length >= TETO_RESPOSTAS,
           cobertura:
             totalConsiderado > 0
               ? Number(((comTeoria / totalConsiderado) * 100).toFixed(1))
