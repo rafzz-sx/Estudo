@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.2.0
+# Ordem de execução no Supabase — versão 2.3.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -20,6 +20,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 5 | `../migrations/007_editais_e_assuntos.sql` | Link do edital de cada concurso, TAF da EsPCEx e a lista de assuntos cobrados |
 | 6 | `../migrations/008_seguranca_rls.sql` | **Fecha o gabarito público.** `questoes` tinha `SELECT USING (true)`: qualquer visitante baixava a resposta das 3.247 questões com a chave anônima |
 | 7 | `../migrations/009_simulados_e_gabaritos.sql` | Coluna `tem_comentario`, ano-base de cada concurso e 33 frases motivacionais novas |
+| 8 | `../migrations/010_alertas_moderacao.sql` | Gravidade e categoria na mensagem sinalizada, view `moderacao_fila` e o tipo de notificação `moderacao` |
 
 A migration 004 já traz os patamares de combo, 70 frases motivacionais, 16
 insígnias, os metadados dos 9 concursos e as tabelas de TAF preenchidas.
@@ -83,14 +84,14 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_2_0.sql
+versao_2_3_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.
 
-> `versao_2_1_0.sql` continua no diretório só como histórico. Rodar os dois
-> não quebra nada (cada um apaga o registro anterior antes de inserir), mas
-> só o 2.2.0 precisa ser executado.
+> As versões anteriores continuam no diretório só como histórico. Rodar mais
+> de uma não quebra nada (cada uma apaga o registro anterior antes de
+> inserir), mas só a 2.3.0 precisa ser executada.
 
 ---
 

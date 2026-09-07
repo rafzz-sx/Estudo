@@ -1,5 +1,5 @@
 ================================================================================
-  BATCAVERNA 2.2.0 — TUDO QUE PRECISA SER FEITO
+  BATCAVERNA 2.3.0 — TUDO QUE PRECISA SER FEITO
   Atualizado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
 ================================================================================
 
@@ -85,7 +85,12 @@
   [ ] 006_moderacao_contas.sql
   [ ] 007_editais_e_assuntos.sql
   [ ] 008_seguranca_rls.sql                << CORRIGIDA, releia abaixo
-  [ ] 009_simulados_e_gabaritos.sql        NOVA
+  [ ] 009_simulados_e_gabaritos.sql
+  [ ] 010_alertas_moderacao.sql            NOVA
+
+       A 010 começa com um ALTER TYPE solto (igual à 006). Se o SQL Editor
+       reclamar, rode esta linha sozinha primeiro e depois o resto:
+         ALTER TYPE notificacao_tipo ADD VALUE IF NOT EXISTS 'moderacao';
 
        Por que rodar a 004 de novo:
          - ganhou a coluna `anulada`
@@ -142,9 +147,9 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_2_0.sql
+  [ ] versao_2_3_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
-       (versao_2_1_0.sql fica só como histórico — não precisa rodar.)
+       (versao_2_1_0 e versao_2_2_0 ficam só como histórico.)
 
   ---- 3.5 CONFERÊNCIA -----------------------------------------------------
 
@@ -179,6 +184,13 @@
     -- as duas travas de tamanho do chat têm que existir (migration 008)
     SELECT conname FROM pg_constraint
     WHERE conrelid = 'mensagem_chat'::regclass AND contype = 'c';
+
+    -- 'moderacao' tem que estar na lista (migration 010)
+    SELECT unnest(enum_range(NULL::notificacao_tipo));
+
+    -- a fila de moderação tem que existir e voltar vazia num banco novo
+    SELECT gravidade_moderacao, COUNT(*) FROM moderacao_fila
+    WHERE revisada_em IS NULL GROUP BY gravidade_moderacao;
 
 
 ================================================================================
@@ -250,7 +262,18 @@
            O total tem que cair (some o ENEM 2024/2025). Desligue e procure
            uma questão do ENEM 2025: ela mostra o selo "sem comentário".
 
-  [ ] 6.10 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
+  [ ] 6.10 MODERAÇÃO · Crie duas contas de teste, faça as duas virarem
+           amigas e mande de uma para a outra: "voce e um idiota".
+           Entre como admin: o sino tem que ter uma notificação nova dizendo
+           quem → para quem e o trecho, e a aba "🚨 Alertas de Moderação"
+           tem que mostrar a linha em laranja.
+           Depois mande "baseado no edital, cai geometria": NÃO pode
+           sinalizar nada.
+
+  [ ] 6.11 PAINEL · Abra "🟢 Usuários Online Agora" com alguém estudando.
+           Tem que listar. Antes vinha sempre vazia por nome de coluna.
+
+  [ ] 6.12 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
            progresso soltando o dedo FORA dela. A música tem que pular para
            onde você soltou. Antes travava.
 
@@ -337,6 +360,8 @@
     python scripts/checar_imports.py          # imports e sintaxe
     python scripts/checar_referencias.py      # componente usado sem import
     python scripts/checar_escopo.py           # variável que não existe (*)
+    python scripts/checar_colunas.py          # coluna que não existe no schema
+    python scripts/checar_moderacao.py        # falso positivo no filtro do chat
     python scripts/checar_classes_tema.py     # classes de cor inexistentes
     python scripts/checar_seeds.py            # SQL antes de colar
     python scripts/checar_paridade_hash.py    # dedup do importador
