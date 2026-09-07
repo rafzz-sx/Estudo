@@ -148,7 +148,19 @@ export default function ConcursoPage() {
   const art = artigo(concurso.sigla);
 
   // ─── Cards de ação ─────────────────────────────────────────
-  const cards = [
+  // `precisaQuestoes` marca o que não funciona sem banco de questões.
+  // EAM, EsPCEx e IME ainda estão com zero: o botão de simulado já se
+  // desabilitava sozinho, mas os cards levavam a telas vazias — um beco
+  // sem saída que parecia defeito. Agora eles dizem o que falta.
+  const cards: {
+    icon: string;
+    titulo: string;
+    desc: string;
+    href: string;
+    cor: string;
+    selo?: string;
+    precisaQuestoes?: boolean;
+  }[] = [
     {
       icon: "📖",
       titulo: `Começar a estudar para ${art} ${concurso.sigla}`,
@@ -164,6 +176,7 @@ export default function ConcursoPage() {
         : "Questões oficiais com gabarito comentado e resolução passo a passo.",
       href: `/questoes?concurso=${concurso.sigla}`,
       cor: "#F5C518",
+      precisaQuestoes: true,
       selo: concurso.total_questoes
         ? `${concurso.total_questoes.toLocaleString("pt-BR")} questões`
         : undefined,
@@ -174,6 +187,7 @@ export default function ConcursoPage() {
       desc: "Tudo que já foi cobrado nas provas oficiais, na ordem do que mais aparece — com o seu desempenho em cada assunto.",
       href: `/concursos/${concurso.sigla.toLowerCase()}/assuntos`,
       cor: "#06B6D4",
+      precisaQuestoes: true,
     },
     {
       icon: "💡",
@@ -188,6 +202,7 @@ export default function ConcursoPage() {
       desc: "Prova cronometrada nos moldes da banca, com correção e análise ao final.",
       href: `/simulado?concurso=${concurso.sigla}`,
       cor: "#EF4444",
+      precisaQuestoes: true,
     },
     {
       icon: "📊",
@@ -197,6 +212,7 @@ export default function ConcursoPage() {
         : "Acompanhe acertos por matéria, evolução e pontos fracos.",
       href: `/concursos/${concurso.sigla.toLowerCase()}/estatisticas`,
       cor: "#22C55E",
+      precisaQuestoes: true,
     },
   ];
 
@@ -347,12 +363,20 @@ export default function ConcursoPage() {
 
       {/* ═══════════ CARDS ═══════════ */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card, i) => (
-          <Link
-            key={i}
-            href={card.href}
-            className="group relative flex min-h-[170px] flex-col justify-between overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 no-underline transition-all duration-300 hover:scale-[1.02] hover:border-bat-gold-400/50 hover:shadow-[0_0_25px_rgba(245,197,24,0.15)]"
-          >
+        {cards.map((card, i) => {
+          // Sem questões cadastradas, estes cards levam a telas vazias. Vira
+          // um bloco inerte que EXPLICA o motivo, em vez de um link que
+          // parece quebrado.
+          const bloqueado = !!card.precisaQuestoes && !concurso.total_questoes;
+
+          const classe = `group relative flex min-h-[170px] flex-col justify-between overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 no-underline transition-all duration-300 ${
+            bloqueado
+              ? "cursor-not-allowed opacity-55"
+              : "hover:scale-[1.02] hover:border-bat-gold-400/50 hover:shadow-[0_0_25px_rgba(245,197,24,0.15)]"
+          }`;
+
+          const miolo = (
+            <>
             <div
               className="absolute bottom-0 left-0 top-0 w-1.5 opacity-60 transition-opacity group-hover:opacity-100"
               style={{ background: card.cor }}
@@ -383,12 +407,32 @@ export default function ConcursoPage() {
             </div>
 
             <div className="relative z-10 mt-4 flex justify-end">
-              <span className="flex translate-x-[-6px] items-center gap-1 text-xs font-bold text-bat-gold-400 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100">
-                Acessar →
-              </span>
+              {bloqueado ? (
+                <span className="text-xs font-medium text-bat-text-muted">
+                  Sem questões cadastradas ainda
+                </span>
+              ) : (
+                <span className="flex translate-x-[-6px] items-center gap-1 text-xs font-bold text-bat-gold-400 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100">
+                  Acessar →
+                </span>
+              )}
             </div>
-          </Link>
-        ))}
+            </>
+          );
+
+          // Dois ramos explícitos em vez de um componente escolhido em tempo
+          // de execução: `bloqueado ? "div" : Link` deixa o tipo do elemento
+          // como união, e as props de cada lado não são as mesmas.
+          return bloqueado ? (
+            <div key={i} aria-disabled className={classe}>
+              {miolo}
+            </div>
+          ) : (
+            <Link key={i} href={card.href} className={classe}>
+              {miolo}
+            </Link>
+          );
+        })}
       </div>
 
       {/* ═══════════ MATÉRIAS COBRADAS ═══════════ */}

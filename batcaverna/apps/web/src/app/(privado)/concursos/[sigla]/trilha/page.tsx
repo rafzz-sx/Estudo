@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { fetchWithAuth } from "@/stores/auth-store";
@@ -60,18 +60,33 @@ function Trilha() {
   } | null>(null);
   const [carregandoTeoria, setCarregandoTeoria] = useState(false);
 
-  useEffect(() => {
+  // "A trilha não carregou" e "este concurso ainda não tem conteúdo" eram a
+  // MESMA tela: o `.catch(() => undefined)` engolia a falha e caía no estado
+  // vazio. O aluno com internet instável concluía que o conteúdo não existe e
+  // não tentava de novo — e é plausível, porque EAM, EsPCEx e IME realmente
+  // não têm questões ainda.
+  const [falhou, setFalhou] = useState(false);
+
+  const carregar = useCallback(() => {
+    setCarregando(true);
+    setFalhou(false);
     fetchWithAuth(`/api/concursos/${sigla}/trilha`)
       .then((r) => r.json())
       .then((json) => {
         if (json.success) {
           setTrilha(json.data);
           setMateriaAberta(json.data.materias[0]?.id ?? null);
+        } else {
+          setFalhou(true);
         }
       })
-      .catch(() => undefined)
+      .catch(() => setFalhou(true))
       .finally(() => setCarregando(false));
   }, [sigla]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
 
   // O radar de fraqueza manda o aluno para cá com ?teoria=<id>: abrir o texto
   // sozinho é o que fecha o caminho "você erra isto -> leia aquilo". Sem
@@ -125,6 +140,24 @@ function Trilha() {
   };
 
   if (carregando) return <div className="skeleton h-96 w-full rounded-3xl" />;
+
+  if (falhou) {
+    return (
+      <div className="rounded-2xl border border-bat-error/30 bg-bat-error/10 p-10 text-center">
+        <span className="mb-3 block text-4xl">📡</span>
+        <h1 className="heading mb-2 text-lg text-bat-text">
+          Não consegui carregar a trilha
+        </h1>
+        <p className="mx-auto mb-5 max-w-md text-sm text-bat-text-secondary">
+          Isto é falha de conexão, não falta de conteúdo. Confira a internet e
+          tente de novo.
+        </p>
+        <button onClick={carregar} className="btn-primary px-5 py-2.5">
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
 
   if (!trilha || trilha.materias.length === 0) {
     return (

@@ -146,18 +146,47 @@ export function avaliarStreak(estado: EstadoEscudo): ResultadoStreak {
 }
 
 // ─── Frases motivacionais ────────────────────────────────────
+/**
+ * As 103 frases mudam quando alguém roda um seed novo — não durante o dia.
+ * Buscar todas as da categoria a CADA questão respondida (o caminho mais
+ * quente da plataforma) era uma consulta a mais por resposta, sempre com o
+ * mesmo resultado. Ficam guardadas por 10 minutos no processo.
+ *
+ * O cache é por instância serverless: várias instâncias significam várias
+ * cópias, o que não é problema — o conteúdo é idêntico e só de leitura.
+ */
+const CACHE_FRASES_MS = 10 * 60 * 1000;
+const cacheFrases = new Map<string, { textos: string[]; validoAte: number }>();
+
 export async function sortearFrase(
   supabase: SupabaseClient,
   categoria: 'erro' | 'acerto' | 'combo_quebrado' | 'retorno'
 ): Promise<string | null> {
-  const { data } = await supabase
-    .from('frases_motivacionais')
-    .select('texto')
-    .eq('categoria', categoria)
-    .eq('ativa', true);
+  const agora = Date.now();
+  const guardado = cacheFrases.get(categoria);
 
-  if (!data || data.length === 0) return null;
-  return data[Math.floor(Math.random() * data.length)].texto;
+  let textos: string[];
+
+  if (guardado && guardado.validoAte > agora) {
+    textos = guardado.textos;
+  } else {
+    const { data } = await supabase
+      .from('frases_motivacionais')
+      .select('texto')
+      .eq('categoria', categoria)
+      .eq('ativa', true);
+
+    textos = (data ?? []).map((f) => f.texto).filter(Boolean);
+
+    // Só guarda o que veio de verdade: um erro passageiro de rede não pode
+    // deixar a categoria muda por dez minutos.
+    if (textos.length > 0) {
+      cacheFrases.set(categoria, { textos, validoAte: agora + CACHE_FRASES_MS });
+    }
+  }
+
+  if (textos.length === 0) return null;
+  return textos[Math.floor(Math.random() * textos.length)];
 }
 
 // ─── Badges ──────────────────────────────────────────────────

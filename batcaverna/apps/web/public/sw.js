@@ -24,7 +24,9 @@
 // Mude este nome a cada deploy que altere o service worker. O handler de
 // `activate` apaga todos os caches com nome diferente — é isso que expurga
 // o 'batcaverna-v1' da versão anterior nos navegadores dos alunos.
-const CACHE_NAME = 'batcaverna-v2';
+// v3: a estratégia dos arquivos estáticos sem hash mudou de cache-first para
+// stale-while-revalidate. Trocar o nome expurga o que a regra antiga gravou.
+const CACHE_NAME = 'batcaverna-v3';
 
 // Só o que é PÚBLICO e estável. Rota que exige login não entra aqui.
 const STATIC_ASSETS = ['/', '/manifest.json'];
@@ -77,8 +79,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  // Assets com hash no nome: Cache-First é seguro e rápido.
-  if (url.pathname.startsWith('/_next/static/') || EXT_ESTATICA.test(url.pathname)) {
+  // Assets com hash no nome: Cache-First é seguro e rápido — o nome muda
+  // quando o conteúdo muda, então o cache nunca fica velho.
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
@@ -91,6 +94,31 @@ self.addEventListener('fetch', (event) => {
             return resp;
           })
       )
+    );
+    return;
+  }
+
+  // Arquivos estáticos SEM hash no nome (/images/concursos/eear.jpg, ícones,
+  // fontes): stale-while-revalidate. Entrega o do cache na hora — a página
+  // não espera — e busca a versão nova em paralelo para a próxima visita.
+  //
+  // Com Cache-First, trocar a foto de um concurso não chegava a quem já
+  // tinha visitado, até a próxima mudança de CACHE_NAME.
+  if (EXT_ESTATICA.test(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const daRede = fetch(request)
+          .then((resp) => {
+            if (resp.ok) {
+              const clone = resp.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return resp;
+          })
+          .catch(() => cached);
+
+        return cached || daRede;
+      })
     );
     return;
   }
