@@ -11,17 +11,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth';
 
 // Rotas que requerem autenticação
+// Todas as rotas do route group `(privado)`. Faltavam seis: quem estava
+// deslogado abria /caderno ou /progresso e via uma tela quebrada em vez de
+// ser mandado para o login (os dados em si já eram protegidos na API).
 const PROTECTED_ROUTES = [
   '/dashboard',
-  '/concurso',
+  '/progresso',
+  '/concursos',
   '/questoes',
   '/simulado',
+  '/revisoes',
+  '/caderno',
+  '/cronograma',
+  '/bizus',
   '/ranking',
-  '/perfil',
-  '/tickets',
-  '/admin',
-  '/amigos',
   '/chat',
+  '/musica',
+  '/tickets',
+  '/perfil',
+  '/admin',
 ];
 
 // Rotas que NÃO devem ser acessadas se já logado

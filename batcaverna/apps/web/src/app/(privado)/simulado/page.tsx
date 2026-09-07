@@ -84,6 +84,61 @@ const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
   ENEM: { questoes: 45, minutos: 270 },
 };
 
+/**
+ * Prova em andamento, guardada no aparelho.
+ *
+ * Antes, todo o estado da prova vivia em useState: recarregar a página no
+ * meio de um simulado de 60 questões perdia tudo, e o registro ficava órfão
+ * no banco. O `beforeunload` avisava, mas não protege contra o navegador
+ * travar, a bateria acabar ou — o caso mais comum no app — o Android matar
+ * a WebView em segundo plano.
+ *
+ * O relógio NÃO é salvo: ele é recalculado a partir do `iniciado_em` que o
+ * servidor devolveu. Fechar a aba e voltar não ganha tempo — igual à prova
+ * real. Se o tempo já acabou quando a pessoa volta, a prova é entregue com
+ * as respostas que ela tinha marcado.
+ *
+ * As questões vão sem gabarito (o servidor nunca o envia antes de
+ * finalizar), então guardá-las localmente não abre brecha nenhuma.
+ */
+const CHAVE_PROVA_ATIVA = "batcaverna-simulado-em-andamento";
+
+interface ProvaSalva {
+  simuladoId: string;
+  questoes: QuestaoSim[];
+  respostas: Record<string, string>;
+  iniciadoEm: string;
+  duracaoMinutos: number;
+}
+
+function lerProvaSalva(): ProvaSalva | null {
+  try {
+    const bruto = localStorage.getItem(CHAVE_PROVA_ATIVA);
+    if (!bruto) return null;
+    const p = JSON.parse(bruto) as ProvaSalva;
+    if (!p?.simuladoId || !Array.isArray(p.questoes) || !p.iniciadoEm) return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+function gravarProvaSalva(p: ProvaSalva) {
+  try {
+    localStorage.setItem(CHAVE_PROVA_ATIVA, JSON.stringify(p));
+  } catch {
+    /* sem espaço ou modo privado: a prova segue só em memória */
+  }
+}
+
+function apagarProvaSalva() {
+  try {
+    localStorage.removeItem(CHAVE_PROVA_ATIVA);
+  } catch {
+    /* idem */
+  }
+}
+
 const MODOS = [
   { tipo: "rapido", rotulo: "Rápido", questoes: 10, minutos: 20, desc: "Aquecimento de 20 minutos" },
   { tipo: "oficial", rotulo: "Formato da banca", questoes: 60, minutos: 240, desc: "A prova como ela é" },
@@ -212,7 +267,17 @@ function Simulado() {
       setSegundosRestantes(json.data.duracao_minutos * 60);
       setRespostas({});
       setIndice(0);
-      inicioProva.current = Date.now();
+      // O relógio da prova é o do servidor: é ele que vale se a página
+      // recarregar. Cai para o do cliente só se a resposta não trouxer.
+      const iniciadoEm: string = json.data.iniciado_em ?? new Date().toISOString();
+      inicioProva.current = new Date(iniciadoEm).getTime();
+      gravarProvaSalva({
+        simuladoId: json.data.simulado_id,
+        questoes: json.data.questoes,
+        respostas: {},
+        iniciadoEm,
+        duracaoMinutos: json.data.duracao_minutos,
+      });
       setFase("prova");
     } catch {
       setErro("Falha de conexão ao iniciar o simulado.");
@@ -226,9 +291,45 @@ function Simulado() {
   // prova lá, não faria sentido cair numa tela de configuração de novo.
   // O ref garante que dispare uma única vez, mesmo com o catálogo chegando
   // depois e re-renderizando a tela.
+  // ─── Retomar prova interrompida ────────────────────────────
+  // Roda ANTES do auto-start (ordem de declaração = ordem de execução dos
+  // efeitos), e o ref abaixo é o que impede o auto-start de montar uma
+  // prova nova por cima da que estava em andamento.
+  const restaurou = useRef(false);
+  useEffect(() => {
+    if (restaurou.current) return;
+    const salva = lerProvaSalva();
+    if (!salva) return;
+    restaurou.current = true;
+
+    const decorrido = Math.floor((Date.now() - new Date(salva.iniciadoEm).getTime()) / 1000);
+    const restante = salva.duracaoMinutos * 60 - decorrido;
+
+    setSimuladoId(salva.simuladoId);
+    setQuestoes(salva.questoes);
+    setRespostas(salva.respostas ?? {});
+    setIndice(0);
+    inicioProva.current = new Date(salva.iniciadoEm).getTime();
+    // Tempo esgotado enquanto a aba estava fechada: entra com 1 s para o
+    // cronômetro entregar a prova pelo caminho normal, com o que foi
+    // respondido. Não devolve o tempo perdido — a prova real também não.
+    setSegundosRestantes(Math.max(1, restante));
+    setFase("prova");
+  }, []);
+
+  // Cada resposta marcada vai para o aparelho na hora. É pouco dado (um
+  // mapa id -> letra), então não há por que adiar.
+  useEffect(() => {
+    if (fase !== "prova" || !simuladoId) return;
+    const salva = lerProvaSalva();
+    if (!salva || salva.simuladoId !== simuladoId) return;
+    gravarProvaSalva({ ...salva, respostas });
+  }, [fase, simuladoId, respostas]);
+
   const autoDisparado = useRef(false);
   useEffect(() => {
     if (params.get("auto") !== "1") return;
+    if (restaurou.current) return;
     if (autoDisparado.current || fase !== "config" || !config.concurso) return;
     autoDisparado.current = true;
     iniciar();
@@ -249,10 +350,16 @@ function Simulado() {
       const json = await res.json();
 
       if (!json.success) {
+        // "Já foi finalizado" = a cópia local é de uma prova que o servidor
+        // já fechou (outra aba, outro aparelho). Não há o que retomar.
+        if (String(json.error ?? "").toLowerCase().includes("finalizado")) {
+          apagarProvaSalva();
+        }
         setErro(json.error ?? "Erro ao corrigir o simulado.");
         return;
       }
 
+      apagarProvaSalva();
       const r: Resultado = json.data;
       setResultado(r);
       setFase("resultado");
@@ -778,6 +885,8 @@ function Simulado() {
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button
             onClick={() => {
+              apagarProvaSalva();
+              restaurou.current = false;
               setFase("config");
               setResultado(null);
               setSimuladoId(null);

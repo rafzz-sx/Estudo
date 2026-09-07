@@ -202,6 +202,12 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     const { isActive, isPaused, duracaoSegundos } = get();
     if (!isActive || isPaused) return;
 
+    // Aba em segundo plano não conta. Sem esta trava, deixar a plataforma
+    // aberta enquanto dorme daria 8 horas de "estudo" — e como o servidor
+    // aceita a contagem que o cliente manda, isso iria direto para o XP e
+    // para o ranking por tempo. O ConviteFeedback já aplica a mesma regra.
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+
     const novaDuracao = duracaoSegundos + 1;
 
     set((state) => ({

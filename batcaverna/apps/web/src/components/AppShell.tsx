@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BatBrand } from "@/components/BatLogo";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore } from "@/stores/study-session-store";
-import { StudySessionBadge } from "@/components/StudySessionWidget";
+import { StudySessionBadge, StudySessionTracker } from "@/components/StudySessionWidget";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { DynamicIsland } from "@/components/DynamicIsland";
 import { usePlayerStore } from "@/stores/player-store";
@@ -124,6 +124,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Convite de feedback após 1h e 3h de uso acumulado */}
       <ConviteFeedback />
+
+      {/* Motor da sessão de estudo: inicia a sessão, faz o tick de 1 s e
+          manda o heartbeat de 30 s. Este componente existia, exportado, e
+          NÃO ERA MONTADO EM LUGAR NENHUM — só o visor (StudySessionBadge)
+          estava ligado. Sem ele o cronômetro ficava em 00:00:00, nenhum
+          segundo de estudo era gravado, o XP por tempo nunca era concedido
+          e o ranking por tempo de estudo (o tipo padrão da tela) ficava
+          vazio para todo mundo.
+
+          Só faz sentido montá-lo aqui DEPOIS de o AppShell ter virado
+          instância única (route group `(privado)`): antes, ele remontaria a
+          cada navegação e o cronômetro zeraria junto. */}
+      <StudySessionTracker />
 
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
