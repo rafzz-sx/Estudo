@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
-import { calcularStreak } from '@/lib/gamificacao';
+import { avaliarStreak } from '@/lib/gamificacao';
 
 /**
  * POST /api/teoria/[id]/concluir
@@ -56,7 +56,7 @@ export async function POST(
 
     const { data: dados } = await supabase
       .from('users')
-      .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado')
+      .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado, escudos_streak, escudo_recarregado_em, escudos_usados_total')
       .eq('id', user.id)
       .single();
 
@@ -69,11 +69,14 @@ export async function POST(
     // questão e como o cronômetro. Antes só a leitura ficava de fora, e
     // quem passava o dia estudando teoria perdia o streak.
     const hoje = new Date().toISOString().slice(0, 10);
-    const streak = calcularStreak(
-      dados?.ultimo_dia_estudado ?? null,
+    const resStreak = avaliarStreak({
+      ultimoDiaEstudado: dados?.ultimo_dia_estudado ?? null,
       hoje,
-      dados?.streak_dias ?? 0
-    );
+      streakAtual: dados?.streak_dias ?? 0,
+      escudos: dados?.escudos_streak,
+      recarregadoEm: dados?.escudo_recarregado_em,
+    });
+    const streak = resStreak.streak;
 
     await supabase
       .from('users')
@@ -82,6 +85,10 @@ export async function POST(
         nivel_atual: nivel.nivel,
         streak_dias: streak,
         maior_streak: Math.max(dados?.maior_streak ?? 0, streak),
+        escudos_streak: resStreak.escudos,
+        escudo_recarregado_em: resStreak.recarregado_em,
+        escudos_usados_total:
+          (dados?.escudos_usados_total ?? 0) + (resStreak.usou_escudo ? 1 : 0),
         ultimo_dia_estudado: hoje,
       })
       .eq('id', user.id);

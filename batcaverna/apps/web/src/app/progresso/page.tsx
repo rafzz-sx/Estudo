@@ -8,6 +8,8 @@ import { useStudySessionStore, formatarTempoLegivel } from "@/stores/study-sessi
 import { StudySessionBadge } from "@/components/StudySessionWidget";
 import { ComboBanner, patamarDe } from "@/components/questoes/ComboBadge";
 import { calcularNivel } from "@batcaverna/utils";
+import { HistoricoSimulados } from "@/components/estudo/HistoricoSimulados";
+import { GraficoEvolucao } from "@/components/estudo/GraficoEvolucao";
 
 // ─── Barra de progresso XP ───────────────────────────────────
 function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
@@ -102,6 +104,9 @@ export default function ProgressoPage() {
   const user = useAuthStore((state) => state.user);
   const [favoritos, setFavoritos] = useState<ConcursoFavorito[]>([]);
   const [questaoDoDia, setQuestaoDoDia] = useState<QuestaoDoDia | null>(null);
+  const [evolucao, setEvolucao] = useState<
+    { semana: string; respondidas: number; acertos: number; taxa: number }[]
+  >([]);
 
   // Sessão de estudo automática (limite 8h)
   const tempoEstudoTotal = useStudySessionStore((state) => state.tempoEstudoTotal);
@@ -129,6 +134,17 @@ export default function ProgressoPage() {
     };
 
     fetchStudyStats();
+
+    // A curva de acerto por semana vem do mesmo painel que alimenta a tela
+    // inicial — uma fonte só, para as duas nunca discordarem.
+    fetchWithAuth("/api/estudo/painel")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && Array.isArray(json.data?.evolucao)) {
+          setEvolucao(json.data.evolucao);
+        }
+      })
+      .catch(() => undefined);
 
     // Concursos alvo do aluno
     fetchWithAuth("/api/usuarios/me/concursos-favoritos")
@@ -247,6 +263,15 @@ export default function ProgressoPage() {
           glowColor="green"
         />
       </div>
+
+      {/* ═══ EVOLUÇÃO ═══ */}
+      {/* A curva vem ANTES do histórico de concursos porque é a pergunta que
+          traz o aluno a esta tela: "eu estou melhorando?". O resto é
+          contexto. */}
+      {evolucao.length >= 2 && <GraficoEvolucao pontos={evolucao} />}
+
+      {/* ═══ SIMULADOS ═══ */}
+      <HistoricoSimulados />
 
       {/* ═══ PROGRESSO POR CONCURSO + QUESTÃO DO DIA ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

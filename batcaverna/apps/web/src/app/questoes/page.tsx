@@ -63,6 +63,9 @@ interface Resultado {
   patamar_novo: boolean;
   maior_combo_pessoal: number;
   streak_dias: number;
+  usou_escudo: boolean;
+  escudos_restantes: number;
+  era_revisao: boolean;
   nivel: { nivel: number; titulo: string };
   subiu_nivel: boolean;
   frase_motivacional: string | null;
@@ -624,6 +627,26 @@ function BancoDeQuestoes() {
                       +{resultado.xp_ganho} XP
                     </span>
                   </div>
+
+                  {/* O escudo salvou a sequência: o aluno tem que saber, senão
+                      ele acha que a plataforma esqueceu de zerar. */}
+                  {resultado.usou_escudo && (
+                    <p className="mt-2.5 rounded-lg border border-bat-info/30 bg-bat-info/10 px-3 py-2 text-xs text-bat-text-secondary">
+                      🛡️ <strong className="text-bat-info">Escudo usado.</strong>{" "}
+                      Você faltou um dia e sua sequência de{" "}
+                      {resultado.streak_dias} dias continuou de pé. O próximo
+                      escudo volta em uma semana.
+                    </p>
+                  )}
+
+                  {/* Revisão vale mais XP; dizer isso ensina o comportamento
+                      que a plataforma quer premiar. */}
+                  {resultado.era_revisao && resultado.correta && (
+                    <p className="mt-2.5 text-xs text-bat-text-secondary">
+                      🔁 Esta questão já tinha te derrubado — acertar na revisão
+                      vale <strong className="text-bat-gold-400">60% mais XP</strong>.
+                    </p>
+                  )}
 
                   {/* Mensagem motivadora — o ponto alto de errar aqui */}
                   {resultado.frase_motivacional && (

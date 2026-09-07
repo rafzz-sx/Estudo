@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
-import { calcularStreak } from '@/lib/gamificacao';
+import { avaliarStreak } from '@/lib/gamificacao';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       try {
         const { data: userData } = await supabase
           .from('users')
-          .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado')
+          .select('xp_total, streak_dias, maior_streak, ultimo_dia_estudado, escudos_streak, escudo_recarregado_em, escudos_usados_total')
           .eq('id', userId)
           .single();
 
@@ -103,11 +103,17 @@ export async function POST(req: NextRequest) {
 
         // Estudar no cronômetro também mantém a corrente de dias viva.
         const hoje = agora.toISOString().split('T')[0];
-        const streak = calcularStreak(
-          userData?.ultimo_dia_estudado ?? null,
+        // O escudo vale em TODO caminho que mexe na sequência. Sem isto,
+        // quem estudou só no cronômetro naquele dia perderia a corrente
+        // mesmo tendo escudo disponível.
+        const resStreak = avaliarStreak({
+          ultimoDiaEstudado: userData?.ultimo_dia_estudado ?? null,
           hoje,
-          userData?.streak_dias ?? 0
-        );
+          streakAtual: userData?.streak_dias ?? 0,
+          escudos: userData?.escudos_streak,
+          recarregadoEm: userData?.escudo_recarregado_em,
+        });
+        const streak = resStreak.streak;
 
         await supabase
           .from('users')
@@ -116,6 +122,11 @@ export async function POST(req: NextRequest) {
             nivel_atual: nivelDepois.nivel,
             streak_dias: streak,
             maior_streak: Math.max(userData?.maior_streak ?? 0, streak),
+            escudos_streak: resStreak.escudos,
+            escudo_recarregado_em: resStreak.recarregado_em,
+            escudos_usados_total:
+              (userData?.escudos_usados_total ?? 0) +
+              (resStreak.usou_escudo ? 1 : 0),
             ultimo_dia_estudado: hoje,
           })
           .eq('id', userId);

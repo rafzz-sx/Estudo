@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
-import { conferirBadges, calcularStreak } from '@/lib/gamificacao';
+import { conferirBadges, avaliarStreak } from '@/lib/gamificacao';
 
 /**
  * POST /api/simulados/[id]/finalizar
@@ -141,6 +141,7 @@ export async function POST(
       .select(
         `xp_total, total_questoes_respondidas, total_acertos, streak_dias,
          maior_streak, ultimo_dia_estudado, maior_combo_pessoal,
+         escudos_streak, escudo_recarregado_em, escudos_usados_total,
          tempo_estudo_total_segundos`
       )
       .eq('id', user.id)
@@ -157,11 +158,14 @@ export async function POST(
     // estudado hoje" e devolvia o streak parado. Fazer simulado congelava a
     // corrente de dias.
     const hoje = new Date().toISOString().slice(0, 10);
-    const streak = calcularStreak(
-      dadosUser?.ultimo_dia_estudado ?? null,
+    const resStreak = avaliarStreak({
+      ultimoDiaEstudado: dadosUser?.ultimo_dia_estudado ?? null,
       hoje,
-      dadosUser?.streak_dias ?? 0
-    );
+      streakAtual: dadosUser?.streak_dias ?? 0,
+      escudos: dadosUser?.escudos_streak,
+      recarregadoEm: dadosUser?.escudo_recarregado_em,
+    });
+    const streak = resStreak.streak;
 
     await supabase
       .from('users')
@@ -173,6 +177,10 @@ export async function POST(
         total_acertos: (dadosUser?.total_acertos ?? 0) + acertos,
         streak_dias: streak,
         maior_streak: Math.max(dadosUser?.maior_streak ?? 0, streak),
+        escudos_streak: resStreak.escudos,
+        escudo_recarregado_em: resStreak.recarregado_em,
+        escudos_usados_total:
+          (dadosUser?.escudos_usados_total ?? 0) + (resStreak.usou_escudo ? 1 : 0),
         ultimo_dia_estudado: hoje,
       })
       .eq('id', user.id);

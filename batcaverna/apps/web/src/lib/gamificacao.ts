@@ -51,14 +51,28 @@ export function patamarDoCombo(combo: number): PatamarCombo | null {
 const XP_BASE: Record<string, number> = { facil: 10, medio: 15, dificil: 25 };
 const XP_CONSOLACAO = 2;
 
+/**
+ * Acertar uma questão que já derrubou você vale 60% a mais.
+ *
+ * Antes, o XP premiava só volume e combo — então o incentivo era responder
+ * muita questão fácil, rápido, e nunca voltar no que doeu. É exatamente o
+ * contrário do que aprova.
+ *
+ * Rever o erro é a ação de maior rendimento da plataforma e a que o aluno
+ * menos faz sozinho, porque dói mais. O XP passa a pagar por isso.
+ */
+const MULT_REVISAO = 1.6;
+
 export function calcularXpResposta(
   acertou: boolean,
   dificuldade: string | null,
-  novoCombo: number
+  novoCombo: number,
+  eraRevisao = false
 ): number {
   if (!acertou) return XP_CONSOLACAO;
   const base = XP_BASE[dificuldade ?? 'medio'] ?? 15;
-  return Math.round(base * calcularBonusCombo(novoCombo));
+  const bruto = base * calcularBonusCombo(novoCombo);
+  return Math.round(eraRevisao ? bruto * MULT_REVISAO : bruto);
 }
 
 // ─── Streak ──────────────────────────────────────────────────
@@ -68,16 +82,87 @@ function diasDeDiferenca(de: string, ate: string): number {
   return Math.round((d2 - d1) / 86_400_000);
 }
 
-export function calcularStreak(
-  ultimoDiaEstudado: string | null,
-  hoje: string,
-  streakAtual: number
-): number {
-  if (!ultimoDiaEstudado) return 1;
+export interface EstadoEscudo {
+  ultimoDiaEstudado: string | null;
+  hoje: string;
+  streakAtual: number;
+  escudos?: number | null;
+  recarregadoEm?: string | null;
+}
+
+export interface ResultadoStreak {
+  streak: number;
+  escudos: number;
+  recarregado_em: string;
+  /** true quando o escudo acabou de salvar a sequência. A tela comemora. */
+  usou_escudo: boolean;
+  /** true quando o escudo foi reposto agora. */
+  recarregou: boolean;
+}
+
+/** A cada quantos dias o escudo volta. */
+const DIAS_PARA_RECARGA = 7;
+
+/**
+ * Sequência de dias, com escudo.
+ *
+ * Antes, um dia perdido zerava tudo. Para um adolescente com escola, prova de
+ * colégio e família, isso não gera disciplina: gera abandono. A pessoa perde
+ * 40 dias por causa de um domingo e não volta, porque o número que a prendia
+ * virou 1.
+ *
+ * O escudo cobre UM dia falho, recarrega sozinho a cada semana e funciona sem
+ * a pessoa precisar saber que existe. Duas coisas ele deliberadamente NÃO faz:
+ *
+ *   • não cobre dois dias seguidos — a corrente precisa significar algo;
+ *   • não acumula. Guardar escudos viraria um recurso a administrar, e a
+ *     última coisa de que quem estuda para concurso precisa é de mais uma
+ *     mecânica para gerenciar.
+ */
+export function avaliarStreak(estado: EstadoEscudo): ResultadoStreak {
+  const { ultimoDiaEstudado, hoje, streakAtual } = estado;
+
+  // ─── Recarga ─────────────────────────────────────────────
+  let escudos = estado.escudos ?? 1;
+  let recarregadoEm = estado.recarregadoEm ?? hoje;
+  let recarregou = false;
+
+  if (diasDeDiferenca(recarregadoEm, hoje) >= DIAS_PARA_RECARGA) {
+    if (escudos < 1) {
+      escudos = 1;
+      recarregou = true;
+    }
+    recarregadoEm = hoje;
+  }
+
+  const semMudanca = (streak: number): ResultadoStreak => ({
+    streak,
+    escudos,
+    recarregado_em: recarregadoEm,
+    usou_escudo: false,
+    recarregou,
+  });
+
+  if (!ultimoDiaEstudado) return semMudanca(1);
+
   const diff = diasDeDiferenca(ultimoDiaEstudado, hoje);
-  if (diff <= 0) return Math.max(streakAtual, 1); // já estudou hoje
-  if (diff === 1) return streakAtual + 1; // dia seguinte: mantém a corrente
-  return 1; // furou um ou mais dias
+
+  if (diff <= 0) return semMudanca(Math.max(streakAtual, 1)); // já estudou hoje
+  if (diff === 1) return semMudanca(streakAtual + 1); // dia seguinte
+
+  // Faltou exatamente um dia e há escudo: a corrente segue, contando o dia
+  // coberto. Gastar o escudo aqui é o ponto — ele existe para este caso.
+  if (diff === 2 && escudos >= 1 && streakAtual >= 2) {
+    return {
+      streak: streakAtual + 1,
+      escudos: escudos - 1,
+      recarregado_em: recarregadoEm,
+      usou_escudo: true,
+      recarregou,
+    };
+  }
+
+  return semMudanca(1); // furou demais
 }
 
 // ─── Frases motivacionais ────────────────────────────────────
@@ -101,6 +186,11 @@ interface EstadoUsuario {
   total_questoes_respondidas: number;
   maior_combo_pessoal: number;
   streak_dias: number;
+  /** O escudo salvou a sequência agora? A tela comemora quando sim. */
+  usou_escudo: boolean;
+  escudos_restantes: number;
+  /** Esta questão veio da fila de revisão — o XP dela vale 60% a mais. */
+  era_revisao: boolean;
   tempo_estudo_total_segundos: number;
 }
 
@@ -194,6 +284,11 @@ export interface ResultadoResposta {
   patamar_novo: boolean;
   maior_combo_pessoal: number;
   streak_dias: number;
+  /** O escudo salvou a sequência agora? A tela comemora quando sim. */
+  usou_escudo: boolean;
+  escudos_restantes: number;
+  /** Esta questão veio da fila de revisão — o XP dela vale 60% a mais. */
+  era_revisao: boolean;
   nivel: ReturnType<typeof calcularNivel>;
   subiu_nivel: boolean;
   frase_motivacional: string | null;
@@ -245,14 +340,33 @@ export async function registrarResposta(
     .select(
       `xp_total, nivel_atual, combo_atual, maior_combo_pessoal, streak_dias,
        maior_streak, ultimo_dia_estudado, total_questoes_respondidas,
-       total_acertos, tempo_estudo_total_segundos`
+       total_acertos, tempo_estudo_total_segundos,
+       escudos_streak, escudo_recarregado_em, escudos_usados_total`
     )
     .eq('id', userId)
     .single();
 
+  // A questão já estava na fila de revisão ANTES desta resposta?
+  // Precisa ser consultado agora, porque `atualizarRevisao` (lá embaixo)
+  // reescreve o agendamento e depois já não dá para saber.
+  const { data: filaAntes } = await supabase
+    .from('revisoes_agendadas')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('questao_id', questao.id)
+    .eq('ativa', true)
+    .maybeSingle();
+
+  const eraRevisao = !!filaAntes;
+
   const comboAnterior = user?.combo_atual ?? 0;
   const novoCombo = correta ? comboAnterior + 1 : 0;
-  const xpGanho = calcularXpResposta(correta, questao.dificuldade, novoCombo);
+  const xpGanho = calcularXpResposta(
+    correta,
+    questao.dificuldade,
+    novoCombo,
+    eraRevisao
+  );
 
   const xpAntes = user?.xp_total ?? 0;
   const xpDepois = xpAntes + xpGanho;
@@ -260,11 +374,14 @@ export async function registrarResposta(
   const nivelDepois = calcularNivel(xpDepois);
 
   const hoje = new Date().toISOString().slice(0, 10);
-  const streak = calcularStreak(
-    user?.ultimo_dia_estudado ?? null,
+  const resStreak = avaliarStreak({
+    ultimoDiaEstudado: user?.ultimo_dia_estudado ?? null,
     hoje,
-    user?.streak_dias ?? 0
-  );
+    streakAtual: user?.streak_dias ?? 0,
+    escudos: user?.escudos_streak,
+    recarregadoEm: user?.escudo_recarregado_em,
+  });
+  const streak = resStreak.streak;
 
   const maiorCombo = Math.max(user?.maior_combo_pessoal ?? 0, novoCombo);
   const totalRespondidas = (user?.total_questoes_respondidas ?? 0) + 1;
@@ -295,6 +412,10 @@ export async function registrarResposta(
       // recalculado), quem tinha recorde de 40 dias e furou a corrente via o
       // recorde ser reescrito para 1 na resposta seguinte.
       maior_streak: Math.max(user?.maior_streak ?? 0, streak),
+      escudos_streak: resStreak.escudos,
+      escudo_recarregado_em: resStreak.recarregado_em,
+      escudos_usados_total:
+        (user?.escudos_usados_total ?? 0) + (resStreak.usou_escudo ? 1 : 0),
       ultimo_dia_estudado: hoje,
       total_questoes_respondidas: totalRespondidas,
       total_acertos: totalAcertos,
@@ -398,6 +519,9 @@ export async function registrarResposta(
       !!patamarAtual && patamarAtual.rotulo !== patamarAntigo?.rotulo,
     maior_combo_pessoal: maiorCombo,
     streak_dias: streak,
+    usou_escudo: resStreak.usou_escudo,
+    escudos_restantes: resStreak.escudos,
+    era_revisao: eraRevisao,
     nivel: nivelDepois,
     subiu_nivel: nivelDepois.nivel > nivelAntes.nivel,
     frase_motivacional: frase,
