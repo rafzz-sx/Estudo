@@ -15,12 +15,23 @@ interface StudySessionState {
 
   // Actions
   initSession: () => Promise<void>;
-  sendHeartbeat: () => Promise<void>;
+  sendHeartbeat: (opcoes?: { keepalive?: boolean; forcar?: boolean }) => Promise<void>;
   pauseSession: () => void;
   resumeSession: () => void;
   stopSession: () => Promise<void>;
   tick: () => void;
 }
+
+/**
+ * Última duração já confirmada ao servidor.
+ *
+ * O heartbeat disparava a cada 30 s mesmo com a aba escondida — e com a aba
+ * escondida o `tick` não anda, então o valor era idêntico ao anterior. Eram
+ * ~2.880 requisições por dia por aluno que não mudavam nada no banco. Fica
+ * fora do estado do zustand de propósito: é detalhe de transporte, não algo
+ * que a interface precise observar.
+ */
+let ultimaDuracaoEnviada = -1;
 
 export function formatarSegundosParaTimer(totalSegundos: number): string {
   const horas = Math.floor(totalSegundos / 3600);
@@ -61,6 +72,8 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   initSession: async () => {
     if (get().isInitializing) return;
     set({ isInitializing: true });
+    // Sessão nova (ou adotada) recomeça a contagem do que já foi sincronizado.
+    ultimaDuracaoEnviada = -1;
 
     try {
       // 1. Consultar status atual da sessão no Supabase
@@ -117,14 +130,23 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     }
   },
 
-  sendHeartbeat: async () => {
+  sendHeartbeat: async (opcoes) => {
     const { isActive, duracaoSegundos } = get();
     if (!isActive) return;
+
+    // Nada andou desde o último envio (aba escondida, ou pausada): não há o
+    // que sincronizar. `forcar` é para a saída da página, onde vale garantir
+    // que os últimos segundos cheguem.
+    if (!opcoes?.forcar && duracaoSegundos === ultimaDuracaoEnviada) return;
+    ultimaDuracaoEnviada = duracaoSegundos;
 
     try {
       const res = await fetchWithAuth('/api/study-sessions/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // `keepalive` deixa a requisição terminar mesmo com a aba fechando —
+        // sem isso o navegador a cancela e o tempo do último intervalo some.
+        keepalive: opcoes?.keepalive === true,
         body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
       });
 
@@ -219,23 +241,25 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
 
   pauseSession: () => {
     set({ isPaused: true });
-    get().sendHeartbeat();
+    // Pausa é fronteira: vale sincronizar mesmo que o valor não tenha mudado.
+    get().sendHeartbeat({ forcar: true });
   },
 
   resumeSession: () => set({ isPaused: false }),
 
   stopSession: async () => {
-    const { duracaoSegundos } = get();
+    // Grava o tempo restante antes de fechar. Reusa o próprio heartbeat em vez
+    // de repetir a chamada aqui — era a mesma requisição escrita duas vezes.
     try {
-      await fetchWithAuth('/api/study-sessions/heartbeat', {
+      await get().sendHeartbeat({ forcar: true, keepalive: true });
+      await fetchWithAuth('/api/study-sessions/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
+        keepalive: true,
       });
-      await fetchWithAuth('/api/study-sessions/stop', { method: 'POST' });
     } catch (e) {
       console.warn('Erro ao finalizar sessão:', e);
     }
-    set({ isActive: false, isPaused: false, sessionId: null });
+    ultimaDuracaoEnviada = -1;
+    set({ isActive: false, isPaused: false, sessionId: null, duracaoSegundos: 0 });
   },
 }));

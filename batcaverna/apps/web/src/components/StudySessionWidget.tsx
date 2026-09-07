@@ -38,6 +38,26 @@ export function StudySessionTracker() {
     return () => clearInterval(heartbeatInterval);
   }, [sendHeartbeat]);
 
+  // 4. Ao sair da página, garante que o último intervalo seja gravado.
+  //
+  //    Sem isto o navegador cancela a requisição pendente e os segundos desde
+  //    o heartbeat anterior — até 30 — somem. `pagehide` é o evento certo:
+  //    dispara ao fechar a aba e também quando o Android manda a WebView para
+  //    segundo plano, que é o caso mais comum aqui. O envio vai com
+  //    `keepalive`, então sobrevive ao descarregamento da página.
+  //
+  //    A sessão NÃO é encerrada aqui de propósito: `pagehide` também dispara
+  //    quando a página vai para o cache de retorno (bfcache) e volta depois.
+  //    Quem encerra é o servidor, em `lib/sessao-estudo`, quando a sessão passa
+  //    de 8 h ou vira o dia — regra que não depende de o navegador avisar nada.
+  useEffect(() => {
+    const aoSair = () => {
+      sendHeartbeat({ forcar: true, keepalive: true });
+    };
+    window.addEventListener('pagehide', aoSair);
+    return () => window.removeEventListener('pagehide', aoSair);
+  }, [sendHeartbeat]);
+
   return null;
 }
 

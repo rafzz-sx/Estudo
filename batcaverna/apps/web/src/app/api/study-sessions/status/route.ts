@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
-
-const LIMITE_MAXIMO_SESSAO_SEGUNDOS = 8 * 3600; // 8 horas = 28.800s
+import {
+  LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+  buscarSessaoAtiva,
+} from '@/lib/sessao-estudo';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -18,15 +20,11 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    // 1. Buscar sessão ativa
-    const { data: activeSession } = await supabase
-      .from('study_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .is('finalizada_em', null)
-      .order('iniciada_em', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 1. Sessão ativa — encerrando antes a que já venceu (8 h ou virada de
+    //    dia). Esta rota não aplicava regra nenhuma, e como o store retorna
+    //    cedo quando encontra sessão ativa, `/start` (o único lugar que tinha
+    //    a regra) nunca mais era chamado: a mesma linha vivia para sempre.
+    const activeSession = await buscarSessaoAtiva(supabase, userId);
 
     // 2. Tempo de hoje (sessões iniciadas hoje)
     const inicioDoDia = new Date();

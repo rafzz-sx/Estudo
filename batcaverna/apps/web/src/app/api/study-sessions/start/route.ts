@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
-
-const LIMITE_MAXIMO_SESSAO_SEGUNDOS = 8 * 3600; // 8 horas = 28.800 segundos
+import {
+  LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+  buscarSessaoAtiva,
+} from '@/lib/sessao-estudo';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -21,37 +23,26 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    // Verificar se já existe sessão ativa
-    const { data: existingSession } = await supabase
-      .from('study_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .is('finalizada_em', null)
-      .order('iniciada_em', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Sessão ativa, se houver — já encerrada por `buscarSessaoAtiva` quando
+    // passou das 8 h ou virou o dia. A regra vive agora em `lib/sessao-estudo`
+    // e é a mesma usada por `/status` e `/heartbeat`; antes existia só aqui, e
+    // como o store só chama esta rota quando `/status` não devolve sessão, ela
+    // deixava de ser aplicada logo na segunda visita do aluno.
+    const existingSession = await buscarSessaoAtiva(supabase, userId);
 
     if (existingSession) {
-      // Se a sessão existente já atingiu ou ultrapassou 8 horas, finalizá-la
-      if ((existingSession.duracao_segundos || 0) >= LIMITE_MAXIMO_SESSAO_SEGUNDOS) {
-        await supabase
-          .from('study_sessions')
-          .update({ finalizada_em: new Date().toISOString() })
-          .eq('id', existingSession.id);
-      } else {
-        return NextResponse.json({
-          success: true,
-          data: {
-            session_id: existingSession.id,
-            duracao_segundos: existingSession.duracao_segundos || 0,
-            multiplicador: existingSession.multiplicador_continuidade_atual || 1.0,
-            xp_ganho_na_sessao: existingSession.xp_ganho_na_sessao || 0,
-            tempo_restante_8h_segundos: Math.max(0, LIMITE_MAXIMO_SESSAO_SEGUNDOS - (existingSession.duracao_segundos || 0)),
-            limite_8h_segundos: LIMITE_MAXIMO_SESSAO_SEGUNDOS,
-          },
-          message: 'Sessão de estudo ativa recuperada!',
-        });
-      }
+      return NextResponse.json({
+        success: true,
+        data: {
+          session_id: existingSession.id,
+          duracao_segundos: existingSession.duracao_segundos || 0,
+          multiplicador: existingSession.multiplicador_continuidade_atual || 1.0,
+          xp_ganho_na_sessao: existingSession.xp_ganho_na_sessao || 0,
+          tempo_restante_8h_segundos: Math.max(0, LIMITE_MAXIMO_SESSAO_SEGUNDOS - (existingSession.duracao_segundos || 0)),
+          limite_8h_segundos: LIMITE_MAXIMO_SESSAO_SEGUNDOS,
+        },
+        message: 'Sessão de estudo ativa recuperada!',
+      });
     }
 
     // Criar nova sessão com limite de 8h

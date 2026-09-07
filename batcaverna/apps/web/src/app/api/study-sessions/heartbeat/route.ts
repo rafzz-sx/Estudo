@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 import { avaliarStreak } from '@/lib/gamificacao';
+import { buscarSessaoAtiva, duracaoAceita } from '@/lib/sessao-estudo';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -19,33 +20,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const supabase = createServerSupabaseClient();
 
-    // Buscar sessão ativa
-    const { data: session, error: sessErr } = await supabase
-      .from('study_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .is('finalizada_em', null)
-      .order('iniciada_em', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const agora = new Date();
 
-    if (sessErr || !session) {
+    // Encerra a sessão vencida (8 h ou virada de dia) antes de devolvê-la.
+    const session = await buscarSessaoAtiva(supabase, userId, agora);
+
+    if (!session) {
       return NextResponse.json({ success: false, error: 'Nenhuma sessão ativa' }, { status: 404 });
     }
 
-    const agora = new Date();
     const duracaoAtualBanco = session.duracao_segundos || 0;
 
-    // Se o client enviou a duração exata do cronômetro da tela, usamos ela com precisão milimétrica
-    let novaDuracao: number;
-    if (typeof body.duracao_segundos === 'number' && body.duracao_segundos >= duracaoAtualBanco) {
-      novaDuracao = Math.floor(body.duracao_segundos);
-    } else {
-      const ultimaAtividade = new Date(session.ultima_atividade_em || session.iniciada_em);
-      let diffSegundos = Math.max(0, Math.floor((agora.getTime() - ultimaAtividade.getTime()) / 1000));
-      if (diffSegundos > 300) diffSegundos = 30;
-      novaDuracao = duracaoAtualBanco + diffSegundos;
-    }
+    // O cronômetro da tela é mais preciso que a conta do servidor — só conta
+    // com a aba visível — mas não é confiável: era aceito sem teto nenhum, e
+    // uma requisição forjada virava milhões de XP. `duracaoAceita` corta no
+    // tempo que o relógio realmente andou desde a última gravação.
+    const novaDuracao = duracaoAceita(session, body.duracao_segundos, agora);
 
     // Delta de segundos estudados desde a última atualização no banco
     const diffSegundos = Math.max(0, novaDuracao - duracaoAtualBanco);
