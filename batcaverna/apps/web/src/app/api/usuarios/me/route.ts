@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import {
   validarDataUrlMidia,
@@ -61,12 +62,18 @@ export async function GET(req: NextRequest) {
     const nivelCalculado = calcularNivel(user.xp_total || 0);
 
     // 3. Tempo total de estudo
-    const { data: sessions } = await supabase
-      .from('study_sessions')
-      .select('duracao_segundos')
-      .eq('user_id', userId);
+    // `lerTudo` porque `study_sessions` passou a ter UMA LINHA POR DIA por
+    // usuário (a virada de dia é o que faz "tempo de hoje" funcionar). Sem
+    // paginação, o total de estudo pararia de crescer calado ao passar das
+    // 1.000 do teto do PostgREST — cerca de três anos de uso diário.
+    const sessions = await lerTudo<{ duracao_segundos: number | null }>(() =>
+      supabase
+        .from('study_sessions')
+        .select('duracao_segundos')
+        .eq('user_id', userId)
+    );
 
-    const tempoTotalEstudo = (sessions || []).reduce(
+    const tempoTotalEstudo = sessions.reduce(
       (acc, s) => acc + (s.duracao_segundos || 0),
       0
     );

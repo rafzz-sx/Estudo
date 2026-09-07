@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import {
   LIMITE_MAXIMO_SESSAO_SEGUNDOS,
@@ -30,21 +31,29 @@ export async function GET(req: NextRequest) {
     const inicioDoDia = new Date();
     inicioDoDia.setHours(0, 0, 0, 0);
 
-    const { data: todaySessions } = await supabase
-      .from('study_sessions')
-      .select('duracao_segundos')
-      .eq('user_id', userId)
-      .gte('iniciada_em', inicioDoDia.toISOString());
+    const todaySessions = await lerTudo<{ duracao_segundos: number | null }>(() =>
+      supabase
+        .from('study_sessions')
+        .select('duracao_segundos')
+        .eq('user_id', userId)
+        .gte('iniciada_em', inicioDoDia.toISOString())
+    );
 
-    const tempoEstudoHoje = (todaySessions || []).reduce((acc, s) => acc + (s.duracao_segundos || 0), 0);
+    const tempoEstudoHoje = todaySessions.reduce((acc, s) => acc + (s.duracao_segundos || 0), 0);
 
     // 3. Tempo total histórico
-    const { data: allSessions } = await supabase
-      .from('study_sessions')
-      .select('duracao_segundos')
-      .eq('user_id', userId);
+    // `lerTudo` porque `study_sessions` passou a ter UMA LINHA POR DIA por
+    // usuário (a virada de dia é o que faz "tempo de hoje" funcionar). Sem
+    // paginação, o total de estudo pararia de crescer calado ao passar das
+    // 1.000 do teto do PostgREST — cerca de três anos de uso diário.
+    const allSessions = await lerTudo<{ duracao_segundos: number | null }>(() =>
+      supabase
+        .from('study_sessions')
+        .select('duracao_segundos')
+        .eq('user_id', userId)
+    );
 
-    const tempoEstudoTotal = (allSessions || []).reduce((acc, s) => acc + (s.duracao_segundos || 0), 0);
+    const tempoEstudoTotal = allSessions.reduce((acc, s) => acc + (s.duracao_segundos || 0), 0);
 
     return NextResponse.json({
       success: true,
