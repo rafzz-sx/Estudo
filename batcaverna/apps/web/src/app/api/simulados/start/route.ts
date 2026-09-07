@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { uuidOuNulo } from '@/lib/seguranca';
 import { errosEmAberto } from '@/lib/diagnostico';
+import { distribuicaoDaProva, repartirVagas } from '@/lib/distribuicao-prova';
 
 /**
  * POST /api/simulados/start
@@ -160,25 +161,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ─── Formato da banca: reparte por matéria ───────────────
+    //
+    // "Formato da banca" acertava a QUANTIDADE e a DURAÇÃO e sorteava
+    // uniformemente do concurso inteiro. Nenhuma banca distribui
+    // uniformemente: a EEAR cobra Matemática e Física em proporções
+    // específicas, e um sorteio uniforme entrega uma prova que não se parece
+    // com a prova. O aluno treinava para uma distribuição que não existe.
+    //
+    // Só vale para 'oficial' sem recorte: escolher uma matéria ou um ano é o
+    // aluno dizendo que NÃO quer o formato da banca.
+    let ids: string[] = [];
+    let distribuicaoUsada: { materia: string; questoes: number }[] | null = null;
+
+    if (tipo === 'oficial' && !idsErrados && !materiaId && !ano) {
+      const fatias = await distribuicaoDaProva(supabase, concursoId);
+      const vagas = repartirVagas(quantidade, fatias);
+
+      if (vagas.size > 0) {
+        const porMateria = await Promise.all(
+          [...vagas.entries()].map(async ([mid, quantas]) => {
+            const { data } = await supabase
+              .from('questoes')
+              .select('id')
+              .eq('concurso_id', concursoId)
+              .eq('ativa', true)
+              .eq('materia_id', mid)
+              .limit(Math.min(quantas * 6, 400));
+
+            return (data ?? [])
+              .map((q) => q.id)
+              .sort(() => Math.random() - 0.5)
+              .slice(0, quantas);
+          })
+        );
+
+        ids = porMateria.flat().sort(() => Math.random() - 0.5);
+
+        const nomePorId = new Map(fatias.map((f) => [f.materia_id, f.nome]));
+        distribuicaoUsada = [...vagas.entries()]
+          .map(([mid, n]) => ({ materia: nomePorId.get(mid) ?? 'Outros', questoes: n }))
+          .sort((a, b) => b.questoes - a.questoes);
+      }
+    }
+
+    // ─── Sorteio simples (todos os outros modos) ─────────────
     // Puxa uma janela aleatória maior que o necessário e embaralha dentro
     // dela: dá variedade real sem carregar as milhares de linhas.
-    const janela = Math.min(count, quantidade * 5);
-    const offsetMax = Math.max(0, count - janela);
-    const offset = Math.floor(Math.random() * (offsetMax + 1));
+    if (ids.length === 0) {
+      const janela = Math.min(count, quantidade * 5);
+      const offsetMax = Math.max(0, count - janela);
+      const offset = Math.floor(Math.random() * (offsetMax + 1));
 
-    const pool = idsErrados
-      ? idsErrados.map((id) => ({ id }))
-      : (
-          await filtrar(supabase.from('questoes').select('id')).range(
-            offset,
-            offset + janela - 1
-          )
-        ).data ?? [];
+      const pool = idsErrados
+        ? idsErrados.map((id) => ({ id }))
+        : (
+            await filtrar(supabase.from('questoes').select('id')).range(
+              offset,
+              offset + janela - 1
+            )
+          ).data ?? [];
 
-    const ids = pool
-      .map((q) => q.id)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, Math.min(quantidade, pool.length));
+      ids = pool
+        .map((q) => q.id)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.min(quantidade, pool.length));
+    }
 
     // ─── Cria o simulado ─────────────────────────────────────
     const { data: simulado, error: sErr } = await supabase
@@ -221,6 +269,11 @@ export async function POST(req: NextRequest) {
         duracao_minutos: simulado.duracao_minutos,
         iniciado_em: simulado.iniciado_em,
         questoes: ordenadas,
+        // Quantas questões de cada matéria a prova recebeu, quando ela foi
+        // montada no formato da banca. A tela mostra isso antes de começar:
+        // saber que caem 24 de Matemática e 6 de Inglês faz parte de treinar
+        // no formato certo. `null` nos outros modos.
+        distribuicao: distribuicaoUsada,
       },
     });
   } catch (error) {

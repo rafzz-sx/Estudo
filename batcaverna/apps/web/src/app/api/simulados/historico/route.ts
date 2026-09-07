@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { REFERENCIA_APROVACAO } from '@/lib/distribuicao-prova';
 
 /**
  * GET /api/simulados/historico?concurso=EEAR
@@ -13,33 +14,6 @@ import { getAuthUserFromRequest } from '@/lib/auth';
  * Devolve também a comparação com a nota de corte — o único número que o
  * candidato realmente quer saber.
  */
-
-/**
- * Notas de corte de referência, em percentual de acerto.
- *
- * ─── LEIA ANTES DE USAR ESTE NÚMERO ──────────────────────────────────────
- * Nota de corte NÃO é fixa. Ela muda todo ano, muda por especialidade e, em
- * vários desses concursos, é definida pela classificação e pelo número de
- * vagas — não por um mínimo absoluto. Um ano com prova difícil derruba o
- * corte; uma especialidade concorrida sobe.
- *
- * O que está aqui é uma FAIXA DE REFERÊNCIA histórica, para o aluno ter um
- * alvo em vez de um número solto. A tela diz isso com todas as letras — e é
- * por isso que o campo se chama `referencia` e não `corte`.
- *
- * Se você tiver o corte oficial do edital do ano, troque aqui.
- */
-const REFERENCIA_APROVACAO: Record<string, { percentual: number; nota: string }> = {
-  EEAR: { percentual: 60, nota: 'varia muito por especialidade' },
-  ESA: { percentual: 55, nota: 'varia por área e ano' },
-  EPCAR: { percentual: 65, nota: 'concorrência alta' },
-  CN: { percentual: 60, nota: 'uma das provas mais difíceis' },
-  EFOMM: { percentual: 55, nota: 'varia por curso' },
-  EAM: { percentual: 50, nota: 'varia por região' },
-  ESPCEX: { percentual: 60, nota: 'varia por ano' },
-  IME: { percentual: 50, nota: 'prova discursiva, corte baixo' },
-  ENEM: { percentual: 60, nota: 'depende do curso e da universidade' },
-};
 
 export async function GET(req: NextRequest) {
   try {

@@ -6,6 +6,7 @@ import {
   evolucaoSemanal,
   errosEmAberto,
 } from '@/lib/diagnostico';
+import { projetarNota } from '@/lib/projecao-nota';
 
 /**
  * GET /api/estudo/painel?concurso=EEAR
@@ -231,6 +232,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // A projeção é a última coisa a ser calculada e a mais tolerante a
+    // falha: ela é um extra da tela, e o painel precisa abrir mesmo sem ela.
+    let projecao = null;
+    try {
+      projecao = await projetarNota(supabase, user.id, concurso.id, concurso.sigla);
+    } catch (e) {
+      console.warn('Aviso: projeção de nota indisponível:', e);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -255,6 +265,10 @@ export async function GET(req: NextRequest) {
               : 0,
         },
         evolucao,
+        // Quanto falta para a faixa de aprovação, e em que matérias os
+        // pontos estão sendo perdidos. `null` quando não dá para projetar
+        // honestamente (concurso sem questões, ou sem corte de referência).
+        projecao,
       },
     });
   } catch (error) {

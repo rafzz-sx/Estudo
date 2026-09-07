@@ -130,6 +130,17 @@ function Simulado() {
   const [simuladoId, setSimuladoId] = useState<string | null>(null);
   const [questoes, setQuestoes] = useState<QuestaoSim[]>([]);
   const [indice, setIndice] = useState(0);
+  /**
+   * Quantas questões de cada matéria a prova recebeu.
+   *
+   * Só vem preenchido no "Formato da banca": lá a prova é repartida na
+   * proporção real da banca, em vez de sorteada uniformemente. Mostrar isso
+   * é parte do treino — o aluno precisa saber que caem 24 de Matemática e 6
+   * de Inglês, não 15 de cada.
+   */
+  const [distribuicao, setDistribuicao] = useState<
+    { materia: string; questoes: number }[] | null
+  >(null);
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [segundosRestantes, setSegundosRestantes] = useState(0);
   const [resultado, setResultado] = useState<Resultado | null>(null);
@@ -217,6 +228,7 @@ function Simulado() {
 
       setSimuladoId(json.data.simulado_id);
       setQuestoes(json.data.questoes);
+      setDistribuicao(json.data.distribuicao ?? null);
       setSegundosRestantes(json.data.duracao_minutos * 60);
       setRespostas({});
       setIndice(0);
@@ -265,6 +277,7 @@ function Simulado() {
 
     setSimuladoId(salva.simuladoId);
     setQuestoes(salva.questoes);
+    setDistribuicao(null);
     setRespostas(salva.respostas ?? {});
     // Volta para onde a pessoa parou. Antes era sempre 0: quem recarregava na
     // questão 47 de 60 voltava para a primeira e navegava tudo de novo.
@@ -677,6 +690,25 @@ function Simulado() {
               Suas respostas continuam salvas neste aparelho. Confira a conexão
               e toque em entregar de novo.
             </p>
+          </div>
+        )}
+
+        {/* Como a banca reparte a prova.
+            Só aparece no "Formato da banca", e some depois da primeira
+            questão respondida — é informação de largada, não de percurso. */}
+        {distribuicao && distribuicao.length > 0 && respondidas === 0 && (
+          <div className="mb-4 rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3">
+            <p className="mb-2 text-xs font-bold text-bat-gold-400">
+              📐 Esta prova está repartida como a da banca
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {distribuicao.map((d) => (
+                <span key={d.materia} className="text-xs text-bat-text-secondary">
+                  {d.materia}{" "}
+                  <strong className="text-bat-text">{d.questoes}</strong>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

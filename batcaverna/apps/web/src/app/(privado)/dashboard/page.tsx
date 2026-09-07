@@ -5,6 +5,10 @@ import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { RadarFraqueza } from "@/components/estudo/RadarFraqueza";
 import { GraficoEvolucao } from "@/components/estudo/GraficoEvolucao";
+import {
+  ProjecaoNota,
+  type ProjecaoDados,
+} from "@/components/estudo/ProjecaoNota";
 
 // ═══════════════════════════════════════════════════════════════
 // PLANO DO DIA — a primeira tela de quem entra
@@ -77,6 +81,7 @@ interface Painel {
     taxa: number;
   };
   evolucao?: PontoEvolucao[];
+  projecao?: ProjecaoDados | null;
 }
 
 const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
@@ -146,6 +151,7 @@ export default function DashboardPage() {
   }
 
   const { concurso, radar, evolucao = [], dias_para_prova: dias } = painel;
+  const projecao = painel.projecao ?? null;
   const cor = concurso?.cor_tema ?? "#F5C518";
 
   return (
@@ -249,6 +255,13 @@ export default function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {/* ═══════════ QUANTO FALTA PARA O CORTE ═══════════
+          Vem antes do radar de propósito: primeiro o alvo e a distância,
+          depois onde atacar. */}
+      {concurso && projecao && (
+        <ProjecaoNota dados={projecao} sigla={concurso.sigla} />
+      )}
 
       {/* ═══════════ RADAR DE FRAQUEZA ═══════════ */}
       {concurso && radar && (
