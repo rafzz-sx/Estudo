@@ -36,7 +36,11 @@ export async function GET(
       // usuário voltava vazia no painel.
       .select('*, questoes (enunciado, resposta_correta, banca, ano)')
       .eq('user_id', id)
-      .order('respondida_em', { ascending: false })
+      // Mesmo caso do `alternativa_correta` acima, e no mesmo arquivo: a
+      // coluna é `respondido_em`. Com o nome errado no ORDER, o PostgREST
+      // recusa a consulta e a aba de atividade continuava vazia mesmo depois
+      // da correção do select.
+      .order('respondido_em', { ascending: false })
       .limit(10);
 
     // 3. Simulados realizados

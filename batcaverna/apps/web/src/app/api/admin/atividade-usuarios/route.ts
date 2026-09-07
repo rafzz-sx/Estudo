@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const { data: sessoesAtivas } = await supabase
       .from('study_sessions')
       .select(`
-        id, user_id, dispositivo, iniciada_em, duracao_segundos,
+        id, user_id, dispositivo_origem, iniciada_em, duracao_segundos,
         multiplicador_continuidade_atual, xp_ganho_na_sessao,
         user:users!user_id (id, nome, apelido, email, avatar_url, nivel_atual, streak_dias)
       `)
@@ -42,7 +42,9 @@ export async function GET(req: NextRequest) {
     const { count: questoesHoje } = await supabase
       .from('user_questao_respostas')
       .select('*', { count: 'exact', head: true })
-      .gte('respondida_em', hojeInicio.toISOString());
+      // `respondida_em` não existe: a coluna é `respondido_em`. A contagem
+      // de questões respondidas hoje voltava indefinida, calada.
+      .gte('respondido_em', hojeInicio.toISOString());
 
     return NextResponse.json({
       success: true,
@@ -56,7 +58,11 @@ export async function GET(req: NextRequest) {
           avatar_url: s.user?.avatar_url,
           nivel_atual: s.user?.nivel_atual || 1,
           streak_dias: s.user?.streak_dias || 0,
-          dispositivo: s.dispositivo || 'web',
+          // A coluna chama `dispositivo_origem`. Pedindo `dispositivo`, o
+          // PostgREST recusava a consulta INTEIRA e a aba "Usuários Online
+          // Agora" mostrava sempre lista vazia — parecia que ninguém estava
+          // estudando.
+          dispositivo: s.dispositivo_origem || 'web',
           iniciada_em: s.iniciada_em,
           duracao_segundos: s.duracao_segundos || 0,
           multiplicador: s.multiplicador_continuidade_atual || 1.0,
