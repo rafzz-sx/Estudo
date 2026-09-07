@@ -297,8 +297,15 @@ TAXONOMIA: dict[str, list[tuple[str, list[str]]]] = {
     ],
     # ─────────────────────────────────────────────── GEOGRAFIA
     "Geografia": [
+        # Os termos marítimos ficam aqui, e Geopolítica é a PRIMEIRA da lista
+        # de propósito: "Amazônia Azul" é jurisdição marítima, não bioma, e
+        # sem esta âncora o termo "amazonia" de Biomas e Vegetação a captura.
+        # É tema recorrente de CN, EFOMM e EAM — as três provas da Marinha.
         ("Geopolítica", ["geopolitica", "conflito", "blocos economicos", "onu", "otan",
-                         "fronteira", "territorio", "guerra"]),
+                         "fronteira", "territorio", "guerra",
+                         "amazonia azul", "mar territorial", "zona economica exclusiva",
+                         "plataforma continental", "aguas jurisdicionais",
+                         "soberania maritima"]),
         ("Globalização e Economia", ["globalizacao", "economia mundial", "comercio internacional",
                                      "capitalismo", "divisao internacional do trabalho"]),
         ("População e Demografia", ["populacao", "demografia", "migracao", "piramide etaria",
@@ -493,6 +500,31 @@ def _listas_da_materia(materia: str) -> list[tuple[str, list[str]]]:
     return combinada
 
 
+def _casa(termo: str, alvo: str) -> bool:
+    """O termo precisa começar no INÍCIO DE UMA PALAVRA do rótulo.
+
+    Os termos são prefixos de propósito — "interpretac" cobre
+    "interpretação/interpretativo", "text" cobre "texto/textual/texts". Por
+    isso a comparação não pode exigir palavra inteira. Mas ela também não
+    pode ser `termo in alvo`, substring cru, que era o que estava aqui:
+    substring cru casa no MEIO de uma palavra, e palavras se contêm.
+
+        "organica" dentro de "inorganica"  -> 14 questões de química
+                                              inorgânica arquivadas como
+                                              Química Orgânica; o assunto
+                                              "Funções Inorgânicas" ficou
+                                              inalcançável, com 0 questões
+        "etica"    dentro de "estetica"    -> Estética virava Ética e Moral
+
+    Pior: o retorno vinha com `casou_no_dicionario = True`, então o erro não
+    aparecia na métrica de cobertura — passava por acerto.
+
+    Exigir início de palavra mantém o prefixo funcionando e corta o casamento
+    por sufixo, que é onde estava o defeito.
+    """
+    return re.search(rf"(?<![0-9a-z]){re.escape(termo)}", alvo) is not None
+
+
 def canonizar(materia: str | None, assunto: str | None) -> tuple[str, bool]:
     """
     Devolve (assunto canônico, casou_no_dicionario).
@@ -511,7 +543,7 @@ def canonizar(materia: str | None, assunto: str | None) -> tuple[str, bool]:
             # O termo passa pela MESMA normalização do rótulo: é isso que
             # torna a comparação simétrica e faz "Inequações" casar com
             # "inequação".
-            if _norm(termo) in alvo:
+            if _casa(_norm(termo), alvo):
                 return canonico, True
 
     return reduzir(bruto), False
