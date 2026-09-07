@@ -32,6 +32,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...menos o modelo. Ele so tem marcador de posicao, nenhum valor real, e
+# e o arquivo que o README manda copiar no primeiro passo:
+#   cp apps/web/.env.example apps/web/.env.local
+# Sem esta excecao, esse passo era impossivel a partir de um clone limpo —
+# o modelo existia so na maquina de quem o escreveu.
+!.env.example
 
 # vercel
 .vercel
