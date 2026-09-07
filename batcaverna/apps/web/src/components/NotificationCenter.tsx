@@ -149,6 +149,10 @@ export function NotificationCenter({ align = "auto" }: Props) {
       case "resposta_ticket": return "🎫";
       case "solicitacao_amizade": return "👥";
       case "streak": return "🔥";
+      // Alerta de moderação: só o admin recebe, e a cor do sino não muda —
+      // quem precisa se destacar é a linha, dentro da lista.
+      case "moderacao": return "🛡️";
+      case "sistema": return "📢";
       default: return "🔔";
     }
   };

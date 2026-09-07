@@ -8,6 +8,13 @@ import {
   uuidOuNulo,
   validarDataUrlMidia,
 } from '@/lib/seguranca';
+import {
+  analisarMensagem,
+  ROTULO_CATEGORIA,
+  ROTULO_GRAVIDADE,
+  trechoParaAlerta,
+  type ResultadoModeracao,
+} from '@/lib/moderacao';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -15,19 +22,71 @@ async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   return user?.id ?? null;
 }
 
-// Termos ofensivos para flag automática de moderação (Seção 15)
-const TERMOS_OFENSIVOS = [
-  'lixo', 'idiota', 'otario', 'imbecil', 'merda', 'caralho', 'puta',
-  'vagabundo', 'corno', 'arrombado', 'desgracado', 'foder',
-];
+/**
+ * Avisa a moderação. Roda depois de a mensagem já estar gravada — se falhar,
+ * a mensagem não é perdida, só o aviso; e o registro continua na fila do
+ * painel de qualquer forma.
+ *
+ * O alerta responde as três perguntas de quem modera: QUEM escreveu, O QUE
+ * escreveu e PARA QUEM. Sem o "para quem" o admin precisava abrir a conversa
+ * para saber se era briga entre dois amigos ou alguém de fora incomodando.
+ */
+async function avisarModeracao(
+  supabase: SupabaseClient,
+  dados: {
+    analise: ResultadoModeracao;
+    mensagemId: string;
+    conversaId: string;
+    autorId: string;
+    destinatarioId: string | null;
+    texto: string;
+  }
+): Promise<void> {
+  const { analise, mensagemId, conversaId, autorId, destinatarioId, texto } = dados;
 
-function contemTermoOfensivo(texto: string): boolean {
-  if (!texto) return false;
-  const normalizado = texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  return TERMOS_OFENSIVOS.some((termo) => normalizado.includes(termo));
+  const { data: admins } = await supabase
+    .from('users')
+    .select('id')
+    .eq('role', 'admin')
+    .eq('ativo', true);
+
+  if (!admins?.length) return;
+
+  const [autor, destinatario] = await Promise.all([
+    supabase.from('users').select('apelido, nome').eq('id', autorId).maybeSingle(),
+    destinatarioId
+      ? supabase.from('users').select('apelido, nome').eq('id', destinatarioId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const quem = autor.data?.apelido ?? 'Alguém';
+  const paraQuem = destinatario.data?.apelido ?? 'outro aluno';
+  const categorias = analise.categorias.map((c) => ROTULO_CATEGORIA[c]).join(', ');
+  const gravidade = analise.gravidade ? ROTULO_GRAVIDADE[analise.gravidade] : 'Baixa';
+
+  const emoji = analise.gravidade === 'critica' ? '🚨' : '⚠️';
+
+  await supabase.from('notificacoes').insert(
+    admins.map((a) => ({
+      user_id: a.id,
+      tipo: 'moderacao',
+      titulo: `${emoji} ${gravidade} · ${categorias}`,
+      // O trecho vai na própria notificação: o admin decide se precisa abrir
+      // a conversa sem ter de abrir a conversa para decidir.
+      mensagem: `${quem} → ${paraQuem}: "${trechoParaAlerta(texto)}"`,
+      dados_extra: {
+        mensagem_id: mensagemId,
+        conversa_id: conversaId,
+        autor_id: autorId,
+        autor_apelido: quem,
+        destinatario_id: destinatarioId,
+        destinatario_apelido: paraQuem,
+        gravidade: analise.gravidade,
+        categorias: analise.categorias,
+        termos: analise.ocorrencias.map((o) => o.trecho),
+      },
+    }))
+  );
 }
 
 /** Tipos que a coluna `tipo` (enum `mensagem_chat_tipo`) aceita. */
@@ -52,15 +111,24 @@ async function participaDaConversa(
   supabase: SupabaseClient,
   conversaId: string,
   userId: string
-): Promise<boolean> {
+): Promise<{ participa: boolean; outroId: string | null }> {
   const { data } = await supabase
     .from('conversas')
     .select('user_id_a, user_id_b')
     .eq('id', conversaId)
     .maybeSingle();
 
-  if (!data) return false;
-  return data.user_id_a === userId || data.user_id_b === userId;
+  if (!data) return { participa: false, outroId: null };
+
+  if (data.user_id_a === userId) {
+    return { participa: true, outroId: data.user_id_b };
+  }
+  if (data.user_id_b === userId) {
+    return { participa: true, outroId: data.user_id_a };
+  }
+  // O chat é sempre 1 para 1: o "outro lado" é o destinatário, e é ele que o
+  // alerta de moderação precisa nomear.
+  return { participa: false, outroId: null };
 }
 
 // GET /api/chat/mensagens?conversa_id=xyz — Lista mensagens de uma conversa
@@ -80,7 +148,8 @@ export async function GET(req: NextRequest) {
 
     // A checagem vem antes do UPDATE de "lida": marcar como lida a conversa
     // dos outros já seria, por si só, vazar que alguém entrou nela.
-    if (!(await participaDaConversa(supabase, conversaId, user))) {
+    const acesso = await participaDaConversa(supabase, conversaId, user);
+    if (!acesso.participa) {
       return NextResponse.json(
         { success: false, error: 'Conversa não encontrada' },
         { status: 404 }
@@ -184,14 +253,15 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    if (!(await participaDaConversa(supabase, conversaId, user))) {
+    const acesso = await participaDaConversa(supabase, conversaId, user);
+    if (!acesso.participa) {
       return NextResponse.json(
         { success: false, error: 'Conversa não encontrada' },
         { status: 404 }
       );
     }
 
-    const sinalizada = textoFinal ? contemTermoOfensivo(textoFinal) : false;
+    const analise = analisarMensagem(textoFinal);
 
     const { data: novaMsg, error: mErr } = await supabase
       .from('mensagem_chat')
@@ -202,7 +272,14 @@ export async function POST(req: NextRequest) {
         tipo,
         midia_url: midia_url || null,
         duracao_segundos: duracao,
-        sinalizada_para_revisao: sinalizada,
+        sinalizada_para_revisao: analise.sinalizada,
+        // Guardar a classificação, e não só o booleano, é o que deixa a fila
+        // do painel ordenar por gravidade em vez de por data.
+        gravidade_moderacao: analise.gravidade,
+        categorias_moderacao: analise.categorias.length ? analise.categorias : null,
+        termos_detectados: analise.ocorrencias.length
+          ? analise.ocorrencias.map((o) => o.trecho)
+          : null,
       })
       .select('*, autor:users!autor_id (id, apelido, avatar_url)')
       .single();
@@ -214,6 +291,27 @@ export async function POST(req: NextRequest) {
       .from('conversas')
       .update({ ultima_mensagem_em: new Date().toISOString() })
       .eq('id', conversaId);
+
+    // Alerta ao vivo para a moderação. Só o que for grave o bastante — o
+    // palavrão solto fica na fila do painel e espera. Um sino que toca a
+    // cada "que prova do caralho" é um sino que o admin desliga na
+    // primeira semana, e aí a ameaça de verdade passa junto.
+    if (analise.alertaImediato && textoFinal) {
+      try {
+        await avisarModeracao(supabase, {
+          analise,
+          mensagemId: novaMsg.id,
+          conversaId,
+          autorId: user,
+          destinatarioId: acesso.outroId,
+          texto: textoFinal,
+        });
+      } catch (e) {
+        // A mensagem já está gravada e sinalizada; o painel mostra de
+        // qualquer jeito. Falhar aqui não pode derrubar o envio.
+        console.error('Falha ao notificar moderação:', e);
+      }
+    }
 
     return NextResponse.json({
       success: true,
