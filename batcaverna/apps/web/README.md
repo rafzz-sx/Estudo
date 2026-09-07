@@ -176,5 +176,17 @@ Consulte a tabela completa de variáveis de ambiente no [Manual Geral do Monorep
    assim que apareceu o `capitalize()`: o Python abaixa o resto da
    palavra, o TS preservava, e o mesmo rótulo virava dois assuntos
    diferentes conforme o caminho da importação.
+13. **Regra que a tela e o servidor checam vira DADO, não dois blocos de
+   `if`.** A regra de senha estava escrita em quatro lugares e as quatro
+   concordavam — que é o estado em que a próxima mudança diverge. Pior: a
+   divergência aparece como a tela marcando ✓ numa senha que a rota
+   recusa, e o aluno clicando sem entender. `REGRAS_SENHA` é uma lista;
+   a validação e a listinha de ✓ percorrem a mesma.
+14. **Erro tem que parecer erro.** A recuperação de senha devolvia
+   "não está ativa" com ✓ verde de sucesso e mandava a pessoa para um
+   campo que nunca ia aceitar nada. Se a operação não vai acontecer, a
+   tela não avança e diz para onde ir — todo caminho sem saída precisa de
+   uma porta, e ela não pode ficar atrás do login que a pessoa não
+   consegue passar.
 
 Para a documentação completa da plataforma, veja o [README Principal da BatCaverna](../../README.md).

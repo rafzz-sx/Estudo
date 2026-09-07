@@ -6,7 +6,7 @@
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 60 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 62 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os principais commits que vão subir (dos 60) -----------------------
+  --- Os principais commits que vão subir (dos 62) -----------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -619,6 +619,44 @@
            Sem essa trava a fila enche de quem passou o olho e o número
            deixa de significar "gente que resolveu isto e discorda".
 
+  [ ] 6.56 ESQUECI MINHA SENHA, SEM E-MAIL CONFIGURADO · este é o estado
+           REAL da instalação hoje, porque não há RESEND_API_KEY.
+           /auth/recuperar → digite um e-mail cadastrado → "Enviar".
+           Tem que aparecer uma caixa VERMELHA dizendo que a recuperação por
+           e-mail não está ativa, com o link "Ir para a página de Contato",
+           e a tela tem que FICAR no passo do e-mail.
+           Antes ela avançava para o passo do código e mostrava a mensagem
+           de indisponível em VERDE com ✓, acima de um campo que nunca ia
+           aceitar nada.
+           O código é gerado assim mesmo e vai para o log da Vercel:
+             [RECUPERAÇÃO] Código para <e-mail>: 123456
+           Dá para você pegar ali e passar para o aluno que abrir contato.
+
+  [ ] 6.57 ESQUECI MINHA SENHA, COM E-MAIL CONFIGURADO · só depois de você
+           cadastrar RESEND_API_KEY na Vercel. Mesmo caminho, mas agora tem
+           que avançar para o passo do código.
+           Confira as duas correções de validade:
+             • peça um código, NÃO use, e peça outro. O PRIMEIRO tem que
+               falhar com "Código inválido ou expirado" — pedir um novo
+               invalida os anteriores.
+             • no banco, a validade agora é de 30 minutos, não 24 horas:
+                 SELECT expira_em - criado_em FROM email_verification_tokens
+                 WHERE token LIKE 'reset_%' ORDER BY criado_em DESC LIMIT 1;
+
+  [ ] 6.58 REGRA DE SENHA IGUAL NOS DOIS LUGARES · /auth (cadastro) e
+           /auth/recuperar têm que exigir exatamente a mesma coisa. Digite
+           "Senha123" (sem caractere especial) nos dois: os dois têm que
+           recusar. A listinha de ✓ ao lado do campo e a mensagem de erro
+           saem da mesma lista agora, então não tem como a tela liberar o
+           que o servidor nega.
+
+  [ ] 6.59 CELULAR · abra no celular de verdade (ou F12 → 360px de largura):
+           /questoes, /simulado, /redacao, /ranking e /admin.
+           Role até o fim de cada uma. NADA pode escorregar para os lados —
+           a página inteira não rola na horizontal. Tabela larga (o /admin
+           tem três) rola DENTRO da própria caixa, não arrasta a página.
+           A Dynamic Island fica no rodapé no celular, não no topo.
+
 
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
@@ -712,6 +750,25 @@
          segunda é mais honesta com o schema.
 
 
+  ! 7.13 RECUPERAÇÃO DE SENHA DEPENDE DE UM PROVEDOR DE E-MAIL
+         Sem `RESEND_API_KEY`, o aluno NÃO consegue redefinir a senha
+         sozinho. O fluxo agora é honesto sobre isso — diz que não está
+         ativo e manda para /contato, em vez de fingir que enviou — mas
+         honesto não é o mesmo que funcionando.
+
+         Enquanto não houver provedor, o caminho é: o aluno abre /contato,
+         você lê a mensagem em /admin → "Mensagens de Contato", pega o
+         código no log da Vercel e devolve para ele.
+
+         Para resolver de vez: crie a conta no Resend (o plano gratuito dá
+         3.000 e-mails/mês, muito acima do necessário), cadastre
+         `RESEND_API_KEY` nas variáveis da Vercel e escreva o envio no
+         lugar marcado em `api/auth/recuperar/route.ts` — o código já é
+         gerado e guardado, falta só entregá-lo.
+
+         Enquanto isso, /contato é o caminho de saída e ele funciona.
+
+
 ================================================================================
   PARTE 8 — MANUTENÇÃO (para o futuro)
 ================================================================================
@@ -762,7 +819,7 @@
   Otimizar foto de concurso nova:
     python scripts/otimizar_imagens.py
 
-  Checagens que rodam sem Node — rode as 15 antes de todo push:
+  Checagens que rodam sem Node — rode as 17 antes de todo push:
     python scripts/checar_imports.py             # imports e sintaxe
     python scripts/checar_referencias.py         # componente usado sem import
     python scripts/checar_escopo.py              # variável que não existe (*)
@@ -778,6 +835,8 @@
     python scripts/checar_taxonomia.py           # assunto inalcançável / meio de palavra
     python scripts/checar_paridade_taxonomia.py  # taxonomia igual no .py e no .ts
     python scripts/checar_contestacao.py         # regras da contestação: SQL x rota x tela
+    python scripts/checar_mobile.py              # nada rola a página para o lado no celular
+    python scripts/checar_regra_unica.py         # a regra de senha num lugar só
 
   Ou de uma vez (PowerShell):
     Get-ChildItem scripts/checar_*.py | ForEach-Object {
@@ -953,29 +1012,26 @@
 
 
   ----------------------------------------------------------------------
-    A-5   OPCIONAL — ALINHAR OS NÚMEROS DE VERSÃO
-  ----------------------------------------------------------------------
-  [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
+    A-5  [RESOLVIDA NA 2.8.0 — não precisa mais fazer nada]
+       Os quatro números de versão foram alinhados em 2.8.0:
+         package.json (raiz, web e mobile) .. 2.1.0 -> 2.8.0
+         apps/mobile/app.json ............... 2.0.0 -> 2.8.0
+         android/app/build.gradle ........... 2.0.0 -> 2.8.0
+         api/app-info (VERSAO_APP) .......... 2.7.0 -> 2.8.0
+       Nos manifests mudou SÓ o campo `version` — cinco linhas no
+       total, nenhuma dependência e nenhum lockfile tocado.
 
-  Tarefa:       Acertar a versão nos manifests.
-  Motivo:       Hoje convivem quatro números diferentes:
-                  package.json (raiz)         2.1.0
-                  apps/web/package.json       2.1.0
-                  apps/mobile/package.json    2.1.0
-                  android/app/build.gradle    2.0.0  (versionName)
-                  a plataforma exibe          2.6.0  (vem do banco)
-                Um APK gerado hoje se anuncia como 2.0.0 no sistema, seis
-                versões atrás — atrapalha o suporte quando o aluno relata a
-                versão que está usando.
+       O que o rodapé exibe vem do BANCO, não do código: rode
+       `supabase/seeds/versao_2_8_0.sql`, que grava a versão e a hora
+       com `date_trunc('hour', NOW())` — hora cheia, sem minutos, que
+       é o formato que a tela mostra ("07/09/2026 às 14h").
+       O `VERSAO_APP` no código é só a reserva de quando a tabela
+       `app_info` está vazia.
 
-                Não corrigi porque exige alterar package.json.
+       O `versionCode` do Android continua em 4 de propósito: ele é
+       um contador da Play Store e só precisa subir quando você for
+       de fato publicar um APK novo.
 
-  Comando:      edição manual dos quatro arquivos para 2.6.0.
-  Validação:    Gerar o APK e conferir em Configurações -> Aplicativos.
-
-
-  ----------------------------------------------------------------------
-    A-6   OPCIONAL — TIRAR AS IMAGENS DE DENTRO DO BANCO
   ----------------------------------------------------------------------
   [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
 
@@ -1004,8 +1060,10 @@
 
   Confira o JWT_SECRET na Vercel → torne o repositório privado → instale o
   Node → dê o push → rode as migrations e os seeds na ordem da PARTE 3
-  (a 2.7.0 traz a migration 016 e o versao_2_7_0.sql) → teste a PARTE 6,
-  com atenção especial ao 6.28 (login de conta antiga) → leia a PARTE 9,
-  que lista o que ainda depende de você.
+  (a 2.8.0 traz as migrations 016 e 017, e o versao_2_8_0.sql) → RODE A 011
+  DE NOVO, porque 39 questões estavam no assunto errado → teste a PARTE 6,
+  com atenção especial ao 6.28 (login de conta antiga), ao 6.51 (assunto
+  certo em Química) e ao 6.56 (esqueci minha senha) → leia a PARTE 9, que
+  lista o que ainda depende de você.
 
 ================================================================================
