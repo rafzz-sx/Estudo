@@ -1,6 +1,6 @@
 ================================================================================
   BATCAVERNA — AUDITORIA DE SEGURANÇA · AÇÕES QUE SÓ VOCÊ PODE FAZER
-  Gerado em 06/09/2026
+  Gerado em 06/09/2026 · revisado na varredura da 2.2.0 (mesmo dia)
 ================================================================================
 
   Este arquivo tem só o que EU não consigo fazer por código. O que já foi
@@ -8,6 +8,42 @@
 
   ATENÇÃO: o item 0 é uma emergência. Faça ele antes de qualquer coisa,
   antes até de subir o código.
+
+  ------------------------------------------------------------------------
+  NOVO NA REVISÃO DA 2.2.0 — leia antes de rodar a migration 008
+  ------------------------------------------------------------------------
+
+  SE VOCÊ JÁ RODOU A 008: rode de novo. Ela tinha um defeito meu.
+
+  A última linha da migration criava um CHECK sobre a coluna `conteudo` da
+  tabela `mensagem_chat`. Essa coluna se chama `conteudo_texto`. O comando
+  abortava com "column conteudo does not exist" e, como tudo estava dentro
+  de uma transação, o Postgres desfazia o arquivo INTEIRO — todas as
+  políticas de RLS junto. Você teria visto uma mensagem de erro vermelha e
+  acharia que era um detalhe no fim; na verdade nada tinha sido aplicado.
+
+  Já está corrigido no arquivo, e ele agora também limita o tamanho da
+  mídia do chat (8 MB por mensagem).
+
+  ------------------------------------------------------------------------
+  DOIS BURACOS DE AUTORIZAÇÃO FECHADOS POR CÓDIGO (nada a fazer, é aviso)
+  ------------------------------------------------------------------------
+
+  Se alguém já usou a plataforma, vale saber que estas portas estiveram
+  abertas — não para consertar agora, mas para você decidir se quer avisar
+  alguém ou olhar os registros:
+
+  • CHAT: /api/chat/mensagens não conferia se quem pedia participava da
+    conversa. Qualquer pessoa logada podia LER a conversa privada de dois
+    estranhos trocando o UUID na requisição, e ESCREVER dentro dela.
+  • CHAMADOS: /api/tickets/[id]/mensagens tinha o mesmo problema. Ticket de
+    suporte é onde o aluno escreve denúncia de assédio e dados de contato.
+  • RANKING: /api/ranking era público (sem login) e ignorava a preferência
+    "ocultar do ranking" que a tela de perfil salvava. Quem desligou
+    continuou aparecendo.
+
+  Explorar qualquer um deles exigia adivinhar um UUID — não é trivial — mas
+  a proteção não existia. Os três estão fechados nos commits 13 e 14.
 
 
 ================================================================================
@@ -128,6 +164,11 @@
     -- 'questoes' e 'bizus' NÃO podem aparecer nesta lista.
     SELECT tablename, policyname, cmd FROM pg_policies
     WHERE schemaname = 'public' ORDER BY tablename;
+
+    -- As duas travas de tamanho do chat têm que existir. Se voltar vazio,
+    -- a 008 abortou no meio (veja o aviso no topo deste arquivo).
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'mensagem_chat'::regclass AND contype = 'c';
 
   ONDE: Supabase Dashboard → SQL Editor → cole → Run
 

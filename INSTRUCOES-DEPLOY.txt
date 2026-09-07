@@ -1,12 +1,12 @@
 ================================================================================
-  BATCAVERNA 2.1.0 — TUDO QUE PRECISA SER FEITO
-  Gerado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
+  BATCAVERNA 2.2.0 — TUDO QUE PRECISA SER FEITO
+  Atualizado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
 ================================================================================
 
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 11 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 16 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, item 0. A chave
      mestra do banco está exposta num repositório público do GitHub.
@@ -49,7 +49,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 11 commits que vão subir ------------------------------------------
+  --- Os 16 commits que vão subir ------------------------------------------
      1. feat(2.1.0)      banco limpo, teoria de humanas, música, vídeo-aulas
      2. fix(gamificacao) nível e streak em todos os caminhos de XP; home -97%
      3. feat(admin)      importador real, fila de resolução, 36 classes mudas
@@ -61,6 +61,11 @@
      9. docs             contagem correta de seeds
     10. security         RLS revisado, headers, rate limit, validação upload
     11. docs(seguranca)  relatório de ações manuais
+    12. docs             lista atualizada dos commits no roteiro
+    13. fix(seguranca)   conversa e ticket alheios eram legíveis e graváveis
+    14. fix(ranking)     "sair do ranking" era ignorado + 5 defeitos
+    15. fix(simulado)    "simulado rápido" do card não gerava simulado
+    16. fix              XP, gabarito comentado, chat no celular, build quebrado
 
 
 ================================================================================
@@ -75,9 +80,10 @@
   [ ] 000_setup_completo_batcaverna.sql    SÓ SE O BANCO FOR NOVO
   [ ] 004_plataforma_completa.sql          rode de novo mesmo já tendo rodado
   [ ] 005_estudo_inteligente.sql
-  [ ] 006_moderacao_contas.sql             NOVA
-  [ ] 007_editais_e_assuntos.sql           NOVA
-  [ ] 008_seguranca_rls.sql                NOVA — fecha o gabarito público
+  [ ] 006_moderacao_contas.sql
+  [ ] 007_editais_e_assuntos.sql
+  [ ] 008_seguranca_rls.sql                << CORRIGIDA, releia abaixo
+  [ ] 009_simulados_e_gabaritos.sql        NOVA
 
        Por que rodar a 004 de novo:
          - ganhou a coluna `anulada`
@@ -88,6 +94,18 @@
        Atenção na 006: ela tem um ALTER TYPE solto. Se o SQL Editor
        reclamar, rode essa linha sozinha primeiro:
          ALTER TYPE notificacao_tipo ADD VALUE IF NOT EXISTS 'sistema';
+
+       SOBRE A 008 — SE VOCÊ JÁ TINHA RODADO ELA, RODE DE NOVO:
+         a versão anterior tinha um CHECK apontando para a coluna
+         `conteudo` da tabela mensagem_chat. A coluna chama
+         `conteudo_texto`. O comando abortava com "column conteudo does not
+         exist" e derrubava a transação inteira — ou seja, TODAS as
+         políticas de segurança dela ficavam sem efeito, sem avisar. Já
+         está corrigido no arquivo.
+
+       A 009 acrescenta a coluna gerada `tem_comentario` (reescreve a
+       tabela de questões, leva ~1 min), grava o ano-base de cada concurso
+       e instala 33 frases motivacionais novas.
 
   ---- 3.2 BANCO DE QUESTÕES (~2 min cada) ---------------------------------
 
@@ -100,8 +118,10 @@
                                           ------
                                            3.247 questões
 
-       RODE DE NOVO mesmo já tendo rodado antes: os arquivos foram
-       regerados com 178 explicações que o parser antigo perdia.
+       Rode ANTES da 009: a coluna `tem_comentario` é calculada pelo banco a
+       partir da `explicacao` e se mantém sozinha depois — mas rodar os
+       seeds primeiro deixa a conferência do item 3.5 já com os números
+       certos.
 
   ---- 3.3 CONTEÚDO DIDÁTICO -----------------------------------------------
 
@@ -120,8 +140,9 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_1_0.sql
+  [ ] versao_2_2_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
+       (versao_2_1_0.sql fica só como histórico — não precisa rodar.)
 
   ---- 3.5 CONFERÊNCIA -----------------------------------------------------
 
@@ -134,19 +155,28 @@
     -- deve voltar ~3.247
     SELECT COUNT(*) FROM questoes WHERE ativa;
 
-    -- 'pendente' deve estar perto de 383, não de 540
-    SELECT resolucao_status, COUNT(*) FROM questoes GROUP BY resolucao_status;
+    -- true ~2.885 · false ~362  (as do ENEM 2024/2025 sem comentário)
+    SELECT tem_comentario, COUNT(*) FROM questoes
+    WHERE ativa GROUP BY tem_comentario;
 
-    -- os 9 concursos com link do edital
-    SELECT sigla, edital_url IS NOT NULL AS tem_edital, tem_taf
+    -- os 9 concursos: link do edital e ano-base
+    SELECT sigla, edital_ano, edital_url IS NOT NULL AS tem_edital, tem_taf
     FROM concursos ORDER BY ordem_exibicao;
 
-    -- EsPCEx tem que aparecer aqui agora
+    -- EsPCEx tem que aparecer aqui
     SELECT c.sigla, COUNT(*) FROM taf_provas t
     JOIN concursos c ON c.id = t.concurso_id GROUP BY c.sigla;
 
     -- combo: os pisos devem ser 3,5,11,21,31,51,76,101,151,201
     SELECT minimo, rotulo FROM combo_patamares ORDER BY minimo;
+
+    -- frases: erro 60 · combo_quebrado 18 · acerto 15 · retorno 10
+    SELECT categoria, COUNT(*) FROM frases_motivacionais
+    WHERE ativa GROUP BY categoria ORDER BY categoria;
+
+    -- as duas travas de tamanho do chat têm que existir (migration 008)
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'mensagem_chat'::regclass AND contype = 'c';
 
 
 ================================================================================
@@ -161,6 +191,12 @@
   [ ] 4.5  PRIMEIRA COISA A TESTAR (é o build que eu não pude rodar):
              npm run build
            Se acusar erro de tipo, me manda a mensagem que eu corrijo.
+
+           Nesta rodada eu encontrei e corrigi DOIS erros que teriam
+           quebrado esse build: uma variável inexistente na rota da trilha e
+           três rotas cujo `getUserFromRequest` prometia devolver um texto
+           mas era usado como objeto. Achei com os verificadores da PARTE 8 —
+           eles não substituem o compilador, mas pegam essa classe de erro.
 
 
 ================================================================================
@@ -181,7 +217,7 @@
 ================================================================================
 
   [ ] 6.1  Entre como admin e vá em /admin
-  [ ] 6.2  Aba "Fila de Resolução": 383 questões esperando gabarito escrito.
+  [ ] 6.2  Aba "Fila de Resolução": 362 questões esperando gabarito escrito.
            Vêm ordenadas pelas que mais derrubam aluno — comece pelo topo.
   [ ] 6.3  Aba "Importar Questões": teste com um .txt que já foi importado.
            Tem que dizer "já no banco" e não inserir nada. Se inserir
@@ -191,38 +227,86 @@
   [ ] 6.5  Responda 12 questões seguidas e SAIA da página. O XP e a
            sequência têm que continuar lá — era o bug que você relatou.
 
+  --- Os cinco testes da rodada de 06/09 (o que eu corrigi hoje) ---
+
+  [ ] 6.6  RANKING · Perfil → Privacidade → ligue "ocultar do ranking".
+           Abra /ranking: você NÃO pode aparecer. Antes aparecia.
+           No mesmo lugar, troque o concurso no seletor: a lista tem que
+           mudar. Antes era sempre a mesma.
+
+  [ ] 6.7  SIMULADO · No card de um concurso, clique "⚡ Simulado rápido".
+           A prova tem que COMEÇAR. Antes você caía na tela de configuração
+           e ficava uma prova vazia no banco.
+           Depois escolha "Por matéria": tem que pedir a matéria.
+           E "Personalizado": tem que deixar você mexer em tudo.
+
+  [ ] 6.8  CHAT NO CELULAR · Abra /chat no telefone. Toque numa conversa:
+           a lista some e aparece o botão de voltar. Antes as duas ficavam
+           empilhadas.
+
+  [ ] 6.9  GABARITO · Em /questoes, ligue "Só com gabarito comentado".
+           O total tem que cair (some o ENEM 2024/2025). Desligue e procure
+           uma questão do ENEM 2025: ela mostra o selo "sem comentário".
+
+  [ ] 6.10 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
+           progresso soltando o dedo FORA dela. A música tem que pular para
+           onde você soltou. Antes travava.
+
 
 ================================================================================
   PARTE 7 — O QUE FICOU PENDENTE (e por quê)
 ================================================================================
 
-  ! 7.1  383 questões sem gabarito comentado
+  ! 7.1  362 questões sem gabarito comentado
          360 delas são ENEM 2024 e 2025, cujos .txt só têm a chave de
-         respostas ("GABARITO OFICIAL"), sem nenhum comentário. Não dá para
-         inventar explicação oficial. Use a Fila de Resolução no painel.
+         respostas, sem nenhum comentário — conferi arquivo por arquivo
+         procurando "Explicação", "Justificativa", "Comentário" e
+         "Resolução": zero ocorrências nos três arquivos. Não dá para
+         inventar explicação oficial.
+         O que dá para fazer: elas continuam na plataforma (são as provas
+         MAIS recentes do ENEM, seria pior tirar), mas agora o aluno vê o
+         selo "sem comentário" antes de responder e pode filtrar só as
+         comentadas. Para escrever as resoluções, use a Fila de Resolução
+         no painel.
 
-  ! 7.2  EAM, EsPCEx e IME com 0 questões
+  ! 7.2  21 questões ficaram DE FORA da plataforma por não terem gabarito
+         São 15 do ENEM 2017 e 6 do ENEM 2020, cujos .txt não trazem a
+         resposta certa. Questão que ninguém consegue corrigir é pior que
+         questão ausente — o filtro de qualidade do gerador as barra.
+         Junto com elas ficaram de fora 13 questões com alternativas em
+         branco ou duplicadas na extração. Total: 3.281 extraídas,
+         3.247 publicadas.
+
+  ! 7.3  EAM, EsPCEx e IME com 0 questões
          Não existe .txt dessas provas na pasta BANCO DE QUESTOES.
          Assim que tiver, importe pelo painel: /admin → Importar Questões.
 
-  ! 7.3  Índices numéricos do TAF da EsPCEx
+  ! 7.4  Índices numéricos do TAF da EsPCEx
          Os 4 exercícios estão cadastrados, mas SEM número: não achei fonte
-         oficial confiável, e o edital avalia por APTO/INAPTO. Marca errada
-         faria o aluno treinar para o alvo errado. Se você tiver a tabela do
-         edital, me passa que eu cadastro.
+         oficial confiável, e o próprio edital avalia por APTO/INAPTO. Marca
+         errada faria o aluno treinar para o alvo errado. Se você tiver a
+         tabela do edital, me passa que eu cadastro.
 
-  ! 7.4  Conteúdo programático transcrito do edital
+  ! 7.5  Conteúdo programático transcrito do edital
          Não consegui fonte verificável. Em vez disso, o card "Assuntos que
          caem" lista o que realmente caiu nas provas oficiais, com
          frequência e ano — e linka o edital oficial no topo.
+         O selo do cabeçalho ("Base: provas oficiais até 2026") também é
+         calculado do próprio banco, não afirmado: ele se corrige sozinho
+         quando você importa uma prova nova.
 
-  ! 7.5  Aba "Banners & Temas" do admin é só informativa
+  ! 7.6  Aba "Banners & Temas" do admin é só informativa
          Não faz nada. Me diga o que ela deveria controlar.
 
-  ! 7.6  npm run build nunca foi executado
-         Node não está instalado aqui. Validei com 5 checagens estáticas
-         (143 arquivos, todas limpas), mas quem confirma a compilação é o
-         Vercel ou o passo 4.5.
+  ! 7.7  npm run build nunca foi executado
+         Node não está instalado aqui. Validei com 7 checagens estáticas
+         (149 arquivos). Elas acharam 2 erros que quebrariam a compilação,
+         já corrigidos — mas quem confirma é o Vercel ou o passo 4.5.
+
+  ! 7.8  Presença em tempo real no chat
+         O "Online" verde era escrito na mão para todo mundo. Agora mostra
+         o último acesso de verdade ("Visto há 20 min"). Presença ao vivo
+         exigiria websocket/Realtime — dá para fazer, é só pedir.
 
 
 ================================================================================
@@ -247,18 +331,25 @@
   Otimizar foto de concurso nova:
     python scripts/otimizar_imagens.py
 
-  Checagens que rodam sem Node:
+  Checagens que rodam sem Node — rode as 4 antes de todo push:
     python scripts/checar_imports.py          # imports e sintaxe
+    python scripts/checar_referencias.py      # componente usado sem import
+    python scripts/checar_escopo.py           # variável que não existe (*)
     python scripts/checar_classes_tema.py     # classes de cor inexistentes
-    python scripts/checar_paridade_hash.py    # dedup do importador
     python scripts/checar_seeds.py            # SQL antes de colar
+    python scripts/checar_paridade_hash.py    # dedup do importador
+
+    (*) checar_escopo é heurística: ele lista candidatos, não certezas.
+        Confira cada um antes de mexer. Foi ele que achou o `questoes` que
+        não existia na rota da trilha e teria quebrado o deploy.
 
 
 ================================================================================
   RESUMO DE UMA LINHA
 ================================================================================
 
-  Instale o Node → dê o push → rode as 5 migrations e os 22 seeds no
-  Supabase na ordem da PARTE 3 → teste os 5 itens da PARTE 6.
+  Torne o repositório privado → instale o Node → dê o push → rode as 6
+  migrations e os 22 seeds no Supabase na ordem da PARTE 3 → teste os 10
+  itens da PARTE 6.
 
 ================================================================================
