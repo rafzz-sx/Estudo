@@ -11,6 +11,7 @@ import { PainelFeedback } from "@/components/admin/PainelFeedback";
 import { PainelSessoes } from "@/components/admin/PainelSessoes";
 import { PainelImportacao } from "@/components/admin/PainelImportacao";
 import { PainelResolucoes } from "@/components/admin/PainelResolucoes";
+import { PainelContatos } from "@/components/admin/PainelContatos";
 
 interface UsuarioAdmin {
   id: string;
@@ -56,6 +57,7 @@ type AbaAdmin =
   | "banners"
   | "avisos"
   | "feedback"
+  | "contatos"
   | "sessoes";
 
 interface ResumoFeedback {
@@ -351,6 +353,7 @@ export default function AdminPage() {
               resumoFeedback?.nao_lidos ? ` (${resumoFeedback.nao_lidos})` : ""
             }`,
           },
+          { key: "contatos", label: "📨 Mensagens de Contato" },
           { key: "auditoria", label: "📝 Log de Auditoria" },
           { key: "banners", label: "🖼️ Banners & Temas" },
         ].map((item) => (
@@ -886,6 +889,8 @@ export default function AdminPage() {
 
       {/* ═══ TAB: FEEDBACK DOS ALUNOS ═══ */}
       {aba === "feedback" && <PainelFeedback onResumo={setResumoFeedback} />}
+
+      {aba === "contatos" && <PainelContatos />}
     </div>
   );
 }

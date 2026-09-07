@@ -6,6 +6,7 @@ import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
 import { SeletorBadges } from "@/components/SeletorBadges";
+import { GaleriaBadges } from "@/components/GaleriaBadges";
 
 function formatarTempo(seg: number): string {
   if (seg <= 0) return "0min";
@@ -53,6 +54,7 @@ export default function PerfilPage() {
   const [pendentesRecebidas, setPendentesRecebidas] = useState<any[]>([]);
   const [pendentesEnviadas, setPendentesEnviadas] = useState<any[]>([]);
   const [modalAmigoAberto, setModalAmigoAberto] = useState(false);
+  const [bloqueando, setBloqueando] = useState<string | null>(null);
 
   // Concursos favoritos e categoria escrita
   const [concursosFavoritos, setConcursosFavoritos] = useState<string[]>([]);
@@ -81,7 +83,10 @@ export default function PerfilPage() {
   // 1. Carregar perfil completo
   const carregarPerfil = async () => {
     try {
-      const res = await fetchWithAuth("/api/usuarios/me");
+      // `completo=1` traz o banner. Esta é a única tela que o exibe, e ele é
+      // um data URL de até 16 MB — por isso não vem mais por padrão (o
+      // AppShell pedia esta rota a cada carga de página e baixava tudo).
+      const res = await fetchWithAuth("/api/usuarios/me?completo=1");
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -109,6 +114,46 @@ export default function PerfilPage() {
       }
     } catch (e) {
       console.warn("Erro ao buscar perfil atualizado:", e);
+    }
+  };
+
+  /**
+   * Corta o contato com um soldado.
+   *
+   * A amizade passa a `bloqueada`: some da lista, some do chat e o outro lado
+   * não consegue mandar mensagem. A rota já fazia tudo isso e nunca teve um
+   * botão que a chamasse.
+   */
+  const bloquearAmigo = async (a: any) => {
+    const nome = a.usuario?.apelido ?? "este soldado";
+    if (
+      !window.confirm(
+        `Bloquear ${nome}?\n\nVocês deixam de ser amigos e ${nome} não poderá mais te mandar mensagem.`
+      )
+    ) {
+      return;
+    }
+
+    setBloqueando(a.amizade_id);
+    try {
+      const res = await fetchWithAuth(`/api/amizades/${a.amizade_id}/bloquear`, {
+        method: "PUT",
+      });
+      const json = await res.json();
+
+      // A mensagem segue a convenção do arquivo: string, e o prefixo "⚠️"
+      // é o que a tela usa para escolher o estilo de erro.
+      if (json.success) {
+        setAmigos((atual) => atual.filter((x) => x.amizade_id !== a.amizade_id));
+        setMsgFeedback(`🚫 ${nome} foi bloqueado.`);
+      } else {
+        setMsgFeedback(`⚠️ ${json.error ?? "Não consegui bloquear agora."}`);
+      }
+    } catch {
+      setMsgFeedback("⚠️ Falha de conexão ao bloquear.");
+    } finally {
+      setBloqueando(null);
+      setTimeout(() => setMsgFeedback(null), 4000);
     }
   };
 
@@ -673,12 +718,28 @@ export default function PerfilPage() {
                       </div>
                     </div>
 
-                    <Link
-                      href={a.usuario?.id ? `/chat?amigo=${a.usuario.id}` : "/chat"}
-                      className="p-2 rounded-xl bg-bat-gold-400/15 border border-bat-gold-400/30 text-bat-gold-400 hover:bg-bat-gold-400/25 transition-all text-xs font-bold no-underline flex-shrink-0"
-                    >
-                      💬 Chat
-                    </Link>
+                    <div className="flex flex-shrink-0 items-center gap-1.5">
+                      <Link
+                        href={a.usuario?.id ? `/chat?amigo=${a.usuario.id}` : "/chat"}
+                        className="p-2 rounded-xl bg-bat-gold-400/15 border border-bat-gold-400/30 text-bat-gold-400 hover:bg-bat-gold-400/25 transition-all text-xs font-bold no-underline"
+                      >
+                        💬 Chat
+                      </Link>
+
+                      {/* Bloquear. A rota /api/amizades/[id]/bloquear existia
+                          completa e não tinha botão em lugar nenhum — numa
+                          plataforma de comunidade com menores de idade, poder
+                          cortar contato é segurança, não enfeite. */}
+                      <button
+                        onClick={() => bloquearAmigo(a)}
+                        disabled={bloqueando === a.amizade_id}
+                        className="p-2 rounded-xl border border-bat-border text-bat-text-muted hover:border-bat-error/40 hover:text-bat-error transition-all text-xs font-bold cursor-pointer disabled:opacity-40"
+                        title={`Bloquear ${a.usuario?.apelido ?? "este soldado"}`}
+                        aria-label={`Bloquear ${a.usuario?.apelido ?? "este soldado"}`}
+                      >
+                        {bloqueando === a.amizade_id ? "…" : "🚫"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -688,23 +749,12 @@ export default function PerfilPage() {
       )}
 
       {/* ═══ BADGES ═══ */}
-      {tab === "badges" && (
-        <div className="space-y-4">
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 text-center">
-            <span className="text-4xl block mb-3">🦇</span>
-            <p className="text-bat-text font-medium mb-1">Primeiro Login</p>
-            <p className="text-bat-text-muted text-xs">Entrou na Caverna</p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={`locked-${i}`} className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 text-center opacity-40">
-                <span className="text-4xl mb-2 block">🔒</span>
-                <p className="text-bat-text-muted text-xs">???</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Antes daqui saía um card fixo "Primeiro Login" e oito cadeados
+          "???" gerados por `Array.from({ length: 8 })` — dado inventado, com
+          a API real (`/api/usuarios/me/badges`) já em uso na aba de
+          configurações logo acima. Agora é o catálogo de verdade, marcando o
+          que foi conquistado e dizendo o que falta para o resto. */}
+      {tab === "badges" && <GaleriaBadges />}
 
       {/* ═══ CONFIGURAÇÕES ═══ */}
       {tab === "config" && (
