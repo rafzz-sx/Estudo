@@ -201,6 +201,24 @@ export function getEmailTokenExpiry(): Date {
 }
 
 /**
+ * Validade do código de REDEFINIÇÃO DE SENHA — 30 minutos.
+ *
+ * Não é a mesma da verificação de e-mail, e a diferença é o ponto. Confirmar
+ * e-mail é uma conveniência: o link vale 24 h porque a pessoa pode abrir a
+ * caixa de entrada só no dia seguinte, e quem interceptasse o link ganharia
+ * pouco. Redefinir senha é uma tomada de conta: quem tiver o código troca a
+ * senha e entra.
+ *
+ * O código tem 6 dígitos — 1 milhão de combinações. Cada hora de validade a
+ * mais é uma hora a mais de tentativas para quem estiver adivinhando, e uma
+ * hora a mais em que um código esquecido num e-mail aberto ainda abre a
+ * conta. 30 minutos é tempo de sobra para quem pediu e está esperando.
+ */
+export function getResetTokenExpiry(): Date {
+  return new Date(Date.now() + 30 * 60 * 1000);
+}
+
+/**
  * Extrai e valida o usuário autenticado da requisição
  * Suporta tanto o header Authorization: Bearer <token> quanto o cookie bat_access_token
  */

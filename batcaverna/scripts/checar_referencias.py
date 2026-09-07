@@ -85,13 +85,27 @@ def sem_texto(codigo: str) -> str:
         # A pista de que é regex e não divisão: o token anterior não pode
         # terminar um valor.
         if c == "/":
-            anterior = next(
-                (ch for ch in reversed(saida) if not ch.isspace()), ""
-            )
+            anteriores = [ch for ch in reversed(saida) if not ch.isspace()]
+            anterior = anteriores[0] if anteriores else ""
+            penultimo = anteriores[1] if len(anteriores) > 1 else ""
+
             # `<` e `>` antes da barra são fecha-tag do JSX (`</div>`), nunca
             # início de regex. Sem esta exclusão o varredor engolia o resto do
             # componente e acusava parêntese solto em arquivo perfeito.
-            if anterior not in ")]}<>" and not (anterior.isalnum() or anterior in "_$\""):
+            #
+            # Com UMA exceção: `=>` é seta de arrow function, e uma regex pode
+            # ser o corpo dela — `testa: (s) => /[A-Z]/.test(s)`. Sem tratar
+            # este caso, o `[` da classe de caracteres entrava no balanço e o
+            # verificador acusava colchete solto em arquivo são. Foi o que
+            # aconteceu quando as regras de senha viraram uma lista de
+            # `{ testa: (s) => /.../ }`.
+            fecha_jsx = anterior in "<>" and not (anterior == ">" and penultimo == "=")
+
+            if (
+                not fecha_jsx
+                and anterior not in ")]}"
+                and not (anterior.isalnum() or anterior in "_$\"")
+            ):
                 j = i + 1
                 classe = False
                 fechou = False

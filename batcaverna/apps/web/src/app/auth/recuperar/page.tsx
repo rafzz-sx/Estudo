@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BatBrand } from "@/components/BatLogo";
 import { fetchWithAuth } from "@/stores/auth-store";
+import { REGRAS_SENHA } from "@batcaverna/utils";
 
 // ─── Luz de fundo amarela suave que segue o cursor ────────────
 function AuthSpotlight() {
@@ -73,6 +74,12 @@ export default function RecuperarSenhaPage() {
 
       if (!res.ok) {
         setErros([json.error || "Erro ao solicitar recuperação"]);
+      } else if (json.codigo_enviado === false) {
+        // Não há como o código chegar até quem pediu (produção sem provedor
+        // de e-mail). Avançar para o passo do código deixaria a pessoa presa
+        // num campo que nunca ia aceitar nada — e a mensagem de indisponível
+        // apareceria com ✓ verde, como se tivesse dado certo.
+        setErros([json.message || "Recuperação por e-mail indisponível."]);
       } else {
         setMensagem(json.message || "Código enviado!");
         // Em dev, o backend retorna o código
@@ -105,11 +112,11 @@ export default function RecuperarSenhaPage() {
     setErros([]);
     const novosErros: string[] = [];
 
-    if (novaSenha.length < 8) novosErros.push("Mínimo 8 caracteres");
-    if (!/[A-Z]/.test(novaSenha)) novosErros.push("Uma letra maiúscula");
-    if (!/[0-9]/.test(novaSenha)) novosErros.push("Um número");
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha))
-      novosErros.push("Um caractere especial");
+    // Mesma fonte da listinha de ✓ abaixo e da validação do servidor: é
+    // impossível esta tela liberar o botão numa senha que a rota recusa.
+    for (const regra of REGRAS_SENHA) {
+      if (!regra.testa(novaSenha)) novosErros.push(regra.rotulo);
+    }
     if (novaSenha !== confirmarSenha) novosErros.push("Senhas não coincidem");
 
     if (novosErros.length > 0) {
@@ -171,6 +178,17 @@ export default function RecuperarSenhaPage() {
             {erros.map((e, i) => (
               <p key={i} className="text-bat-error text-sm">• {e}</p>
             ))}
+            {/* Caminho de saída quando a recuperação por e-mail está
+                indisponível. /contato é público — /tickets fica atrás do
+                login, que é justamente o que a pessoa não consegue passar. */}
+            {erros.some((e) => e.includes("Contato")) && (
+              <Link
+                href="/contato"
+                className="mt-2 inline-block text-sm font-bold text-[#F5C518] underline underline-offset-4"
+              >
+                Ir para a página de Contato →
+              </Link>
+            )}
           </div>
         )}
 
@@ -297,18 +315,19 @@ export default function RecuperarSenhaPage() {
             {/* Indicador de força */}
             {novaSenha && (
               <div className="space-y-1 text-[11px]">
-                <div className={`flex items-center gap-1.5 ${novaSenha.length >= 8 ? "text-emerald-400" : "text-bat-text-muted"}`}>
-                  <span>{novaSenha.length >= 8 ? "✓" : "○"}</span> Mínimo 8 caracteres
-                </div>
-                <div className={`flex items-center gap-1.5 ${/[A-Z]/.test(novaSenha) ? "text-emerald-400" : "text-bat-text-muted"}`}>
-                  <span>{/[A-Z]/.test(novaSenha) ? "✓" : "○"}</span> Uma letra maiúscula
-                </div>
-                <div className={`flex items-center gap-1.5 ${/[0-9]/.test(novaSenha) ? "text-emerald-400" : "text-bat-text-muted"}`}>
-                  <span>{/[0-9]/.test(novaSenha) ? "✓" : "○"}</span> Um número
-                </div>
-                <div className={`flex items-center gap-1.5 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha) ? "text-emerald-400" : "text-bat-text-muted"}`}>
-                  <span>{/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(novaSenha) ? "✓" : "○"}</span> Um caractere especial
-                </div>
+                {REGRAS_SENHA.map((regra) => {
+                  const ok = regra.testa(novaSenha);
+                  return (
+                    <div
+                      key={regra.rotulo}
+                      className={`flex items-center gap-1.5 ${
+                        ok ? "text-emerald-400" : "text-bat-text-muted"
+                      }`}
+                    >
+                      <span>{ok ? "✓" : "○"}</span> {regra.rotulo}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

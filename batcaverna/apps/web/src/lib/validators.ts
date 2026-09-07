@@ -2,6 +2,8 @@
 // Validadores Oficiais do Sistema BatCaverna
 // ═══════════════════════════════════════════════════════════════
 
+import { validarSenha } from '@batcaverna/utils';
+
 // ─── Domínios temporários / descartáveis bloqueados ───────────
 export const DISPOSABLE_DOMAINS = new Set([
   'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'temp-mail.org',
@@ -140,17 +142,17 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validação de Força da Senha
+ * Validação de Força da Senha.
+ *
+ * A regra em si mora em `@batcaverna/utils` (REGRAS_SENHA), que é onde os
+ * dois aplicativos do monorepo conseguem enxergá-la. Esta função continua
+ * existindo com a mesma assinatura porque é o que o cadastro e a tela de
+ * login já chamam — o que mudou é que ela deixou de ter uma segunda cópia
+ * das regras.
  */
 export function isStrongPassword(senha: string): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  if (!senha || senha.length < 8) errors.push('Mínimo de 8 caracteres');
-  if (!/[A-Z]/.test(senha)) errors.push('Pelo menos uma letra maiúscula');
-  if (!/[0-9]/.test(senha)) errors.push('Pelo menos um número');
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(senha)) {
-    errors.push('Pelo menos um caractere especial');
-  }
-  return { valid: errors.length === 0, errors };
+  const { valida, erros } = validarSenha(senha ?? '');
+  return { valid: valida, errors: erros };
 }
 
 /**

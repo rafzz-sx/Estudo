@@ -69,24 +69,56 @@ export function validarEmail(email: string): boolean {
 /**
  * Valida força da senha (mínimo 8 chars, maiúscula, número, especial)
  */
+/**
+ * As regras de senha, como DADO — não como quatro blocos de `if`.
+ *
+ * A mesma regra estava escrita em quatro lugares: aqui, em
+ * `apps/web/src/lib/validators.ts`, na rota de recuperação e, duas vezes, na
+ * tela de recuperação (uma para validar, outra para desenhar a listinha de
+ * ✓/○). As quatro concordavam — o que é justamente o estado em que a
+ * próxima mudança passa a divergir, porque quem mexer numa não tem como
+ * saber das outras três.
+ *
+ * Sendo dado, a validação e a lista visual saem da MESMA fonte: acrescentar
+ * uma regra aqui a faz aparecer nos dois lugares, e é impossível a tela
+ * marcar ✓ numa senha que o servidor recusa.
+ */
+export const REGRAS_SENHA: {
+  /** Texto curto, para a listinha ao lado do campo. */
+  rotulo: string;
+  /** Texto completo, para a mensagem de erro. */
+  erro: string;
+  testa: (senha: string) => boolean;
+}[] = [
+  {
+    rotulo: 'Mínimo 8 caracteres',
+    erro: 'Mínimo de 8 caracteres',
+    testa: (s) => s.length >= 8,
+  },
+  {
+    rotulo: 'Uma letra maiúscula',
+    erro: 'Pelo menos uma letra maiúscula',
+    testa: (s) => /[A-Z]/.test(s),
+  },
+  {
+    rotulo: 'Um número',
+    erro: 'Pelo menos um número',
+    testa: (s) => /[0-9]/.test(s),
+  },
+  {
+    rotulo: 'Um caractere especial',
+    erro: 'Pelo menos um caractere especial',
+    testa: (s) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(s),
+  },
+];
+
 export function validarSenha(senha: string): {
   valida: boolean;
   erros: string[];
 } {
-  const erros: string[] = [];
-
-  if (senha.length < 8) {
-    erros.push('Mínimo de 8 caracteres');
-  }
-  if (!/[A-Z]/.test(senha)) {
-    erros.push('Pelo menos uma letra maiúscula');
-  }
-  if (!/[0-9]/.test(senha)) {
-    erros.push('Pelo menos um número');
-  }
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(senha)) {
-    erros.push('Pelo menos um caractere especial');
-  }
+  const erros = REGRAS_SENHA.filter((r) => !r.testa(senha ?? '')).map(
+    (r) => r.erro
+  );
 
   return { valida: erros.length === 0, erros };
 }

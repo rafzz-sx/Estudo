@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { hashToken, hashSenha, generateEmailToken, getEmailTokenExpiry } from '@/lib/auth';
+import { hashToken, hashSenha, getResetTokenExpiry } from '@/lib/auth';
+import { isStrongPassword } from '@/lib/validators';
 
 function getSupabase() {
   return createServerSupabaseClient();
@@ -48,12 +49,28 @@ export async function POST(req: NextRequest) {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const codeHash = await hashToken(code);
 
+    // Pedir um código novo invalida os anteriores.
+    //
+    // Antes, cada pedido só INSERIA. Com o limite de 4 pedidos a cada 15
+    // minutos e a validade de 24 h que este código herdava da verificação de
+    // e-mail, uma conta podia acumular dezenas de códigos válidos ao mesmo
+    // tempo — cada um deles abrindo a conta. Quem pede um código novo está
+    // dizendo que o anterior não serve mais.
+    await supabase
+      .from('email_verification_tokens')
+      .update({ usado: true })
+      .eq('user_id', user.id)
+      .eq('usado', false)
+      .like('token', 'reset_%');
+
     // Salvar token de recuperação na tabela email_verification_tokens
     // Reutilizamos a tabela existente com um prefixo para distinguir
     await supabase.from('email_verification_tokens').insert({
       user_id: user.id,
       token: `reset_${codeHash}`,
-      expira_em: getEmailTokenExpiry().toISOString(),
+      // 30 minutos, não as 24 h da verificação de e-mail: este código troca
+      // a senha, aquele só confirma um endereço.
+      expira_em: getResetTokenExpiry().toISOString(),
       usado: false,
     });
 
@@ -77,13 +94,27 @@ export async function POST(req: NextRequest) {
       console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
     }
 
+    // `codigo_enviado` diz à tela se existe um código A CAMINHO das mãos de
+    // quem pediu — por e-mail, ou na resposta em desenvolvimento.
+    //
+    // Sem este campo a tela não tinha como saber, e avançava sempre para o
+    // passo do código. Em produção sem provedor de e-mail, o resultado era o
+    // pior tipo de erro: a mensagem "recuperação por e-mail ainda não está
+    // ativa" aparecia com ✓ verde de sucesso, logo acima de um formulário
+    // pedindo "o código de 6 dígitos enviado para seu e-mail". A pessoa
+    // ficava presa num campo que nunca ia aceitar nada.
+    const codigoEnviado = temProvedorDeEmail || !emProducao;
+
     return NextResponse.json({
       success: true,
-      message: temProvedorDeEmail
+      codigo_enviado: codigoEnviado,
+      message: codigoEnviado
         ? 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.'
-        : emProducao
-        ? 'Recuperação por e-mail ainda não está ativa. Abra um chamado no Suporte para redefinir sua senha.'
-        : 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.',
+        : 'Recuperação por e-mail ainda não está ativa nesta instalação. ' +
+          'Fale com a gente pela página de Contato para redefinir sua senha. ' +
+          // /contato, e não /tickets: quem esqueceu a senha não consegue
+          // entrar, e a tela de chamados fica atrás do login.
+          'A página de contato não exige login.',
       // Só em desenvolvimento, e só quando não há como enviar o e-mail.
       ...(!emProducao && !temProvedorDeEmail ? { _dev_code: code } : {}),
     });
@@ -118,28 +149,14 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Validar nova senha
-    if (nova_senha.length < 8) {
+    // Validar nova senha. A regra sai de `@batcaverna/utils`, a mesma que o
+    // cadastro usa — estas quatro condições estavam reescritas aqui à mão, e
+    // uma senha aceita no cadastro podia ser recusada na recuperação (ou o
+    // contrário) no dia em que alguém mexesse só num dos lados.
+    const forca = isStrongPassword(nova_senha);
+    if (!forca.valid) {
       return NextResponse.json(
-        { success: false, error: 'A nova senha deve ter pelo menos 8 caracteres' },
-        { status: 400 }
-      );
-    }
-    if (!/[A-Z]/.test(nova_senha)) {
-      return NextResponse.json(
-        { success: false, error: 'A nova senha deve ter pelo menos uma letra maiúscula' },
-        { status: 400 }
-      );
-    }
-    if (!/[0-9]/.test(nova_senha)) {
-      return NextResponse.json(
-        { success: false, error: 'A nova senha deve ter pelo menos um número' },
-        { status: 400 }
-      );
-    }
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(nova_senha)) {
-      return NextResponse.json(
-        { success: false, error: 'A nova senha deve ter pelo menos um caractere especial' },
+        { success: false, error: `A nova senha precisa de: ${forca.errors.join(', ')}` },
         { status: 400 }
       );
     }
