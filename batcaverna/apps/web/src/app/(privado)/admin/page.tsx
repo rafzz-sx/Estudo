@@ -12,6 +12,7 @@ import { PainelSessoes } from "@/components/admin/PainelSessoes";
 import { PainelImportacao } from "@/components/admin/PainelImportacao";
 import { PainelResolucoes } from "@/components/admin/PainelResolucoes";
 import { PainelContatos } from "@/components/admin/PainelContatos";
+import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
 
 interface UsuarioAdmin {
   id: string;
@@ -58,6 +59,7 @@ type AbaAdmin =
   | "avisos"
   | "feedback"
   | "contatos"
+  | "teoria"
   | "sessoes";
 
 interface ResumoFeedback {
@@ -345,6 +347,7 @@ export default function AdminPage() {
           { key: "moderacao", label: "🛡️ Conversas do Chat" },
           { key: "armazem", label: "📥 Importar Questões" },
           { key: "resolucoes", label: "✍️ Fila de Resolução" },
+          { key: "teoria", label: "📝 Fila de Teoria" },
           { key: "sessoes", label: "⏳ Sessões & Logins" },
           { key: "avisos", label: "📢 Aviso Global" },
           {
@@ -891,6 +894,8 @@ export default function AdminPage() {
       {aba === "feedback" && <PainelFeedback onResumo={setResumoFeedback} />}
 
       {aba === "contatos" && <PainelContatos />}
+
+      {aba === "teoria" && <PainelLacunasTeoria />}
     </div>
   );
 }
