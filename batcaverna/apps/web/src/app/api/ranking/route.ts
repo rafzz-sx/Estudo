@@ -1,137 +1,245 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { getAuthUserFromRequest } from '@/lib/auth';
+import { aplicarLimite } from '@/lib/seguranca';
+import { calcularNivel } from '@batcaverna/utils';
 
-// GET /api/ranking?tipo=tempo_estudo|questoes&periodo=semanal|mensal|geral&limit=50
+/**
+ * GET /api/ranking?tipo=tempo_estudo|questoes&periodo=semanal|mensal|geral
+ *                 &concurso=EEAR&limit=50
+ *
+ * Reescrita completa. A versão anterior tinha seis defeitos, e os dois
+ * primeiros são graves:
+ *
+ *  1. IGNORAVA `user_privacy_settings.ocultar_do_ranking`. A tela de perfil
+ *     salvava a preferência, a política de privacidade prometia "você pode
+ *     sair do ranking a qualquer momento" — e o ranking continuava listando
+ *     a pessoa. Promessa quebrada, com adolescentes na base.
+ *  2. Não exigia login: qualquer um na internet baixava apelido, avatar,
+ *     nível e XP de toda a base numa requisição.
+ *  3. Ignorava o parâmetro `concurso`, que a tela manda a cada clique no
+ *     seletor. O aluno filtrava por EEAR e via exatamente a mesma lista.
+ *  4. Filtrava respostas por `respondida_em`; a coluna chama `respondido_em`.
+ *     O ranking semanal e mensal de questões vinha sempre vazio, calado.
+ *  5. O PostgREST devolve no máximo 1.000 linhas por requisição. As somas
+ *     eram feitas sobre essa primeira fatia, então o ranking passaria a
+ *     MENTIR assim que a plataforma tivesse uso de verdade.
+ *  6. Trazia `banner_url` — imagem em base64 de até 16 MB guardada na linha
+ *     do usuário — e nunca usava.
+ */
+
+/**
+ * Lê uma tabela inteira em fatias, contornando o teto de 1.000 linhas por
+ * requisição do PostgREST.
+ *
+ * `montar` devolve a consulta JÁ com o `.select()` aplicado: no supabase-js
+ * os filtros (`.eq`, `.gte`) só existem depois do select.
+ */
+async function lerTudo<T>(montar: () => any, maximo = 100_000): Promise<T[]> {
+  const PAGINA = 1000;
+  const acumulado: T[] = [];
+
+  for (let inicio = 0; inicio < maximo; inicio += PAGINA) {
+    const { data, error } = await montar().range(inicio, inicio + PAGINA - 1);
+
+    if (error) throw error;
+    if (!data?.length) break;
+
+    acumulado.push(...(data as T[]));
+    if (data.length < PAGINA) break;
+  }
+
+  return acumulado;
+}
+
+interface UsuarioRanking {
+  id: string;
+  nome: string | null;
+  apelido: string | null;
+  avatar_url: string | null;
+  nivel_atual: number | null;
+  xp_total: number | null;
+  ativo: boolean | null;
+  suspenso_ate: string | null;
+}
+
 export async function GET(req: NextRequest) {
   try {
+    // O ranking é uma tela de dentro da plataforma. Exigir login aqui é o
+    // que impede que os dados dos alunos sejam raspados de fora.
+    const user = await getAuthUserFromRequest(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Não autorizado' },
+        { status: 401 }
+      );
+    }
+
+    // A rota agrega três tabelas; sem teto, recarregar sem parar derruba o
+    // banco. 30 leituras a cada 5 min sobra para navegar entre as abas.
+    const bloqueio = aplicarLimite(req, 'ranking', 30, 300);
+    if (bloqueio) return bloqueio;
+
     const { searchParams } = new URL(req.url);
-    const tipo = searchParams.get('tipo') || 'tempo_estudo';
-    const periodo = searchParams.get('periodo') || 'geral';
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
+
+    const tipo =
+      searchParams.get('tipo') === 'questoes' ? 'questoes' : 'tempo_estudo';
+
+    const periodoBruto = searchParams.get('periodo') || 'geral';
+    const periodo = ['semanal', 'mensal', 'geral'].includes(periodoBruto)
+      ? periodoBruto
+      : 'geral';
+
+    const limit = Math.min(
+      Math.max(parseInt(searchParams.get('limit') || '50', 10) || 50, 1),
+      100
+    );
+    const concurso = searchParams.get('concurso');
 
     const supabase = createServerSupabaseClient();
 
-    // 1. Determinar filtro de data com base no período
     let dataCorte: Date | null = null;
-    if (periodo === 'semanal') {
-      dataCorte = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    } else if (periodo === 'mensal') {
-      dataCorte = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (periodo === 'semanal') dataCorte = new Date(Date.now() - 7 * 86_400_000);
+    else if (periodo === 'mensal') dataCorte = new Date(Date.now() - 30 * 86_400_000);
+
+    // ─── 1. Quem pediu para não aparecer ─────────────────────
+    const { data: ocultos } = await supabase
+      .from('user_privacy_settings')
+      .select('user_id')
+      .eq('ocultar_do_ranking', true);
+
+    const escondidos = new Set((ocultos ?? []).map((o) => o.user_id));
+
+    // ─── 2. Filtro por concurso favoritado ───────────────────
+    // A tela manda `concurso=EEAR`. Traduzimos para o conjunto de quem
+    // favoritou aquele concurso; sem isso o seletor era decorativo.
+    let doConcurso: Set<string> | null = null;
+    if (concurso && concurso.toLowerCase() !== 'todos') {
+      const { data: c } = await supabase
+        .from('concursos')
+        .select('id')
+        .ilike('sigla', concurso)
+        .maybeSingle();
+
+      // Sigla inexistente devolve lista vazia — melhor que ranking errado.
+      if (!c) {
+        return NextResponse.json({
+          success: true,
+          data: { tipo, periodo, concurso, ranking: [] },
+        });
+      }
+
+      const favoritos = await lerTudo<{ user_id: string }>(() =>
+        supabase
+          .from('user_concurso_favoritos')
+          .select('user_id')
+          .eq('concurso_id', c.id)
+      );
+      doConcurso = new Set(favoritos.map((f) => f.user_id));
     }
 
-    // 2. Buscar usuários cadastrados
-    const { data: users, error: uErr } = await supabase
-      .from('users')
-      .select('id, nome, apelido, avatar_url, banner_url, nivel_atual, xp_total');
+    // ─── 3. Participantes elegíveis ──────────────────────────
+    // Conta suspensa ou desativada sai do pódio: quem foi removido da
+    // comunidade não continua ocupando o topo dela.
+    const usuarios = await lerTudo<UsuarioRanking>(() =>
+      supabase
+        .from('users')
+        .select(
+          'id, nome, apelido, avatar_url, nivel_atual, xp_total, ativo, suspenso_ate'
+        )
+    );
 
-    if (uErr || !users) {
-      return NextResponse.json({ success: true, data: { tipo, ranking: [] } });
-    }
+    const agora = Date.now();
+    const elegiveis = usuarios.filter((u) => {
+      if (escondidos.has(u.id)) return false;
+      if (doConcurso && !doConcurso.has(u.id)) return false;
+      if (u.ativo === false) return false;
+      if (u.suspenso_ate && new Date(u.suspenso_ate).getTime() > agora) return false;
+      return true;
+    });
+
+    const idsElegiveis = new Set(elegiveis.map((u) => u.id));
+
+    // ─── 4. Métrica escolhida ────────────────────────────────
+    const valorPorUsuario: Record<string, number> = {};
+    const acertoPorUsuario: Record<string, { total: number; acertos: number }> = {};
 
     if (tipo === 'tempo_estudo') {
-      // 3. Buscar todas as sessões de estudo reais da trilha
-      let query = supabase
-        .from('study_sessions')
-        .select('user_id, duracao_segundos, iniciada_em');
+      const sessoes = await lerTudo<{
+        user_id: string | null;
+        duracao_segundos: number | null;
+      }>(() => {
+        const q = supabase
+          .from('study_sessions')
+          .select('user_id, duracao_segundos');
+        return dataCorte ? q.gte('iniciada_em', dataCorte.toISOString()) : q;
+      });
 
-      if (dataCorte) {
-        query = query.gte('iniciada_em', dataCorte.toISOString());
+      for (const s of sessoes) {
+        if (!s.user_id || !idsElegiveis.has(s.user_id)) continue;
+        valorPorUsuario[s.user_id] =
+          (valorPorUsuario[s.user_id] ?? 0) + (s.duracao_segundos ?? 0);
       }
-
-      const { data: sessions } = await query;
-
-      // Agrupar duração de estudo por usuário
-      const tempoPorUsuario: Record<string, number> = {};
-      (sessions || []).forEach((s: any) => {
-        if (!s.user_id) return;
-        tempoPorUsuario[s.user_id] = (tempoPorUsuario[s.user_id] || 0) + (s.duracao_segundos || 0);
-      });
-
-      // Mapear e filtrar apenas quem tem tempo > 0 (ou ordenar todos)
-      const listaRankeada = users
-        .map((u) => {
-          const segundos = tempoPorUsuario[u.id] || 0;
-          return {
-            user_id: u.id,
-            apelido: u.apelido || u.nome || 'Soldado',
-            avatar_url: u.avatar_url,
-            nivel_atual: u.nivel_atual || 1,
-            titulo_nivel: (u.nivel_atual || 1) >= 15 ? 'Rei da Batcaverna' : (u.nivel_atual || 1) >= 10 ? 'General' : (u.nivel_atual || 1) >= 5 ? 'Cabo' : 'Recruta',
-            valor: segundos,
-            percentual_acerto: 0,
-          };
-        })
-        .filter((item) => item.valor > 0)
-        .sort((a, b) => b.valor - a.valor)
-        .slice(0, limit)
-        .map((item, index) => ({
-          ...item,
-          posicao: index + 1,
-        }));
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          tipo,
-          periodo,
-          ranking: listaRankeada,
-        },
-      });
     } else {
-      // 4. Ranking de Questões
-      let query = supabase
-        .from('user_questao_respostas')
-        .select('user_id, correta, respondida_em');
+      const respostas = await lerTudo<{
+        user_id: string | null;
+        correta: boolean | null;
+      }>(() => {
+        const q = supabase
+          .from('user_questao_respostas')
+          .select('user_id, correta');
+        return dataCorte ? q.gte('respondido_em', dataCorte.toISOString()) : q;
+      });
 
-      if (dataCorte) {
-        query = query.gte('respondida_em', dataCorte.toISOString());
+      for (const r of respostas) {
+        if (!r.user_id || !idsElegiveis.has(r.user_id)) continue;
+        const atual = acertoPorUsuario[r.user_id] ?? { total: 0, acertos: 0 };
+        atual.total += 1;
+        if (r.correta) atual.acertos += 1;
+        acertoPorUsuario[r.user_id] = atual;
+        valorPorUsuario[r.user_id] = atual.total;
       }
-
-      const { data: respostas } = await query;
-
-      const questoesPorUsuario: Record<string, { total: number; acertos: number }> = {};
-      (respostas || []).forEach((r: any) => {
-        if (!r.user_id) return;
-        if (!questoesPorUsuario[r.user_id]) {
-          questoesPorUsuario[r.user_id] = { total: 0, acertos: 0 };
-        }
-        questoesPorUsuario[r.user_id].total += 1;
-        if (r.correta) questoesPorUsuario[r.user_id].acertos += 1;
-      });
-
-      const listaRankeada = users
-        .map((u) => {
-          const stats = questoesPorUsuario[u.id] || { total: 0, acertos: 0 };
-          const percentual = stats.total > 0 ? Number(((stats.acertos / stats.total) * 100).toFixed(1)) : 0;
-          return {
-            user_id: u.id,
-            apelido: u.apelido || u.nome || 'Soldado',
-            avatar_url: u.avatar_url,
-            nivel_atual: u.nivel_atual || 1,
-            titulo_nivel: (u.nivel_atual || 1) >= 15 ? 'Rei da Batcaverna' : (u.nivel_atual || 1) >= 10 ? 'General' : 'Recruta',
-            valor: stats.total,
-            percentual_acerto: percentual,
-          };
-        })
-        .filter((item) => item.valor > 0)
-        .sort((a, b) => b.valor - a.valor)
-        .slice(0, limit)
-        .map((item, index) => ({
-          ...item,
-          posicao: index + 1,
-        }));
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          tipo,
-          periodo,
-          ranking: listaRankeada,
-        },
-      });
     }
+
+    // ─── 5. Monta o pódio ────────────────────────────────────
+    const ranking = elegiveis
+      .map((u) => {
+        const stats = acertoPorUsuario[u.id];
+        // O título vem do mesmo `calcularNivel` que a plataforma inteira usa.
+        // Estava reescrito na mão aqui, com faixas diferentes em cada aba: o
+        // mesmo aluno era "Cabo" no ranking de tempo e "Recruta" no de
+        // questões.
+        const nivel = calcularNivel(u.xp_total ?? 0);
+
+        return {
+          user_id: u.id,
+          apelido: u.apelido || u.nome || 'Soldado',
+          avatar_url: u.avatar_url,
+          nivel_atual: nivel.nivel,
+          titulo_nivel: nivel.titulo,
+          valor: valorPorUsuario[u.id] ?? 0,
+          percentual_acerto:
+            stats && stats.total > 0
+              ? Number(((stats.acertos / stats.total) * 100).toFixed(1))
+              : 0,
+        };
+      })
+      .filter((item) => item.valor > 0)
+      .sort(
+        (a, b) => b.valor - a.valor || b.percentual_acerto - a.percentual_acerto
+      )
+      .slice(0, limit)
+      .map((item, index) => ({ ...item, posicao: index + 1 }));
+
+    return NextResponse.json({
+      success: true,
+      data: { tipo, periodo, concurso: concurso ?? 'todos', ranking },
+    });
   } catch (error) {
     console.error('GET /api/ranking error:', error);
-    return NextResponse.json({ success: false, error: 'Erro ao gerar ranking' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: 'Erro ao montar o ranking' },
+      { status: 500 }
+    );
   }
 }

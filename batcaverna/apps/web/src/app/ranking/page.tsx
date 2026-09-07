@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuthStore } from "@/stores/auth-store";
+import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import Link from "next/link";
 import { MiniPerfilModal } from "@/components/MiniPerfilModal";
 
@@ -68,7 +68,9 @@ export default function RankingPage() {
       const url = `/api/ranking?tipo=${tab}&periodo=${periodo}${
         concursoFiltro !== "todos" ? `&concurso=${concursoFiltro}` : ""
       }`;
-      const res = await fetch(url);
+      // A rota passou a exigir login (antes qualquer um baixava a base
+      // inteira de fora). `fetchWithAuth` é quem manda o cookie/Bearer.
+      const res = await fetchWithAuth(url);
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data?.ranking)) {
