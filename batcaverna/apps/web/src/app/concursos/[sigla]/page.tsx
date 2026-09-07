@@ -37,6 +37,8 @@ interface ConcursoDetalhe {
   faixa_etaria: string | null;
   duracao_curso: string | null;
   etapas: string | null;
+  edital_url: string | null;
+  edital_ano: number | null;
   imagem_fundo_url: string | null;
   materias: MateriaResumo[];
   anos: number[];
@@ -93,31 +95,24 @@ export default function ConcursoPage() {
     if (sigla) carregar();
   }, [sigla]);
 
-  /** Simulado rápido já no contexto do concurso em que o aluno está. */
-  const iniciarSimuladoRapido = async () => {
+  /**
+   * Simulado rápido já no contexto do concurso em que o aluno está.
+   *
+   * Antes esta função chamava /api/simulados/start aqui e redirecionava para
+   * `/simulado?id=<uuid>`. A tela de simulado nunca leu esse `id`: ela só
+   * conhece `concurso`. O aluno era jogado na tela de configuração como se
+   * nada tivesse acontecido — e a prova recém-criada ficava órfã no banco,
+   * sem nenhuma resposta, sujando o histórico e as estatísticas.
+   *
+   * Agora quem monta a prova é a própria tela de simulado, que já sabe fazer
+   * isso: mandamos o contexto pela URL e ela inicia sozinha com `auto=1`.
+   */
+  const iniciarSimuladoRapido = () => {
     if (!concurso || gerandoSimulado) return;
     setGerandoSimulado(true);
-    try {
-      const res = await fetchWithAuth("/api/simulados/start", {
-        method: "POST",
-        body: JSON.stringify({
-          concurso_id: concurso.id,
-          tipo: "rapido",
-          total_questoes: 10,
-          duracao_minutos: 20,
-        }),
-      });
-      const json = await res.json();
-      if (json.success && json.data?.simulado_id) {
-        router.push(`/simulado?id=${json.data.simulado_id}`);
-      } else {
-        setErro(json.error ?? "Não consegui montar o simulado agora.");
-      }
-    } catch {
-      setErro("Falha de conexão ao montar o simulado.");
-    } finally {
-      setGerandoSimulado(false);
-    }
+    router.push(
+      `/simulado?concurso=${encodeURIComponent(concurso.sigla)}&tipo=rapido&auto=1`
+    );
   };
 
   if (carregando) {
@@ -270,6 +265,33 @@ export default function ConcursoPage() {
                 {concurso.duracao_curso && <span>⏳ {concurso.duracao_curso}</span>}
                 {concurso.orgao && <span>🛡️ {concurso.orgao}</span>}
               </div>
+
+              {/* Referência do edital — o aluno precisa saber de quando é a
+                  base do que está estudando, e poder conferir na fonte. Um
+                  ano gravado no banco vale mais que a promessa de estar
+                  "atualizado". */}
+              {(concurso.edital_ano || concurso.edital_url) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {concurso.edital_ano && (
+                    <span className="rounded-lg border border-bat-border bg-black/40 px-2.5 py-1 text-[11px] text-bat-text-secondary backdrop-blur-sm">
+                      📅 Base: provas oficiais até{" "}
+                      <strong className="text-bat-gold-400">
+                        {concurso.edital_ano}
+                      </strong>
+                    </span>
+                  )}
+                  {concurso.edital_url && (
+                    <a
+                      href={concurso.edital_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-bat-gold-400/30 bg-bat-gold-400/10 px-2.5 py-1 text-[11px] font-semibold text-bat-gold-400 no-underline backdrop-blur-sm transition-colors hover:bg-bat-gold-400/20"
+                    >
+                      🔗 Edital e site oficial ↗
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

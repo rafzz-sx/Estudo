@@ -61,11 +61,23 @@ interface ConcursoOpcao {
   total_questoes: number;
 }
 
+interface MateriaOpcao {
+  id: string;
+  nome: string;
+  icone_emoji: string | null;
+  total_questoes: number;
+}
+
 const MODOS = [
   { tipo: "rapido", rotulo: "Rápido", questoes: 10, minutos: 20, desc: "Aquecimento de 20 minutos" },
   { tipo: "materia", rotulo: "Por matéria", questoes: 20, minutos: 40, desc: "Foco numa disciplina" },
   { tipo: "completo", rotulo: "Prova completa", questoes: 45, minutos: 150, desc: "Simula o dia da prova" },
+  { tipo: "personalizado", rotulo: "Personalizado", questoes: 20, minutos: 45, desc: "Você define tudo" },
 ];
+
+/** Faixas aceitas pelo servidor (`/api/simulados/start`). Espelhadas aqui
+ *  para a tela não deixar o aluno pedir algo que o back vai recortar calado. */
+const LIMITES = { questoesMin: 5, questoesMax: 100, minutosMin: 5, minutosMax: 300 };
 
 // ═══════════════════════════════════════════════════════════════
 function Simulado() {
@@ -74,10 +86,20 @@ function Simulado() {
 
   const [fase, setFase] = useState<"config" | "prova" | "resultado">("config");
   const [concursos, setConcursos] = useState<ConcursoOpcao[]>([]);
+  // O `tipo` também vem da URL: os atalhos do card do concurso mandam
+  // ?concurso=EEAR&tipo=rapido&auto=1 e a prova começa sozinha.
+  const tipoDaUrl = params.get("tipo");
   const [config, setConfig] = useState({
     concurso: params.get("concurso") ?? "",
-    tipo: "rapido",
+    tipo: MODOS.some((m) => m.tipo === tipoDaUrl) ? tipoDaUrl! : "rapido",
+    materia_id: "",
+    ano: "",
+    total_questoes: 20,
+    duracao_minutos: 45,
   });
+
+  const [materias, setMaterias] = useState<MateriaOpcao[]>([]);
+  const [anos, setAnos] = useState<number[]>([]);
 
   const [simuladoId, setSimuladoId] = useState<string | null>(null);
   const [questoes, setQuestoes] = useState<QuestaoSim[]>([]);
@@ -109,13 +131,43 @@ function Simulado() {
       .catch(() => undefined);
   }, []);
 
+  // ─── Matérias e anos do concurso escolhido ─────────────────
+  // Sem isto o modo "Por matéria" era propaganda enganosa: mandava o tipo
+  // 'materia' sem nenhum `materia_id`, e o servidor sorteava do concurso
+  // inteiro — o aluno escolhia "foco numa disciplina" e recebia mistura.
+  useEffect(() => {
+    if (!config.concurso) return;
+    let cancelado = false;
+
+    fetchWithAuth(
+      `/api/questoes/filtros?concurso=${encodeURIComponent(config.concurso)}`
+    )
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelado || !json.success) return;
+        setMaterias(json.data.materias ?? []);
+        setAnos(json.data.anos ?? []);
+        // Trocar de concurso invalida a matéria antes escolhida.
+        setConfig((c) => ({ ...c, materia_id: "", ano: "" }));
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelado = true;
+    };
+  }, [config.concurso]);
+
   // ─── Iniciar ───────────────────────────────────────────────
-  const iniciar = async () => {
+  const iniciar = useCallback(async () => {
     if (!config.concurso || ocupado) return;
     setOcupado(true);
     setErro(null);
 
     const modo = MODOS.find((m) => m.tipo === config.tipo)!;
+    const personalizado = config.tipo === "personalizado";
+
+    const quantidade = personalizado ? config.total_questoes : modo.questoes;
+    const minutos = personalizado ? config.duracao_minutos : modo.minutos;
 
     try {
       const res = await fetchWithAuth("/api/simulados/start", {
@@ -123,8 +175,11 @@ function Simulado() {
         body: JSON.stringify({
           concurso: config.concurso,
           tipo: modo.tipo,
-          total_questoes: modo.questoes,
-          duracao_minutos: modo.minutos,
+          total_questoes: quantidade,
+          duracao_minutos: minutos,
+          // Só vão quando fazem sentido: o back trata ausência como "todas".
+          ...(config.materia_id ? { materia_id: config.materia_id } : {}),
+          ...(config.ano ? { ano: Number(config.ano) } : {}),
         }),
       });
       const json = await res.json();
@@ -146,7 +201,20 @@ function Simulado() {
     } finally {
       setOcupado(false);
     }
-  };
+  }, [config, ocupado]);
+
+  // ─── Início automático (?auto=1) ───────────────────────────
+  // O botão "Simulado rápido" do card do concurso cai aqui: o aluno pediu a
+  // prova lá, não faria sentido cair numa tela de configuração de novo.
+  // O ref garante que dispare uma única vez, mesmo com o catálogo chegando
+  // depois e re-renderizando a tela.
+  const autoDisparado = useRef(false);
+  useEffect(() => {
+    if (params.get("auto") !== "1") return;
+    if (autoDisparado.current || fase !== "config" || !config.concurso) return;
+    autoDisparado.current = true;
+    iniciar();
+  }, [params, fase, config.concurso, iniciar]);
 
   // ─── Finalizar ─────────────────────────────────────────────
   const finalizar = useCallback(async () => {
@@ -231,6 +299,18 @@ function Simulado() {
   // ═══════════ CONFIGURAÇÃO ═══════════
   if (fase === "config") {
     const modo = MODOS.find((m) => m.tipo === config.tipo)!;
+    const personalizado = config.tipo === "personalizado";
+    const porMateria = config.tipo === "materia";
+    const qtd = personalizado ? config.total_questoes : modo.questoes;
+    const min = personalizado ? config.duracao_minutos : modo.minutos;
+
+    // Quantas questões existem de fato no recorte escolhido. Prometer 45
+    // questões de uma matéria que só tem 12 é frustrar o aluno na largada.
+    const materiaEscolhida = materias.find((m) => m.id === config.materia_id);
+    const disponiveis = materiaEscolhida
+      ? materiaEscolhida.total_questoes
+      : concursos.find((c) => c.sigla === config.concurso)?.total_questoes ?? 0;
+    const vaiFaltar = disponiveis > 0 && disponiveis < qtd;
 
     return (
       <div className="mx-auto max-w-2xl">
@@ -273,7 +353,7 @@ function Simulado() {
             <label className="mb-2 block text-sm font-medium text-bat-text">
               Modo
             </label>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
               {MODOS.map((m) => (
                 <button
                   key={m.tipo}
@@ -293,23 +373,119 @@ function Simulado() {
                   </p>
                   <p className="mt-0.5 text-[11px] text-bat-text-muted">{m.desc}</p>
                   <p className="mt-1.5 text-[11px] text-bat-text-secondary">
-                    {m.questoes} questões · {m.minutos} min
+                    {m.tipo === "personalizado"
+                      ? "Você escolhe"
+                      : `${m.questoes} questões · ${m.minutos} min`}
                   </p>
                 </button>
               ))}
             </div>
           </div>
 
+          {/* ─── Matéria: obrigatória no modo "Por matéria", opcional no
+                  personalizado ─── */}
+          {(porMateria || personalizado) && (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-bat-text">
+                Matéria{" "}
+                {personalizado && (
+                  <span className="font-normal text-bat-text-muted">
+                    (opcional)
+                  </span>
+                )}
+              </label>
+              <select
+                value={config.materia_id}
+                onChange={(e) =>
+                  setConfig({ ...config, materia_id: e.target.value })
+                }
+                className="input-field"
+              >
+                <option value="">
+                  {porMateria
+                    ? "Escolha a disciplina do treino"
+                    : "Todas as matérias do concurso"}
+                </option>
+                {materias.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.icone_emoji ? `${m.icone_emoji} ` : ""}
+                    {m.nome} — {m.total_questoes.toLocaleString("pt-BR")} questões
+                  </option>
+                ))}
+              </select>
+              {porMateria && !config.materia_id && (
+                <p className="mt-1.5 text-[11px] text-bat-warning">
+                  Escolha uma matéria — sem isso a prova sai com todas
+                  misturadas e o treino perde o foco.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ─── Ajustes finos ─── */}
+          {personalizado && (
+            <div className="space-y-4 rounded-xl border border-bat-gold-400/20 bg-bat-gold-400/5 p-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-bat-text">
+                  Ano da prova{" "}
+                  <span className="font-normal text-bat-text-muted">
+                    (opcional)
+                  </span>
+                </label>
+                <select
+                  value={config.ano}
+                  onChange={(e) => setConfig({ ...config, ano: e.target.value })}
+                  className="input-field"
+                >
+                  <option value="">Todos os anos</option>
+                  {anos.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Ajuste
+                rotulo="Quantidade de questões"
+                valor={config.total_questoes}
+                minimo={LIMITES.questoesMin}
+                maximo={LIMITES.questoesMax}
+                passo={5}
+                sufixo="questões"
+                onChange={(v) => setConfig({ ...config, total_questoes: v })}
+              />
+
+              <Ajuste
+                rotulo="Tempo de prova"
+                valor={config.duracao_minutos}
+                minimo={LIMITES.minutosMin}
+                maximo={LIMITES.minutosMax}
+                passo={5}
+                sufixo="minutos"
+                onChange={(v) => setConfig({ ...config, duracao_minutos: v })}
+              />
+            </div>
+          )}
+
           <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
-            ⏱️ Você terá <strong className="text-bat-gold-400">{modo.minutos} minutos</strong>{" "}
-            para {modo.questoes} questões — cerca de{" "}
-            {Math.round((modo.minutos * 60) / modo.questoes)} segundos por questão.
-            Quando o tempo acabar, a prova é entregue automaticamente.
+            ⏱️ Você terá <strong className="text-bat-gold-400">{min} minutos</strong>{" "}
+            para {qtd} questões — cerca de {Math.round((min * 60) / qtd)} segundos
+            por questão. Quando o tempo acabar, a prova é entregue
+            automaticamente.
+            {vaiFaltar && (
+              <span className="mt-2 block text-bat-warning">
+                ⚠️ Este recorte tem {disponiveis.toLocaleString("pt-BR")} questões
+                cadastradas. A prova virá com {disponiveis} em vez de {qtd}.
+              </span>
+            )}
           </div>
 
           <button
             onClick={iniciar}
-            disabled={!config.concurso || ocupado}
+            disabled={
+              !config.concurso || ocupado || (porMateria && !config.materia_id)
+            }
             className="btn-primary w-full py-3.5 disabled:opacity-40"
           >
             {ocupado ? "Montando a prova..." : "Iniciar simulado →"}
@@ -596,6 +772,53 @@ function Simulado() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/** Deslizador + número, para os ajustes do modo personalizado. */
+function Ajuste({
+  rotulo,
+  valor,
+  minimo,
+  maximo,
+  passo,
+  sufixo,
+  onChange,
+}: {
+  rotulo: string;
+  valor: number;
+  minimo: number;
+  maximo: number;
+  passo: number;
+  sufixo: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <label className="text-sm font-medium text-bat-text">{rotulo}</label>
+        <span className="heading text-base font-bold tabular-nums text-bat-gold-400">
+          {valor}{" "}
+          <span className="text-[11px] font-normal text-bat-text-muted">
+            {sufixo}
+          </span>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={minimo}
+        max={maximo}
+        step={passo}
+        value={valor}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full cursor-pointer accent-bat-gold-400"
+        aria-label={rotulo}
+      />
+      <div className="mt-0.5 flex justify-between text-[10px] text-bat-text-muted">
+        <span>{minimo}</span>
+        <span>{maximo}</span>
+      </div>
     </div>
   );
 }

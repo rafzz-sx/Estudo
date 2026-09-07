@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { uuidOuNulo } from '@/lib/seguranca';
 
 /**
  * POST /api/simulados/start
@@ -71,10 +72,18 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Sorteio sobre o pool inteiro ────────────────────────
+    // Validados antes de virar filtro: `materia_id` chega do cliente e um
+    // texto solto no lugar de um UUID faz o PostgREST estourar 22P02.
+    const materiaId = uuidOuNulo(body?.materia_id);
+    const anoNum = Number(body?.ano);
+    const ano = Number.isInteger(anoNum) && anoNum > 1990 && anoNum < 2100
+      ? anoNum
+      : null;
+
     const filtrar = (q: any) => {
       let r = q.eq('concurso_id', concursoId).eq('ativa', true);
-      if (body?.materia_id) r = r.eq('materia_id', body.materia_id);
-      if (body?.ano) r = r.eq('ano', Number(body.ano));
+      if (materiaId) r = r.eq('materia_id', materiaId);
+      if (ano) r = r.eq('ano', ano);
       return r;
     };
 
@@ -114,7 +123,7 @@ export async function POST(req: NextRequest) {
       .insert({
         user_id: user.id,
         concurso_id: concursoId,
-        materia_id: body?.materia_id ?? null,
+        materia_id: materiaId,
         tipo,
         questoes_ids: ids,
         total_questoes: ids.length,
