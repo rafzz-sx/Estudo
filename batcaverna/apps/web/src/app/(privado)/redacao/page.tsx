@@ -10,6 +10,7 @@ import {
   contarPalavras,
   estimarLinhas,
 } from "@/lib/redacao";
+import { GuiaRedacao } from "@/components/estudo/GuiaRedacao";
 
 /**
  * Redação.
@@ -49,10 +50,10 @@ interface MinhaRedacao {
   criado_em: string;
 }
 
-type Aba = "escrever" | "historico";
+type Aba = "guia" | "escrever" | "historico";
 
 export default function RedacaoPage() {
-  const [aba, setAba] = useState<Aba>("escrever");
+  const [aba, setAba] = useState<Aba>("guia");
   const [temas, setTemas] = useState<Tema[]>([]);
   const [minhas, setMinhas] = useState<MinhaRedacao[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -228,6 +229,7 @@ export default function RedacaoPage() {
       <div className="flex gap-2">
         {(
           [
+            ["guia", "📖 Como escrever"],
             ["escrever", "✍️ Escrever"],
             ["historico", `📚 Minhas redações (${minhas.length})`],
           ] as const
@@ -251,6 +253,9 @@ export default function RedacaoPage() {
           {aviso}
         </p>
       )}
+
+      {/* ═══════════ COMO ESCREVER ═══════════ */}
+      {aba === "guia" && <GuiaRedacao />}
 
       {/* ═══════════ ESCREVER ═══════════ */}
       {aba === "escrever" && (
