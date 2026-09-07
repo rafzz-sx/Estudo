@@ -10,6 +10,7 @@ import {
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
 import { ComboBanner, ComboCompacto } from "@/components/questoes/ComboBadge";
+import { ContestarGabarito } from "@/components/questoes/ContestarGabarito";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface Alternativa {
@@ -713,6 +714,15 @@ function BancoDeQuestoes() {
                     precisaResolucao={resultado.precisa_resolucao}
                     alternativaEscolhida={escolhida}
                     revisao={resultado.revisao}
+                  />
+                )}
+
+                {/* Só depois de ver o gabarito: quem não conferiu a resposta
+                    não tem do que discordar. */}
+                {mostrarGabarito && (
+                  <ContestarGabarito
+                    questaoId={questao.id}
+                    respostaCorreta={resultado.resposta_correta}
                   />
                 )}
               </div>

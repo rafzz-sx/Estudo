@@ -5,18 +5,35 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 /**
  * GET /api/admin/questoes/pendentes
  *
- * A fila de questões que chegaram sem gabarito comentado.
+ * As duas filas de trabalho sobre questões, na mesma rota porque a
+ * maquinaria é a mesma — paginação, filtro por concurso e matéria, e a
+ * ordenação por demanda real.
  *
- * 540 das 3.247 questões importadas vêm de provas cujo .txt não trazia a
- * seção de explicação (ENEM 2024 e 2025 inteiros, EPCAR 2022, ESA 2024).
- * O aluno vê a letra certa e não entende o porquê — que é exatamente o que
- * a plataforma promete resolver.
+ * ─── filtro=resolucao (padrão) ────────────────────────────────────────
+ * Questões que chegaram sem gabarito comentado. 540 das 3.247 importadas
+ * vêm de provas cujo .txt não trazia a seção de explicação (ENEM 2024 e
+ * 2025 inteiros, EPCAR 2022, ESA 2024). O aluno vê a letra certa e não
+ * entende o porquê — que é exatamente o que a plataforma promete resolver.
  *
- * Esta rota ordena a fila por DEMANDA REAL: a questão que mais gente errou
- * aparece primeiro. Escrever a resolução dela rende mais que escrever a de
- * uma questão que ninguém abriu.
+ * ─── filtro=figura ────────────────────────────────────────────────────
+ * Questões que dependem de um desenho e só têm a DESCRIÇÃO dele em texto.
+ * São 347: 107 de Matemática, 85 de Física. O extrator do PDF não trazia
+ * a imagem, então escreveu "[IMAGEM: um triângulo ABC com circunferência
+ * inscrita de centro O...]" e a plataforma desenha isso num quadro branco.
+ * Dá para resolver várias assim, mas em geometria o desenho costuma SER o
+ * problema — ler a descrição e reconstruir a figura de cabeça é uma prova
+ * diferente da que o aluno vai fazer.
  *
- * Query: ?concurso=EEAR&materia=Matemática&page=1&per_page=20&ordem=erradas
+ * O caminho de exibição já existia inteiro: a coluna `figura_svg` (004), o
+ * `QuadroFigura` que a renderiza, as cinco telas que a passam e o editor no
+ * painel. O que faltava era a fila — todas as 347 têm explicação, então
+ * NENHUMA aparecia no filtro de resolução. O editor existia e era
+ * inalcançável justamente para as questões que precisam dele.
+ *
+ * Em ambas, a ordem `erradas` põe na frente o que mais derruba aluno:
+ * desenhar a figura de uma questão que ninguém abriu não rende nada.
+ *
+ * Query: ?filtro=figura&concurso=EEAR&materia=Matemática&page=1&ordem=erradas
  */
 export async function GET(req: NextRequest) {
   try {
@@ -37,6 +54,7 @@ export async function GET(req: NextRequest) {
     const concurso = searchParams.get('concurso');
     const materia = searchParams.get('materia');
     const ordem = searchParams.get('ordem') ?? 'erradas';
+    const filtro = searchParams.get('filtro') === 'figura' ? 'figura' : 'resolucao';
 
     const supabase = createServerSupabaseClient();
 
@@ -52,8 +70,19 @@ export async function GET(req: NextRequest) {
          assuntos ( nome )`,
         { count: 'exact' }
       )
-      .eq('ativa', true)
-      .or('resolucao_status.eq.pendente,explicacao.is.null');
+      .eq('ativa', true);
+
+    if (filtro === 'figura') {
+      // Depende de desenho e ainda não tem um: a descrição existe, o SVG não.
+      // `neq('figura_descricao', '')` porque a coluna aceita string vazia e
+      // uma descrição em branco não é uma figura pendente, é ruído.
+      query = query
+        .not('figura_descricao', 'is', null)
+        .neq('figura_descricao', '')
+        .is('figura_svg', null);
+    } else {
+      query = query.or('resolucao_status.eq.pendente,explicacao.is.null');
+    }
 
     if (concurso && concurso !== 'todos') {
       const { data } = await supabase
@@ -102,6 +131,10 @@ export async function GET(req: NextRequest) {
         page,
         per_page: perPage,
         total_pages: Math.ceil((totalPendentes ?? 0) / perPage),
+        // A tela precisa saber qual fila veio: as duas usam a mesma rota e
+        // o mesmo editor, mas o texto e a contagem falam de coisas
+        // diferentes — resolução que falta escrever, figura que falta desenhar.
+        filtro,
       },
     });
   } catch (error) {

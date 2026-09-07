@@ -5,17 +5,47 @@ import { fetchWithAuth } from "@/stores/auth-store";
 import { QuadroFigura } from "@/components/questoes/QuadroFigura";
 
 /**
- * Fila de resolução.
+ * As duas filas de conteúdo de questão, no mesmo editor.
  *
+ * ─── Resolução ────────────────────────────────────────────────────────
  * 540 das questões importadas vêm de provas cujo .txt não trazia gabarito
  * comentado (ENEM 2024 e 2025 inteiros, EPCAR 2022, ESA 2024). O aluno vê
  * a letra certa e fica sem entender o porquê — que é justamente o que a
  * plataforma promete resolver.
  *
- * A fila vem ordenada por DEMANDA: a questão que mais gente errou aparece
- * primeiro. Escrever a resolução dela vale mais do que escrever a de uma
- * questão que ninguém abriu.
+ * ─── Figura ───────────────────────────────────────────────────────────
+ * 347 questões dependem de um desenho e só têm a descrição dele em texto:
+ * 107 de Matemática, 85 de Física. Em geometria, o desenho costuma SER o
+ * problema — reconstruir a figura de cabeça a partir de um parágrafo é uma
+ * prova diferente da que o aluno vai fazer.
+ *
+ * O editor de SVG abaixo já existia, e TODAS as 347 têm explicação — então
+ * nenhuma delas caía na fila de resolução. O editor estava inalcançável
+ * exatamente para as questões que precisam dele. É só isso que a segunda
+ * aba conserta.
+ *
+ * As duas vêm ordenadas por DEMANDA: a questão que mais gente errou aparece
+ * primeiro. Trabalhar numa questão que ninguém abriu não rende nada.
  */
+
+type Fila = "resolucao" | "figura";
+
+const FILAS: { chave: Fila; rotulo: string; emoji: string; ajuda: string }[] = [
+  {
+    chave: "resolucao",
+    rotulo: "Resolução",
+    emoji: "✍️",
+    ajuda: "Questões sem gabarito comentado: o aluno vê a letra e não o porquê.",
+  },
+  {
+    chave: "figura",
+    rotulo: "Figura",
+    emoji: "📐",
+    ajuda:
+      "Questões que dependem de desenho e só têm a descrição em texto. " +
+      "Cole um SVG estático no campo do editor.",
+  },
+];
 
 interface Passo {
   titulo: string;
@@ -60,6 +90,7 @@ export function PainelResolucoes() {
   const [total, setTotal] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [carregando, setCarregando] = useState(true);
+  const [fila, setFila] = useState<Fila>("resolucao");
   const [filtros, setFiltros] = useState({ concurso: "todos", ordem: "erradas" });
 
   const [abertaId, setAbertaId] = useState<string | null>(null);
@@ -88,6 +119,7 @@ export function PainelResolucoes() {
         page: String(pagina),
         per_page: "20",
         ordem: filtros.ordem,
+        filtro: fila,
       });
       if (filtros.concurso !== "todos") qs.set("concurso", filtros.concurso);
 
@@ -102,7 +134,7 @@ export function PainelResolucoes() {
     } finally {
       setCarregando(false);
     }
-  }, [pagina, filtros]);
+  }, [pagina, filtros, fila]);
 
   useEffect(() => {
     carregar();
@@ -144,11 +176,36 @@ export function PainelResolucoes() {
         return;
       }
 
-      // Sai da fila na hora: a lista é de pendentes.
-      setItens((lista) => lista.filter((i) => i.id !== q.id));
-      setTotal((t) => Math.max(0, t - 1));
-      setAbertaId(null);
-      setAviso(`✅ Resolução de ${q.concursos?.sigla} nº ${q.numero_original} salva.`);
+      const alvo = `${q.concursos?.sigla} nº ${q.numero_original}`;
+      const temSvg = !!rascunho.figura_svg.trim();
+
+      // Só sai da fila quem passou a atender o critério DELA. Na fila de
+      // figura, salvar a explicação não resolve nada: a questão continua
+      // sem desenho e precisa continuar aparecendo.
+      const resolveu = fila === "figura" ? temSvg : true;
+
+      if (resolveu) {
+        setItens((lista) => lista.filter((i) => i.id !== q.id));
+        setTotal((t) => Math.max(0, t - 1));
+        setAbertaId(null);
+        setAviso(
+          fila === "figura"
+            ? `✅ Figura de ${alvo} desenhada.`
+            : `✅ Resolução de ${alvo} salva.`
+        );
+      } else {
+        // Guarda o que foi salvo na lista, para o editor não reabrir vazio.
+        setItens((lista) =>
+          lista.map((i) =>
+            i.id === q.id
+              ? { ...i, explicacao: rascunho.explicacao, figura_svg: null }
+              : i
+          )
+        );
+        setAviso(
+          `Salvo, mas ${alvo} continua na fila: falta o SVG do desenho.`
+        );
+      }
     } catch {
       setAviso("Falha de conexão ao salvar.");
     } finally {
@@ -169,16 +226,58 @@ export function PainelResolucoes() {
     <div className="space-y-5">
       {/* ═══ Cabeçalho ═══ */}
       <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
+        {/* Duas filas, um editor. O que muda é o critério de quem aparece. */}
+        <div
+          role="tablist"
+          aria-label="Fila de trabalho"
+          className="mb-4 flex flex-wrap gap-1.5"
+        >
+          {FILAS.map((f) => (
+            <button
+              key={f.chave}
+              role="tab"
+              aria-selected={fila === f.chave}
+              onClick={() => {
+                if (fila === f.chave) return;
+                setFila(f.chave);
+                setPagina(1);
+                setAbertaId(null);
+                setAviso(null);
+              }}
+              className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm font-bold transition-colors ${
+                fila === f.chave
+                  ? "bg-bat-gold-400 text-black"
+                  : "bg-bat-bg-secondary text-bat-text-secondary hover:bg-bat-bg-elevated"
+              }`}
+            >
+              {f.emoji} {f.rotulo}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="heading mb-1 text-base font-bold text-bat-text">
-              ✍️ Fila de resolução
+              {fila === "figura" ? "📐 Fila de figura" : "✍️ Fila de resolução"}
             </h3>
             <p className="max-w-2xl text-sm leading-relaxed text-bat-text-secondary">
-              Questões que entraram <strong>sem gabarito comentado</strong>. O
-              aluno vê a letra certa e não entende o porquê. A fila vem
-              ordenada por quem mais derruba gente — escrever a do topo rende
-              mais.
+              {fila === "figura" ? (
+                <>
+                  Questões que <strong>dependem de um desenho</strong> e só têm
+                  a descrição dele em texto. Em geometria o desenho costuma ser
+                  o problema: reconstruir a figura de cabeça a partir de um
+                  parágrafo é uma prova diferente da que o aluno vai fazer.
+                  Cole um <strong>SVG estático</strong> no editor — sem script,
+                  sem evento inline, sem imagem de fora.
+                </>
+              ) : (
+                <>
+                  Questões que entraram <strong>sem gabarito comentado</strong>.
+                  O aluno vê a letra certa e não entende o porquê. A fila vem
+                  ordenada por quem mais derruba gente — escrever a do topo
+                  rende mais.
+                </>
+              )}
             </p>
           </div>
           <div className="rounded-xl border border-bat-warning/25 bg-bat-warning/10 px-4 py-2 text-center">
@@ -240,7 +339,9 @@ export function PainelResolucoes() {
             Nenhuma questão pendente com esse filtro
           </p>
           <p className="mt-1 text-sm text-bat-text-secondary">
-            Todo gabarito desse recorte já está comentado.
+            {fila === "figura"
+              ? "Toda questão desse recorte que depende de desenho já tem o seu."
+              : "Todo gabarito desse recorte já está comentado."}
           </p>
         </div>
       ) : (

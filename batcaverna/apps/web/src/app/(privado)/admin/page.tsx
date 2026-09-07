@@ -11,6 +11,7 @@ import { PainelFeedback } from "@/components/admin/PainelFeedback";
 import { PainelSessoes } from "@/components/admin/PainelSessoes";
 import { PainelImportacao } from "@/components/admin/PainelImportacao";
 import { PainelResolucoes } from "@/components/admin/PainelResolucoes";
+import { PainelContestacoes } from "@/components/admin/PainelContestacoes";
 import { PainelContatos } from "@/components/admin/PainelContatos";
 import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
 
@@ -54,6 +55,7 @@ type AbaAdmin =
   | "saude"
   | "armazem"
   | "resolucoes"
+  | "contestacoes"
   | "auditoria"
   | "banners"
   | "avisos"
@@ -346,7 +348,8 @@ export default function AdminPage() {
           { key: "saude", label: "🩺 Diagnóstico" },
           { key: "moderacao", label: "🛡️ Conversas do Chat" },
           { key: "armazem", label: "📥 Importar Questões" },
-          { key: "resolucoes", label: "✍️ Fila de Resolução" },
+          { key: "resolucoes", label: "✍️ Resolução & Figura" },
+          { key: "contestacoes", label: "⚖️ Contestações" },
           { key: "teoria", label: "📝 Fila de Teoria" },
           { key: "sessoes", label: "⏳ Sessões & Logins" },
           { key: "avisos", label: "📢 Aviso Global" },
@@ -884,6 +887,8 @@ export default function AdminPage() {
 
       {/* ═══ TAB: SESSÕES & LOGINS ═══ */}
       {aba === "resolucoes" && <PainelResolucoes />}
+
+      {aba === "contestacoes" && <PainelContestacoes />}
 
       {aba === "sessoes" && <PainelSessoes />}
 
