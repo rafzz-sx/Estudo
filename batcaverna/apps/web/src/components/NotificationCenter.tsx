@@ -49,8 +49,26 @@ export function NotificationCenter({ align = "auto" }: Props) {
 
   useEffect(() => {
     carregarNotificacoes();
-    const interval = setInterval(carregarNotificacoes, 30000); // 30s
-    return () => clearInterval(interval);
+
+    // Aba escondida não consulta. O chat e o cronômetro de estudo já aplicam
+    // esta regra; o sino ficara de fora e consultava a cada 30 s para sempre —
+    // 2.880 requisições por dia por aluno com a aba aberta em segundo plano.
+    // E como o AppShell agora é montado uma vez para toda a área logada, o
+    // intervalo vive enquanto a sessão durar.
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") carregarNotificacoes();
+    }, 30000);
+
+    // Ao voltar para a aba, atualiza na hora em vez de esperar o próximo ciclo.
+    const aoVoltar = () => {
+      if (document.visibilityState === "visible") carregarNotificacoes();
+    };
+    document.addEventListener("visibilitychange", aoVoltar);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", aoVoltar);
+    };
   }, []);
 
   // Fechar dropdown ao clicar fora

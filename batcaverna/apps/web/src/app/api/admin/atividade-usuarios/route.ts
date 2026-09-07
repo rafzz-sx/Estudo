@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
 async function getAdminFromRequest(req: NextRequest) {
@@ -19,16 +20,31 @@ export async function GET(req: NextRequest) {
     // 1. Sessões ativas (não finalizadas ou com heartbeat recente nos últimos 10 minutos)
     const dezMinAtras = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
-    const { data: sessoesAtivas } = await supabase
-      .from('study_sessions')
-      .select(`
-        id, user_id, dispositivo_origem, iniciada_em, duracao_segundos,
-        multiplicador_continuidade_atual, xp_ganho_na_sessao,
-        user:users!user_id (id, nome, apelido, email, avatar_url, nivel_atual, streak_dias)
-      `)
-      .is('finalizada_em', null)
-      .gte('iniciada_em', dezMinAtras)
-      .order('iniciada_em', { ascending: false });
+    // `study_sessions` tem uma linha por sessão de cada usuário: passa das
+    // 1.000 do teto do PostgREST muito antes de haver 1.000 contas, e a aba
+    // passava a mostrar um recorte arbitrário como se fosse o total. As outras
+    // três rotas do admin já haviam sido corrigidas; esta ficou de fora.
+    const sessoesAtivas = await lerTudo<{
+      id: string;
+      user_id: string;
+      dispositivo_origem: string | null;
+      iniciada_em: string;
+      duracao_segundos: number | null;
+      multiplicador_continuidade_atual: number | null;
+      xp_ganho_na_sessao: number | null;
+      user: unknown;
+    }>(() =>
+      supabase
+        .from('study_sessions')
+        .select(`
+          id, user_id, dispositivo_origem, iniciada_em, duracao_segundos,
+          multiplicador_continuidade_atual, xp_ganho_na_sessao,
+          user:users!user_id (id, nome, apelido, email, avatar_url, nivel_atual, streak_dias)
+        `)
+        .is('finalizada_em', null)
+        .gte('iniciada_em', dezMinAtras)
+        .order('iniciada_em', { ascending: false })
+    );
 
     // 2. Total de usuários registrados
     const { count: totalUsuarios } = await supabase

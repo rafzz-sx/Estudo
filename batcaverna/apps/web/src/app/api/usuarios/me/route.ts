@@ -15,7 +15,19 @@ async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   return user?.id ?? null;
 }
 
-// GET /api/usuarios/me — Retorna perfil completo do usuário autenticado
+/**
+ * GET /api/usuarios/me — perfil do usuário autenticado.
+ *
+ * `?completo=1` acrescenta o `banner_url`.
+ *
+ * O banner é guardado como data URL em base64 dentro da própria coluna, e o
+ * teto é de 16 MB (`MAX_BANNER_BYTES`) — que em base64 viram ~21 MB de JSON.
+ * Ele vinha em TODA resposta, e o `AppShell` chama esta rota a cada carga da
+ * área logada só para desenhar a barra lateral, que usa nome, patente, XP e
+ * avatar — nunca o banner. Eram dezenas de MB para nada, no 4G do aluno.
+ *
+ * Agora só quem realmente exibe o banner (a tela de perfil) pede por ele.
+ */
 export async function GET(req: NextRequest) {
   try {
     const userId = await getUserFromRequest(req);
@@ -23,17 +35,20 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
+    const completo = new URL(req.url).searchParams.get('completo') === '1';
+
     // 1. Dados do usuário
     const { data: user, error: uErr } = await supabase
       .from('users')
       .select(`
         id, nome, apelido, email, email_verified,
-        avatar_url, banner_url, banner_tipo, bio,
+        avatar_url, banner_tipo, bio,
         data_nascimento, role, xp_total, nivel_atual,
         maior_combo_pessoal, combo_atual, combo_atualizado_em,
         streak_dias, maior_streak, ultimo_dia_estudado, criado_em,
         total_questoes_respondidas, total_acertos,
         tempo_estudo_total_segundos, ultimo_login_em, sessao_expira_em
+        ${completo ? ', banner_url' : ''}
       `)
       .eq('id', userId)
       .single();

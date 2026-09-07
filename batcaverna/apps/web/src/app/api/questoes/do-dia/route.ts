@@ -49,7 +49,13 @@ export async function GET(req: NextRequest) {
         `id, enunciado, ano,
          concursos (sigla), materias (nome), assuntos (nome)`
       )
-      .eq('ativa', true);
+      .eq('ativa', true)
+      // Sem ORDER BY, o Postgres não garante ordem estável entre execuções —
+      // ela muda com atualização, VACUUM ou plano diferente. O `offset` abaixo
+      // é determinístico, mas caía numa linha diferente ao longo do dia, e a
+      // promessa de "a mesma questão o dia inteiro" não se sustentava.
+      .order('id', { ascending: true });
+
     if (concursoIds.length) query = query.in('concurso_id', concursoIds);
 
     const { data } = await query.range(offset, offset).limit(1);

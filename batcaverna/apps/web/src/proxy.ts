@@ -81,11 +81,13 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // Adicionar user info nos headers para as páginas
-    const response = NextResponse.next();
-    response.headers.set('x-user-id', payload.sub);
-    response.headers.set('x-user-role', payload.role);
-    return response;
+    // Antes, daqui saíam dois cabeçalhos `x-user-id` e `x-user-role`. O
+    // comentário dizia "para as páginas", mas `response.headers` é a resposta
+    // que vai para o NAVEGADOR — para repassar algo à página seria
+    // `NextResponse.next({ request: { headers } })`. Ou seja: não chegavam a
+    // página nenhuma (nenhum arquivo os lia) e iam para o cliente, ficando
+    // registrados em log de proxy e de CDN a cada resposta HTML.
+    return NextResponse.next();
   }
 
   // ─── Rota de auth com token válido → redirecionar para dashboard

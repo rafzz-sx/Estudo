@@ -135,11 +135,21 @@ export async function GET(req: NextRequest) {
       .select('id', { count: 'exact', head: true })
       .gte('criado_em', ontem);
 
+    // O total precisa ser contado, não medido pelo tamanho da lista: a lista
+    // é limitada a 500 para não pesar a tela. Passando de 500 contas, o painel
+    // dizia "500 usuários" para sempre — enquanto "novos nas últimas 24 h",
+    // que já era `count: 'exact'`, continuava subindo. Contradição na mesma
+    // tela.
+    const { count: totalUsuarios } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true });
+
     return NextResponse.json({
       success: true,
       data: {
         metricas: {
-          total_usuarios: listaUsuarios.length,
+          total_usuarios: totalUsuarios ?? listaUsuarios.length,
+          usuarios_listados: listaUsuarios.length,
           online_agora: online.size,
           novos_24h: novosUsuarios24h ?? 0,
           total_questoes: totalQuestoes ?? 0,
