@@ -26,17 +26,19 @@ Aplicação Web principal da plataforma BatCaverna, construída com **Next.js 16
 apps/web/src/
 ├── app/
 │   ├── api/                     # API Routes (Backend Next.js com service_role Supabase)
-│   ├── auth/                    # Login, Cadastro, Recuperação de Senha
-│   ├── dashboard/               # Painel principal do aluno (XP, streak, progresso)
-│   ├── concursos/               # Catálogo de concursos e matérias
-│   ├── questoes/                # Resolução interativa de questões
-│   ├── simulado/                # Simulados cronometrados
-│   ├── ranking/                 # Hall da Fama e líderes
-│   ├── bizus/                   # Anotações táticas e resumos
-│   ├── chat/                    # Chat privado entre soldados
-│   ├── tickets/                 # Suporte ao usuário
-│   ├── perfil/                  # Estatísticas, badges e edição de perfil
-│   ├── admin/                   # Painel Administrativo e Armazém de questões
+│   ├── auth/                    # Login, Cadastro, Recuperação de Senha (público)
+│   ├── contato/                 # Formulário público → POST /api/contato
+│   ├── (privado)/               # ROUTE GROUP — um único layout.tsx com o AppShell
+│   │   ├── dashboard/           #   "Plano de Hoje"
+│   │   ├── progresso/           #   histórico, evolução, simulados
+│   │   ├── concursos/           #   catálogo + [sigla]/trilha·assuntos·estatisticas·taf
+│   │   ├── questoes/            #   resolução interativa
+│   │   ├── simulado/            #   prova cronometrada (persiste no aparelho)
+│   │   ├── revisoes/ caderno/   #   repetição espaçada · caderno de erros
+│   │   ├── cronograma/ musica/  #   plano de estudo · acervo de música
+│   │   ├── ranking/ chat/       #   hall da fama · conversas
+│   │   ├── tickets/ perfil/     #   suporte · perfil
+│   │   └── admin/               #   painel administrativo
 │   ├── layout.tsx               # Layout raiz com fontes e viewport
 │   └── page.tsx                 # Landing page pública
 ├── components/
@@ -68,13 +70,13 @@ apps/web/src/
     └── player-store.ts          # Player de música, com <audio> singleton fora do React
 ```
 
-> [!WARNING]
-> **`components/StudySessionWidget.tsx` exporta `StudySessionTracker` — o
-> componente que dispara `initSession`, o tick de 1 segundo e o heartbeat de
-> 30 segundos — e ele não é montado em lugar nenhum** (verificado em
-> 07/09/2026). Só `StudySessionBadge` (o visor) é usado, pelo `AppShell`.
-> Enquanto isso não for corrigido, o cronômetro não corre, o tempo de estudo
-> não é gravado e o ranking por tempo de estudo fica vazio.
+> [!NOTE]
+> `components/StudySessionWidget.tsx` exporta dois componentes: o
+> **`StudySessionBadge`** (o visor, na sidebar e na topbar) e o
+> **`StudySessionTracker`** (o motor: inicia a sessão, faz o tick de 1 s com
+> a aba visível e manda o heartbeat de 30 s). O Tracker é montado **uma vez**
+> pelo `AppShell`. Até 07/09/2026 ele existia e não era montado — o
+> cronômetro ficava em 00:00:00 e o ranking por tempo de estudo vinha vazio.
 
 ---
 
@@ -109,12 +111,13 @@ Consulte a tabela completa de variáveis de ambiente no [Manual Geral do Monorep
 2. **Next.js 16 Dynamic Params**: Sempre resolva `params` com `await params` em rotas dinâmicas.
 3. **API Routes**: Sempre utilize `createServerSupabaseClient()` para bypass de RLS seguro.
 4. **Client Requests**: Sempre utilize o helper `fetchWithAuth()` para chamadas a rotas privadas.
-5. **Cada rota privada tem o próprio `layout.tsx` montando um `AppShell`.**
-   São segmentos irmãos: navegar de `/questoes` para `/dashboard` **desmonta
-   e remonta o AppShell inteiro**, junto com tudo que ele carrega. Qualquer
-   estado que precise sobreviver à navegação tem de morar num store Zustand
-   ou no servidor — nunca num `useState`/`useRef` de componente montado pelo
-   AppShell.
+5. **Toda rota logada vai dentro de `app/(privado)/`.** É o único lugar com
+   `layout.tsx` montando o `AppShell`. **Não crie `layout.tsx` por rota**:
+   antes havia 14, eram segmentos irmãos, e navegar entre seções desmontava
+   e remontava o AppShell inteiro — o acumulador de tempo de uso, o
+   cronômetro de estudo e as requisições de perfil recomeçavam a cada
+   clique no menu. Página nova = pasta nova dentro de `(privado)`, sem
+   layout próprio.
 6. **Sem Node instalado?** Rode as checagens em `scripts/checar_*.py`. Elas
    pegam import quebrado, coluna inexistente no schema, classe de Tailwind
    sem token e identificador não declarado — a classe de erro que o

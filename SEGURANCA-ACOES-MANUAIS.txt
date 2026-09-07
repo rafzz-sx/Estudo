@@ -109,26 +109,29 @@
 
   Ou seja: a condição é SEMPRE falsa.
 
-  CONSEQUÊNCIA PRÁTICA — e é séria
-  --------------------------------
-  A variável SUPABASE_SERVICE_ROLE_KEY que você configurar na Vercel é
-  IGNORADA. O código sempre usa a chave escrita no arquivo.
+  ✅ CORRIGIDO NO CÓDIGO EM 07/09 (commit "impl"). VALE A PARTIR DO
+     PRÓXIMO DEPLOY.
 
-  Isso significa que, se você rotacionar a chave no Supabase primeiro:
+  A comparação quebrada foi trocada por uma que reconhece o FORMATO da
+  chave (JWT `eyJ...` ou `sb_...`). Com isso:
 
-      • a chave antiga é revogada
-      • o código continua enviando a chave antiga
-      • TODAS as telas param de funcionar ao mesmo tempo
-      • e configurar a chave nova na Vercel NÃO resolve, porque ela é
-        ignorada
+      • a variável de ambiente, quando existe, MANDA;
+      • o valor fixo do arquivo virou reserva, usada só se a variável
+        faltar;
+      • o mesmo vale para a chave pública e para a URL do projeto — agora
+        dá para apontar para outro projeto Supabase só pela Vercel.
 
-  O site só volta quando eu tirar o valor fixo do código e você fizer um
-  deploy novo. Ou seja: você ficaria fora do ar no meio do processo.
+  O QUE ISSO MUDA NA ORDEM: depois que você cadastrar as variáveis (Passo
+  2 do 0-C) e este código estiver no ar (Passo 3), rotacionar é seguro —
+  NÃO precisa mais esperar eu tirar o valor fixo do arquivo. Tirá-lo virou
+  higiene (Passo 7, opcional), não pré-requisito.
 
-  O mesmo defeito está na chave pública (`includes('anon')`) e na URL do
-  projeto (`includes('bzrrbbaqzlfmertirbak')`). Este último funciona por
-  acaso — o texto do endereço aparece mesmo —, mas prende a plataforma
-  neste projeto Supabase: apontar para um projeto novo exige mudar o código.
+  Enquanto este código NÃO estiver no ar, a situação continua a de antes:
+  a variável é ignorada e rotacionar derruba o site. Por isso o Passo 3.
+
+  (Histórico, para entender o que aconteceu: a comparação era
+  `includes('service_role')`, e num JWT esse texto fica em base64 — nunca
+  aparece legível. A condição era sempre falsa.)
 
 
 ================================================================================
@@ -195,22 +198,17 @@
 
      Onde achar as chaves atuais: Supabase → Project Settings → API Keys.
 
-     Neste momento elas ainda não têm efeito (é o defeito do 0-B). Você
-     está preparando o terreno.
+     Elas passam a VALER assim que o código de 07/09 estiver no ar
+     (Passo 3). Até lá são ignoradas — não rotacione antes do Passo 4.
 
 
-  PASSO 3 — ME AVISAR                             (eu faço, 10 min)
+  PASSO 3 — Subir o código de 07/09                (5 min)
 
-     Diga: "as variáveis estão na Vercel, pode tirar do código".
+     É o push dos commits pendentes + o deploy automático da Vercel.
+     Roteiro completo em INSTRUCOES-DEPLOY.txt, Parte 2.
 
-     Eu então, num único commit:
-       • removo os valores fixos do supabase.ts
-       • conserto a comparação quebrada (o `.includes` do 0-B)
-       • faço a aplicação recusar subir sem as variáveis, em vez de cair
-         num valor padrão silencioso
-       • removo o `|| 'dev-secret-change-me'` do auth.ts
-
-     Você faz o deploy.
+     A partir desse deploy o código lê as variáveis da Vercel. O valor fixo
+     do arquivo só entra se alguma variável estiver faltando.
 
 
   PASSO 4 — Confirmar que o site subiu             (2 min)
@@ -262,6 +260,21 @@
      Se achar algo estranho, me avise que eu ajudo a investigar.
 
 
+  PASSO 7 — (OPCIONAL) tirar os valores fixos do arquivo   (me chame)
+
+     Depois dos Passos 4 e 5, as chaves que estão escritas em supabase.ts
+     são as ANTIGAS, já revogadas — não abrem mais nada. Mas continuam no
+     arquivo, e um leitor desatento acharia que são válidas.
+
+     Quando quiser, me diga: "as variáveis estão na Vercel e o site subiu,
+     pode tirar do código". Eu removo os valores fixos do supabase.ts e o
+     `|| 'dev-secret-change-me'` do auth.ts, e faço a aplicação recusar
+     subir sem as variáveis — em vez de cair num padrão silencioso.
+
+     É higiene, não urgência: com o código de 07/09 no ar, o valor fixo
+     só seria usado se a variável sumisse da Vercel.
+
+
 ================================================================================
   🚨 0-D. SE VOCÊ JÁ ROTACIONOU E O SITE CAIU
 ================================================================================
@@ -273,12 +286,16 @@
   CAMINHO A — se você AINDA tem a chave antiga anotada
      Não dá para "desrotacionar" no Supabase. Pule para o caminho B.
 
-  CAMINHO B — o correto (me chame, ~15 min)
-     1. Garanta que SUPABASE_SERVICE_ROLE_KEY na Vercel tem a chave NOVA
-     2. Me avise: "rotacionei e caiu, tira do código"
-     3. Eu removo os valores fixos e conserto a comparação
-     4. Você faz Redeploy
-     5. Site volta
+  CAMINHO B — o correto (você mesmo, ~10 min)
+     1. Garanta que SUPABASE_SERVICE_ROLE_KEY e NEXT_PUBLIC_SUPABASE_ANON_KEY
+        na Vercel têm as chaves NOVAS
+     2. Suba o código de 07/09 (push + deploy) — a comparação já está
+        corrigida nele, a variável passa a valer
+     3. Site volta
+
+     Se o código de 07/09 JÁ estava no ar quando você rotacionou, o site
+     não deveria ter caído. Nesse caso confira se a variável está marcada
+     em "Production" e faça Redeploy.
 
      Enquanto isso, a plataforma responde erro em todas as telas que
      acessam dados. O conteúdo do banco NÃO é perdido — é só o acesso que
@@ -308,16 +325,11 @@
   proteção não existia. Os três estão fechados nos commits 13 e 14.
 
 
-  AINDA ABERTA (encontrada na auditoria de 07/09, precisa de código):
-
-  • MINI-PERFIL — /api/usuarios/[id]/mini-perfil NÃO exige login. Com um
-    UUID em mãos, qualquer pessoa na internet obtém nome real, apelido,
-    foto, banner, bio, XP, nível, sequência, concursos favoritos, insígnias
-    e tempo de estudo — inclusive de menores de idade. E ignora o
-    "ocultar do ranking".
-
-    Não é ação sua: eu corrijo quando você autorizar a Fase 2 do plano.
-    Está aqui para você saber que existe.
+  • MINI-PERFIL — /api/usuarios/[id]/mini-perfil não exigia login. Com um
+    UUID em mãos, qualquer pessoa na internet obtinha nome real, foto,
+    banner, bio, XP, sequência e tempo de estudo — inclusive de menores —
+    e ignorava o "ocultar do ranking". Fechada em 07/09: exige login, e
+    quem se ocultou do ranking só é visível para amigos confirmados.
 
 
 ================================================================================
@@ -390,8 +402,8 @@
   │ Variável                        │ Obrigatória│ Observação               │
   ├─────────────────────────────────┼────────────┼──────────────────────────┤
   │ NEXT_PUBLIC_SUPABASE_URL        │ SIM        │ ⚠ ver nota abaixo        │
-  │ NEXT_PUBLIC_SUPABASE_ANON_KEY   │ SIM        │ ⚠ HOJE É IGNORADA        │
-  │ SUPABASE_SERVICE_ROLE_KEY       │ SIM 🔒     │ ⚠ HOJE É IGNORADA        │
+  │ NEXT_PUBLIC_SUPABASE_ANON_KEY   │ SIM        │ ✅ vale a partir de 07/09 │
+  │ SUPABASE_SERVICE_ROLE_KEY       │ SIM 🔒     │ ✅ vale a partir de 07/09 │
   │ JWT_SECRET                      │ SIM 🔒     │ ⚠ tem padrão inseguro    │
   │ JWT_ACCESS_EXPIRATION           │ não (36000)│ 10 horas                 │
   │ JWT_REFRESH_EXPIRATION          │ não (36000)│                          │
@@ -404,16 +416,19 @@
 
   🔒 = segredo. NUNCA ponha o prefixo NEXT_PUBLIC_ nessas.
 
-  ⚠ AS TRÊS MARCADAS ACIMA — leia o item 0-B
-    As duas chaves do Supabase são hoje IGNORADAS pelo código por causa de
-    uma comparação quebrada. Configurá-las é necessário (é o Passo 2 do
-    item 0-C), mas elas só passam a valer depois que eu consertar o código.
-    JWT_SECRET, essa sim, JÁ funciona — e é por isso que o item 0-A é o
-    mais urgente do arquivo.
+  ✅ AS DUAS CHAVES DO SUPABASE — leia o item 0-B
+    Até 07/09 eram IGNORADAS pelo código por uma comparação quebrada. O
+    código de 07/09 corrige isso: a partir do deploy dele, a variável
+    manda e o valor fixo do arquivo vira reserva. Configurá-las (Passo 2
+    do 0-C) continua obrigatório.
 
-  ⚠ NEXT_PUBLIC_SUPABASE_URL só é aceita se o endereço contiver
-    "bzrrbbaqzlfmertirbak". Apontar para OUTRO projeto Supabase exige mudar
-    o código. Se você pretende migrar de projeto, me avise antes.
+  ⚠ JWT_SECRET tem padrão INSEGURO
+    Se faltar, o código usa 'dev-secret-change-me' — e agora grava um
+    aviso em letras grandes no log do servidor a cada boot. O item 0-A
+    continua sendo o mais urgente do arquivo.
+
+  ✅ NEXT_PUBLIC_SUPABASE_URL aceita qualquer endereço *.supabase.co desde
+    07/09. Migrar para outro projeto passa a ser só trocar a variável.
 
   REGRA DE OURO: tudo que começa com NEXT_PUBLIC_ é embutido no JavaScript
   que vai para o navegador. Qualquer visitante lê no DevTools. Se uma chave

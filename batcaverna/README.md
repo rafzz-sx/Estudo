@@ -50,6 +50,7 @@ npm run dev:web
 | Mudança | Onde | Por quê |
 | --- | --- | --- |
 | `middleware.ts` → **`proxy.ts`** | `apps/web/src/proxy.ts` | O Next.js 16 depreciou o nome `middleware`; a função exportada agora chama `proxy` |
+| 14 layouts → **route group `(privado)`** | `apps/web/src/app/(privado)/layout.tsx` | Cada rota privada tinha o próprio `layout.tsx` montando um AppShell. Eram segmentos irmãos: navegar entre seções desmontava e remontava o AppShell inteiro e perdia todo estado que vivia nele. Agora há um só |
 | Autenticação unificada | todas as rotas de API | Cada rota tinha seu próprio helper e 23 delas só liam o header `Authorization`, que nenhuma tela enviava — todas respondiam 401 em silêncio |
 | `fetchWithAuth` no front | páginas e componentes | `fetch` puro não renovava o token expirado |
 | Gamificação no servidor | `apps/web/src/lib/gamificacao.ts` | XP e combo eram calculados só no navegador e se perdiam ao trocar de página |
@@ -178,22 +179,24 @@ Configurações TypeScript estendidas (`tsconfig.base.json`).
 apps/web/src/app/
 ├── page.tsx                     # Landing Page pública com apresentação e atalho de acesso
 ├── auth/page.tsx                # Central de Autenticação (Login, Cadastro, Recuperação de Senha)
-├── dashboard/page.tsx           # "Plano de Hoje": o que estudar agora, radar de fraqueza
-├── concursos/page.tsx           # Catálogo de Concursos Militares e seleção de foco
-├── questoes/page.tsx            # Banco Interativo de Questões com filtros dinâmicos
-├── simulado/page.tsx            # Modo Prova Cronometrada e geração personalizada
-├── ranking/page.tsx             # Hall da Fama (Geral, Semanal, Mensal e por Concurso)
-├── bizus/page.tsx               # Anotações táticas, fórmulas e resumos de alto impacto
-├── chat/page.tsx                # Comunicação entre soldados e conversas diretas
-├── tickets/page.tsx             # Central de Suporte e reporte de inconsistências
-├── perfil/page.tsx              # Estatísticas do estudante, edição de perfil e banner
-├── progresso/page.tsx           # Histórico: streak, tempo, XP, evolução e simulados
-├── caderno/page.tsx             # Caderno de erros com anotação por questão
-├── revisoes/page.tsx            # Fila da repetição espaçada
-├── cronograma/page.tsx          # Plano de estudo por semana até a data da prova
-├── musica/page.tsx              # Acervo de música, favoritos e playlists
-├── concursos/[sigla]/           # trilha · assuntos · estatísticas · TAF
-├── admin/                       # Painel Administrativo (Gestão de usuários, moderação, armazém)
+├── (privado)/                   # ROUTE GROUP: um único layout.tsx monta o AppShell
+│   │                            #  para toda a área logada (não aparece na URL)
+│   ├── dashboard/page.tsx       # "Plano de Hoje": o que estudar agora, radar de fraqueza
+│   ├── concursos/page.tsx       # Catálogo de Concursos Militares e seleção de foco
+│   ├── concursos/[sigla]/       # trilha · assuntos · estatísticas · TAF
+│   ├── questoes/page.tsx        # Banco Interativo de Questões com filtros dinâmicos
+│   ├── simulado/page.tsx        # Prova cronometrada; sobrevive a recarregar a página
+│   ├── ranking/page.tsx         # Hall da Fama (Geral, Semanal, Mensal e por Concurso)
+│   ├── bizus/page.tsx           # Anotações táticas, fórmulas e resumos de alto impacto
+│   ├── chat/page.tsx            # Comunicação entre soldados e conversas diretas
+│   ├── tickets/page.tsx         # Central de Suporte e reporte de inconsistências
+│   ├── perfil/page.tsx          # Estatísticas do estudante, edição de perfil e banner
+│   ├── progresso/page.tsx       # Histórico: streak, tempo, XP, evolução e simulados
+│   ├── caderno/page.tsx         # Caderno de erros com anotação por questão
+│   ├── revisoes/page.tsx        # Fila da repetição espaçada
+│   ├── cronograma/page.tsx      # Plano de estudo por semana até a data da prova
+│   ├── musica/page.tsx          # Acervo de música, favoritos e playlists
+│   └── admin/                   # Painel Administrativo (usuários, moderação, armazém)
 ├── termos/                      # Termos de Uso
 ├── privacidade/                 # Política de Privacidade (LGPD)
 └── contato/                     # Canal de contato oficial
@@ -270,6 +273,7 @@ O backend adota duas instâncias de conexão com o banco de dados:
 | `/api/admin/questoes/importar` | POST | Prévia e importação de um `.txt` de prova, com deduplicação por hash SHA-256 | Admin |
 | `/api/admin/moderacao` | GET / PUT | Fila de mensagens sinalizadas do chat e registro da decisão | Admin |
 | `/api/admin/saude` | GET | Diagnóstico da instalação: confere se cada migration chegou ao banco | Admin |
+| `/api/contato` | POST | Formulário público de contato: grava em `contatos_publicos` e notifica os administradores | Pública (3/15min por IP) |
 | `/api/admin/auditoria` | GET | Relatório de auditoria de ações administrativas | Admin |
 
 ---

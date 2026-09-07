@@ -1,4 +1,4 @@
-# Ordem de execução no Supabase — versão 2.4.0
+# Ordem de execução no Supabase — versão 2.5.0
 
 Todos os scripts são **idempotentes**: rodar de novo não duplica nada.
 Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
@@ -25,6 +25,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 10 | `../migrations/012_escudo_streak_e_simulados.sql` | Escudo de sequência e histórico de simulados |
 | 11 | `../migrations/013_taf_treino.sql` | Diário de treino do TAF |
 | 12 | `../migrations/014_teoria_ligada_ao_assunto.sql` | Liga cada texto de teoria ao assunto canônico |
+| 13 | `../migrations/015_contatos_publicos.sql` | Tabela do formulário público de contato (que antes descartava a mensagem) |
 
 > **A 011 depende dos seeds de questões.** Se o banco estiver vazio, rode
 > primeiro os `.sql` do banco de questões (seção 2) e só então a 011 — ela
@@ -98,7 +99,7 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_4_0.sql
+versao_2_5_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.

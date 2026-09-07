@@ -1,12 +1,12 @@
 ================================================================================
-  BATCAVERNA 2.4.0 — TUDO QUE PRECISA SER FEITO
+  BATCAVERNA 2.5.0 — TUDO QUE PRECISA SER FEITO
   Atualizado em 06/09/2026 · Guarde este arquivo, ele é o roteiro completo
 ================================================================================
 
   Leia na ordem. Cada bloco diz ONDE fazer (esta máquina, o Supabase, o
   GitHub) e o que esperar de resultado.
 
-  Estado atual: 27 commits prontos e NÃO enviados. Árvore de trabalho limpa.
+  Estado atual: 36 commits prontos e NÃO enviados. Árvore de trabalho limpa.
 
   >> ANTES DE SUBIR: leia SEGURANCA-ACOES-MANUAIS.txt, itens 0-A a 0-C.
      Dois pontos, e o primeiro leva 1 minuto:
@@ -61,7 +61,7 @@
            IMPORTANTE: o site novo com o banco VELHO vai mostrar erro em
            várias telas. Faça a PARTE 3 antes de usar a plataforma.
 
-  --- Os 27 commits que vão subir ----------------------------------------
+  --- Os 36 commits que vão subir ----------------------------------------
      1. feat(2.1.0): banco de questoes limpo, teoria de humanas, musica e v…
      2. fix(gamificacao,perf): nivel e streak em todos os caminhos de XP; h…
      3. feat(admin): importador de provas real, fila de resolucao e 36 clas…
@@ -112,6 +112,7 @@
   [ ] 012_escudo_streak_e_simulados.sql    NOVA
   [ ] 013_taf_treino.sql                   NOVA
   [ ] 014_teoria_ligada_ao_assunto.sql     NOVA — << rode DEPOIS das teorias
+  [ ] 015_contatos_publicos.sql            NOVA — formulário de contato
 
        A 010 começa com um ALTER TYPE solto (igual à 006). Se o SQL Editor
        reclamar, rode esta linha sozinha primeiro e depois o resto:
@@ -186,7 +187,7 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_4_0.sql
+  [ ] versao_2_5_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
        (as versões anteriores ficam só como histórico.)
 
@@ -352,7 +353,50 @@
   [ ] 6.17 DIAGNÓSTICO · /admin -> "🩺 Diagnóstico". Todas as linhas verdes.
            Qualquer vermelha aponta a migration que faltou rodar.
 
-  [ ] 6.18 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
+  --- Os testes da implementação de 07/09 (correções da auditoria) ---
+
+  [ ] 6.18 CRONÔMETRO · Entre e fique 2 minutos em qualquer tela, com a aba
+           VISÍVEL. O relógio da sidebar ("Central de Estudo") tem que
+           andar. Depois, no SQL Editor:
+             SELECT duracao_segundos FROM study_sessions
+             ORDER BY iniciada_em DESC LIMIT 1;
+           Tem que ser > 0. Antes o motor do cronômetro existia e não era
+           montado: ficava em 00:00:00 para sempre e o ranking por tempo de
+           estudo vinha vazio.
+           Troque de aba por 1 minuto e volte: o tempo NÃO pode ter
+           contado enquanto a aba estava escondida.
+
+  [ ] 6.19 NAVEGAÇÃO · Toque uma música. Navegue Dashboard → Questões →
+           Ranking → Chat. A ilha do player, o sino e o cronômetro têm que
+           continuar na tela o tempo todo, inclusive no CHAT (que ficava
+           sem barra lateral nenhuma).
+
+  [ ] 6.20 FAVORITAR EsPCEx · Perfil → Configurações → marque EsPCEx →
+           salve → recarregue a página. Tem que continuar marcado. Antes
+           nunca salvava, e a tela dizia que tinha salvo.
+
+  [ ] 6.21 SIMULADO NO MEIO · Inicie um simulado, responda 3 questões e
+           RECARREGUE a página (F5). A prova tem que voltar de onde parou,
+           com as 3 respostas, e o relógio descontando o tempo que passou.
+           Feche a aba e abra de novo: idem.
+
+  [ ] 6.22 CONTATO · Deslogado, abra /contato e envie uma mensagem. Entre
+           como admin: o sino tem que ter "📨 ... pelo formulário de
+           contato" com nome, e-mail e o trecho. Antes a mensagem era
+           descartada e a tela dizia "encaminhada ao comando".
+
+  [ ] 6.23 MINI-PERFIL DESLOGADO · Copie a URL
+           /api/usuarios/<qualquer-uuid>/mini-perfil e abra numa janela
+           anônima. Tem que responder 401. Antes devolvia nome, foto e
+           tempo de estudo de qualquer aluno para quem soubesse o UUID.
+
+  [ ] 6.24 SERVICE WORKER · Depois do deploy, abra o site, faça logout e
+           entre com OUTRA conta no mesmo navegador. Nenhuma tela pode
+           mostrar dado da conta anterior. E depois de um deploy futuro,
+           recarregar não pode dar tela branca (o cache antigo
+           'batcaverna-v1' é expurgado sozinho).
+
+  [ ] 6.25 PLAYER · Toque uma música, expanda a ilha e arraste a barra de
            progresso soltando o dedo FORA dela. A música tem que pular para
            onde você soltou. Antes travava.
 
@@ -469,6 +513,11 @@
     python scripts/checar_colunas.py          # coluna que não existe no schema
     python scripts/checar_moderacao.py        # falso positivo no filtro do chat
     python scripts/checar_streak.py           # lógica do escudo de sequência
+
+  Testes do pacote de utilidades (precisam de Node):
+    cd batcaverna && npx vitest run packages/utils
+    (cobre níveis, combo, multiplicador e — desde 07/09 — os patamares do
+     combo, que agora vivem em packages/utils como fonte única)
     python scripts/checar_classes_tema.py     # classes de cor inexistentes
     python scripts/checar_seeds.py            # SQL antes de colar
     python scripts/checar_paridade_hash.py    # dedup do importador
