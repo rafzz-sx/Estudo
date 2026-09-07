@@ -53,6 +53,7 @@ interface PlayerState {
 
 // ─── Elemento de áudio singleton ─────────────────────────────
 let audio: HTMLAudioElement | null = null;
+let errosSeguidos = 0;
 
 function obterAudio(): HTMLAudioElement | null {
   if (typeof window === 'undefined') return null;
@@ -75,9 +76,24 @@ function obterAudio(): HTMLAudioElement | null {
     usePlayerStore.getState()._aoTerminar();
   });
   audio.addEventListener('error', () => {
-    // Faixa quebrada não pode travar a fila: pula para a próxima.
+    // Faixa quebrada não pode travar a fila: pula para a próxima. Mas se
+    // TODAS falharem (o archive.org fora do ar, por exemplo), "próxima" a
+    // cada erro vira uma cascata — e com "repetir: todas" vira laço eterno.
+    // Depois de tantos erros seguidos quanto o tamanho da fila, desistimos.
+    const s = usePlayerStore.getState();
+    errosSeguidos += 1;
+    if (errosSeguidos >= Math.max(3, s.fila.length)) {
+      console.warn('Nenhuma faixa da fila carregou; player pausado.');
+      errosSeguidos = 0;
+      usePlayerStore.setState({ tocando: false });
+      return;
+    }
     console.warn('Falha ao carregar a faixa; pulando.');
-    usePlayerStore.getState().proxima();
+    s.proxima();
+  });
+  // Uma faixa que carregou zera a contagem de erros.
+  audio.addEventListener('playing', () => {
+    errosSeguidos = 0;
   });
 
   return audio;

@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { calcularNivel, calcularBonusCombo } from '@batcaverna/utils';
+import {
+  calcularNivel,
+  calcularBonusCombo,
+  PATAMARES_COMBO,
+  patamarDoCombo,
+  type PatamarCombo,
+} from '@batcaverna/utils';
 import { atualizarRevisao } from './revisao-espacada';
 
 /**
@@ -16,36 +22,10 @@ import { atualizarRevisao } from './revisao-espacada';
  */
 
 // ─── Patamares de combo ──────────────────────────────────────
-// Espelham a tabela `combo_patamares` (migration 004). Mantidos aqui
-// também para não depender de um round-trip a cada resposta.
-export interface PatamarCombo {
-  minimo: number;
-  rotulo: string;
-  cor: string;
-  emoji: string;
-}
-
-// Os pisos são "um a mais que o número redondo": passar de 10 acertos
-// mostra INSANO x11, passar de 20 mostra BRUTA x21. Até 10 o rótulo ainda
-// é COMBO/EM CHAMAS. A ordem decrescente é o que faz o `find` abaixo
-// devolver sempre o patamar mais alto atingido.
-export const PATAMARES_COMBO: PatamarCombo[] = [
-  { minimo: 201, rotulo: 'IMORTAL', cor: '#10B981', emoji: '☠️' },
-  { minimo: 151, rotulo: 'MORCEGO-REI', cor: '#F5C518', emoji: '👑' },
-  { minimo: 101, rotulo: 'DIVINO', cor: '#FFFFFF', emoji: '🦇' },
-  { minimo: 76, rotulo: 'SOBRENATURAL', cor: '#06B6D4', emoji: '🌌' },
-  { minimo: 51, rotulo: 'IMPARÁVEL', cor: '#EC4899', emoji: '🚀' },
-  { minimo: 31, rotulo: 'LENDÁRIO', cor: '#A855F7', emoji: '👑' },
-  { minimo: 21, rotulo: 'BRUTA', cor: '#EF4444', emoji: '💥' },
-  { minimo: 11, rotulo: 'INSANO', cor: '#F97316', emoji: '⚡' },
-  { minimo: 5, rotulo: 'EM CHAMAS', cor: '#F5C518', emoji: '🔥' },
-  { minimo: 3, rotulo: 'COMBO', cor: '#22C55E', emoji: '🔥' },
-];
-
-/** Retorna o patamar do combo atual, ou null se ainda não atingiu o primeiro. */
-export function patamarDoCombo(combo: number): PatamarCombo | null {
-  return PATAMARES_COMBO.find((p) => combo >= p.minimo) ?? null;
-}
+// A lista vive em @batcaverna/utils (fonte única, compartilhada com o
+// cliente). Reexportada aqui para quem já importava deste módulo.
+export { PATAMARES_COMBO, patamarDoCombo };
+export type { PatamarCombo };
 
 // ─── XP ──────────────────────────────────────────────────────
 const XP_BASE: Record<string, number> = { facil: 10, medio: 15, dificil: 25 };

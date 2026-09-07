@@ -179,6 +179,41 @@ export function calcularMultiplicadorContinuidade(blocosCompletados: number): nu
  * Calcula o bônus de XP por combo de acertos (seção 8.3)
  * 1-3 acertos = normal; 4+ = bônus crescente até +50%
  */
+// ─── Patamares de combo ──────────────────────────────────────
+// FONTE ÚNICA. Antes havia três cópias desta lista (lib/gamificacao.ts no
+// servidor, components/questoes/ComboBadge.tsx no cliente e a tabela
+// `combo_patamares` no banco) e nenhuma garantia de que ficariam iguais.
+// Servidor e cliente importam daqui. A tabela do banco continua existindo
+// como referência histórica, mas o código não a lê.
+//
+// Os pisos são "um a mais que o número redondo": passar de 10 acertos
+// mostra INSANO x11, passar de 20 mostra BRUTA x21. A ordem decrescente é o
+// que faz `patamarDoCombo` devolver o patamar mais alto atingido.
+export interface PatamarCombo {
+  minimo: number;
+  rotulo: string;
+  cor: string;
+  emoji: string;
+}
+
+export const PATAMARES_COMBO: readonly PatamarCombo[] = [
+  { minimo: 201, rotulo: 'IMORTAL', cor: '#10B981', emoji: '☠️' },
+  { minimo: 151, rotulo: 'MORCEGO-REI', cor: '#F5C518', emoji: '👑' },
+  { minimo: 101, rotulo: 'DIVINO', cor: '#FFFFFF', emoji: '🦇' },
+  { minimo: 76, rotulo: 'SOBRENATURAL', cor: '#06B6D4', emoji: '🌌' },
+  { minimo: 51, rotulo: 'IMPARÁVEL', cor: '#EC4899', emoji: '🚀' },
+  { minimo: 31, rotulo: 'LENDÁRIO', cor: '#A855F7', emoji: '👑' },
+  { minimo: 21, rotulo: 'BRUTA', cor: '#EF4444', emoji: '💥' },
+  { minimo: 11, rotulo: 'INSANO', cor: '#F97316', emoji: '⚡' },
+  { minimo: 5, rotulo: 'EM CHAMAS', cor: '#F5C518', emoji: '🔥' },
+  { minimo: 3, rotulo: 'COMBO', cor: '#22C55E', emoji: '🔥' },
+];
+
+/** Patamar do combo atual, ou null antes do primeiro (3 acertos). */
+export function patamarDoCombo(combo: number): PatamarCombo | null {
+  return PATAMARES_COMBO.find((p) => combo >= p.minimo) ?? null;
+}
+
 export function calcularBonusCombo(combo: number): number {
   if (combo <= 3) return 1;
   const bonus = Math.min((combo - 3) * 0.05, 0.5);

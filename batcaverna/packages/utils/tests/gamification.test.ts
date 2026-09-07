@@ -5,6 +5,8 @@ import {
   calcularBonusCombo,
   formatarTempoEstudo,
   formatarDataHoraVersao,
+  patamarDoCombo,
+  PATAMARES_COMBO,
 } from '../src/index';
 
 describe('Gamificação — 15 Níveis e XP da BatCaverna', () => {
@@ -47,5 +49,28 @@ describe('Gamificação — 15 Níveis e XP da BatCaverna', () => {
     const formatada = formatarDataHoraVersao('2026-08-27T14:35:00Z');
     expect(formatada).toContain('às');
     expect(formatada).toMatch(/\d{2}\/\d{2}\/\d{4} às \d+h/);
+  });
+});
+
+describe('Patamares de combo — fonte única em @batcaverna/utils', () => {
+  it('Abaixo de 3 acertos não há patamar', () => {
+    expect(patamarDoCombo(0)).toBeNull();
+    expect(patamarDoCombo(2)).toBeNull();
+  });
+
+  it('Os pisos são "um a mais que o número redondo"', () => {
+    expect(patamarDoCombo(3)?.rotulo).toBe('COMBO');
+    expect(patamarDoCombo(10)?.rotulo).toBe('EM CHAMAS'); // ainda não é INSANO
+    expect(patamarDoCombo(11)?.rotulo).toBe('INSANO');
+    expect(patamarDoCombo(20)?.rotulo).toBe('INSANO');
+    expect(patamarDoCombo(21)?.rotulo).toBe('BRUTA');
+    expect(patamarDoCombo(201)?.rotulo).toBe('IMORTAL');
+    expect(patamarDoCombo(999)?.rotulo).toBe('IMORTAL');
+  });
+
+  it('A lista está em ordem decrescente de piso (é o que faz o find funcionar)', () => {
+    for (let i = 1; i < PATAMARES_COMBO.length; i++) {
+      expect(PATAMARES_COMBO[i].minimo).toBeLessThan(PATAMARES_COMBO[i - 1].minimo);
+    }
   });
 });
