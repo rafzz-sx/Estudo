@@ -139,8 +139,11 @@
 
        • A 011 (224 KB) REMAPEIA os assuntos que já estão no banco. Se o
          banco estiver vazio, rode primeiro os seeds de questões (3.2) e
-         depois volte aqui. Ela unifica 2.452 assuntos em 515 — é a mudança
-         mais importante desta versão.
+         depois volte aqui. Ela unifica 2.452 assuntos em 529.
+
+         >> RODE-A DE NOVO mesmo que já a tenha rodado antes da 2.8.0:
+            39 questões estavam no assunto errado, e é ela quem remapeia
+            o que já está no banco.
 
        • A 014 casa o nome do tema da teoria com o nome do assunto. Rode
          depois da 011 E depois dos seeds de teoria (3.3), senão não casa
@@ -204,7 +207,7 @@
 
   ---- 3.4 VERSÃO (por último) ---------------------------------------------
 
-  [ ] versao_2_7_0.sql
+  [ ] versao_2_8_0.sql
        Grava a versão do rodapé com a hora cheia, sem minutos.
        (as versões anteriores ficam só como histórico.)
 
@@ -495,7 +498,7 @@
            conteúdo.
 
 
-  --- Os testes das melhorias de 07/09 (versão 2.7.0) ---
+  --- Os testes das melhorias de 07/09 (versões 2.7.0 e 2.8.0) ---
 
   [ ] 6.38 ILHA LEGÍVEL · Toque uma música com capa CLARA (bege, foto
            estourada, ilustração pastel). O título e o artista dentro da ilha
@@ -875,16 +878,31 @@
 
 
   ----------------------------------------------------------------------
-    A-0   OBRIGATÓRIO — RODAR A MIGRATION 016 (módulo de redação)
+    A-0   OBRIGATÓRIO — RODAR AS MIGRATIONS 016 E 017
   ----------------------------------------------------------------------
   [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
 
-  Tarefa:       Rodar supabase/migrations/016_redacao.sql no SQL Editor,
-                ANTES do seed da versão (A-1).
-  Motivo:       Cria as duas tabelas do módulo de redação
+  Tarefa:       Rodar, no SQL Editor e nesta ordem, ANTES do seed da
+                versão (A-1):
+                  1. supabase/migrations/016_redacao.sql
+                  2. supabase/migrations/017_contestar_gabarito.sql
+                  3. supabase/migrations/011_taxonomia_assuntos.sql
+                     (DE NOVO, mesmo que você já a tenha rodado)
+  Motivo:       A 016 cria as duas tabelas do módulo de redação
                 (`redacao_temas` e `redacoes`) e cadastra 10 temas oficiais
-                do ENEM. Sem ela, a tela /redacao abre e avisa que não há
-                tema cadastrado.
+                do ENEM. Sem ela, /redacao abre e avisa que não há tema.
+
+                A 017 cria `questao_contestacoes`, que é como o aluno
+                avisa que uma questão está errada. Sem ela, o botão
+                "Contestar" devolve erro.
+
+                A 011 DE NOVO porque 39 questões estavam no assunto
+                errado: o casamento de termos da taxonomia era substring
+                crua, e "organica" casa dentro de "inorganica". Quatorze
+                questões de química inorgânica ficaram sob "Química
+                Orgânica" e o assunto "Funções Inorgânicas" ficou com
+                ZERO. Os seeds novos já saem certos, mas quem remapeia o
+                que JÁ ESTÁ no banco é a 011.
   Comando:      Copiar o arquivo inteiro e colar no SQL Editor do Supabase.
   Configuração: nenhuma.
   Validação:    SELECT ano, titulo FROM redacao_temas ORDER BY ano DESC;
@@ -892,8 +910,20 @@
                 Depois abra /redacao e confira que o seletor de tema tem
                 todos eles.
 
-  >> É ADITIVA E NÃO DESTRUTIVA: só cria tabelas novas. Nenhum dado
-     existente é tocado.
+                SELECT COUNT(*) FROM questao_contestacoes;  -- 0, sem erro
+
+                E o teste que prova que a 011 fez efeito:
+                  SELECT a.nome, COUNT(*) FROM questoes q
+                  JOIN assuntos a ON a.id = q.assunto_id
+                  JOIN materias m ON m.id = q.materia_id
+                  WHERE m.nome = 'Química' GROUP BY a.nome ORDER BY 2 DESC;
+                "Funções Inorgânicas" tem que aparecer com 3, e
+                "Ácidos, Bases e pH" com 3. Se vierem zerados, a 011
+                não rodou.
+
+  >> A 016 E A 017 SÃO ADITIVAS: só criam tabelas novas, nenhum dado
+     existente é tocado. A 011 REESCREVE o vínculo assunto↔questão,
+     que é o objetivo dela; não apaga questão nem resposta de aluno.
 
   >> CONFIRA OS TEMAS: cadastrei o que consta no registro público das
      provas do ENEM, mas não tenho como validar contra a fonte a partir
@@ -906,15 +936,17 @@
   ----------------------------------------------------------------------
   [AÇÃO MANUAL — EXECUTAR NA OUTRA MÁQUINA]     PENDENTE
 
-  Tarefa:       Rodar supabase/seeds/versao_2_7_0.sql no SQL Editor.
-  Motivo:       É o que faz o rodapé mostrar 2.6.0. Sem ele o site continua
-                anunciando a versão anterior.
+  Tarefa:       Rodar supabase/seeds/versao_2_8_0.sql no SQL Editor.
+  Motivo:       É o que faz o rodapé mostrar 2.8.0. Sem ele o site continua
+                anunciando a versão anterior — o número exibido vem do
+                BANCO (tabela `app_info`), não do código.
   Comando:      Copiar o arquivo inteiro e colar no SQL Editor do Supabase.
   Configuração: nenhuma.
-  Validação:    O rodapé de qualquer tela mostra "2.7.0". Ou:
-                  SELECT versao_atual FROM app_info;
+  Validação:    O rodapé do /perfil mostra "BatCaverna v2.8.0 · Atualizado
+                em DD/MM/AAAA às HHh" — hora cheia, sem minutos. Ou:
+                  SELECT versao_atual, atualizado_em FROM app_info;
 
-  >> RODE A 016 ANTES (ação A-0, logo acima).
+  >> RODE A A-0 ANTES (016, 017 e a 011 de novo).
 
 
   ----------------------------------------------------------------------

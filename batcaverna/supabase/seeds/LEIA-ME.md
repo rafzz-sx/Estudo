@@ -21,7 +21,7 @@ Cole cada arquivo no **SQL Editor** do Supabase e execute na ordem abaixo.
 | 6 | `../migrations/008_seguranca_rls.sql` | **Fecha o gabarito público.** `questoes` tinha `SELECT USING (true)`: qualquer visitante baixava a resposta das 3.247 questões com a chave anônima |
 | 7 | `../migrations/009_simulados_e_gabaritos.sql` | Coluna `tem_comentario`, ano-base de cada concurso e 33 frases motivacionais novas |
 | 8 | `../migrations/010_alertas_moderacao.sql` | Gravidade e categoria na mensagem sinalizada, view `moderacao_fila` e o tipo de notificação `moderacao` |
-| 9 | `../migrations/011_taxonomia_assuntos.sql` | **Unifica 2.452 assuntos em 515.** Arquivo grande (224 KB) — cole sozinho, leva ~1 min |
+| 9 | `../migrations/011_taxonomia_assuntos.sql` | **Unifica 2.452 assuntos em 529.** Arquivo grande (224 KB) — cole sozinho, leva ~1 min. **Se já rodou antes da 2.8.0, rode de novo:** 39 questões estavam no assunto errado |
 | 10 | `../migrations/012_escudo_streak_e_simulados.sql` | Escudo de sequência e histórico de simulados |
 | 11 | `../migrations/013_taf_treino.sql` | Diário de treino do TAF |
 | 12 | `../migrations/014_teoria_ligada_ao_assunto.sql` | Liga cada texto de teoria ao assunto canônico |
@@ -101,17 +101,17 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_7_0.sql
+versao_2_8_0.sql
 ```
 
 Grava a versão do rodapé com a **hora cheia**, sem minutos.
 
 > As versões anteriores continuam no diretório só como histórico. Rodar mais
 > de uma não quebra nada (cada uma apaga o registro anterior antes de
-> inserir), mas só a **2.7.0** precisa ser executada.
+> inserir), mas só a **2.8.0** precisa ser executada.
 >
-> **A 2.7.0 traz a migration 016** (módulo de redação). Rode-a antes deste
-> seed. Ela é aditiva: só cria `redacao_temas` e `redacoes`.
+> **A 2.8.0 traz a migration 017** (contestação de gabarito). Rode-a antes
+> deste seed. Ela é aditiva: só cria `questao_contestacoes`.
 >
 > A 2.6.0 não trouxe migration — a correção do hash de senha usa um formato
 > que cabe na coluna `senha_hash VARCHAR(255)` que já existia.

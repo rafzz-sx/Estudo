@@ -3061,7 +3061,7 @@ COMMIT;
 -- 6. Conferência
 -- ════════════════════════════════════════════════════════════════════
 
--- Antes: 2.452. Depois: ~515.
+-- Antes: 2.452. Depois: ~529.
 SELECT COUNT(*) AS total_de_assuntos FROM assuntos;
 
 -- Antes 88% tinham 1 questão só. Depois deve ficar perto de 60 linhas.

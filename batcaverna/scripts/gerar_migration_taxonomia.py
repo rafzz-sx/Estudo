@@ -224,7 +224,10 @@ def main() -> int:
     add("-- 6. Conferência")
     add("-- ════════════════════════════════════════════════════════════════════")
     add("")
-    add("-- Antes: 2.452. Depois: ~515.")
+    # O número sai da contagem real, não de um literal. Estava fixo em "~515"
+    # e o cabeçalho deste mesmo arquivo, esse sim calculado, passou a dizer
+    # 529 quando a taxonomia mudou — a migration se contradizia.
+    add(f"-- Antes: {len(mapa):,}. Depois: ~{len(canonicos)}.".replace(",", "."))
     add("SELECT COUNT(*) AS total_de_assuntos FROM assuntos;")
     add("")
     add("-- Antes 88% tinham 1 questão só. Depois deve ficar perto de 60 linhas.")
