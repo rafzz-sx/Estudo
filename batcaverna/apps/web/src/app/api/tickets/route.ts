@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
-async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  // Aceita cookie (navegador) e header Bearer (app/mobile).
-  const user = await getAuthUserFromRequest(req);
-  return user?.id ?? null;
+/**
+ * Aceita cookie (navegador) e header Bearer (app/mobile).
+ *
+ * Devolvia só o `id` (`Promise<string | null>`), mas TODO este arquivo usa o
+ * retorno como objeto: `user.id`, `user.role`. Em TypeScript isso é erro de
+ * compilação — o build do Vercel não passaria. Em execução, `user.id` seria
+ * `undefined` e a rota quebraria por inteiro.
+ */
+async function getUserFromRequest(
+  req: NextRequest
+): Promise<{ id: string; role: string } | null> {
+  return getAuthUserFromRequest(req);
 }
 
 // GET /api/tickets — Lista tickets do usuário (ou todos se for admin)

@@ -180,12 +180,26 @@ ALTER TABLE users
   ADD CONSTRAINT users_nome_tamanho
     CHECK (length(nome) BETWEEN 2 AND 100);
 
--- Mensagem de chat e ticket: impede alguém de enfiar um megabyte de texto
--- numa mensagem e derrubar a tela de quem for ler.
+-- Mensagem de chat: impede alguém de enfiar um megabyte de texto numa
+-- mensagem e derrubar a tela de quem for ler.
+--
+-- A coluna chama `conteudo_texto`. Escrito como `conteudo`, este ALTER
+-- abortava com "column conteudo does not exist" e derrubava a transação
+-- inteira — as políticas de RLS acima ficavam sem efeito, caladas.
 ALTER TABLE mensagem_chat
   DROP CONSTRAINT IF EXISTS mensagem_chat_tamanho;
 ALTER TABLE mensagem_chat
-  ADD CONSTRAINT mensagem_chat_tamanho CHECK (length(conteudo) <= 2000);
+  ADD CONSTRAINT mensagem_chat_tamanho
+    CHECK (conteudo_texto IS NULL OR length(conteudo_texto) <= 2000);
+
+-- A mídia do chat vai em data URL, dentro da própria linha. Sem teto, uma
+-- pessoa grava 200 MB numa mensagem e a conversa não abre mais para ninguém.
+-- 8 MB de base64 ≈ 6 MB de arquivo: sobra para foto e áudio de voz.
+ALTER TABLE mensagem_chat
+  DROP CONSTRAINT IF EXISTS mensagem_chat_midia_tamanho;
+ALTER TABLE mensagem_chat
+  ADD CONSTRAINT mensagem_chat_midia_tamanho
+    CHECK (midia_url IS NULL OR length(midia_url) <= 8 * 1024 * 1024);
 
 
 COMMIT;

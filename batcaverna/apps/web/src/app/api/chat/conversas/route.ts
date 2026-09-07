@@ -2,10 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
-async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  // Aceita cookie (navegador) e header Bearer (app/mobile).
-  const user = await getAuthUserFromRequest(req);
-  return user?.id ?? null;
+/**
+ * Aceita cookie (navegador) e header Bearer (app/mobile).
+ *
+ * Devolvia só o `id` (`Promise<string | null>`), mas TODO este arquivo usa o
+ * retorno como objeto: `user.id`, `user.role`. Em TypeScript isso é erro de
+ * compilação — o build do Vercel não passaria. Em execução, `user.id` seria
+ * `undefined` e a rota quebraria por inteiro.
+ */
+async function getUserFromRequest(
+  req: NextRequest
+): Promise<{ id: string; role: string } | null> {
+  return getAuthUserFromRequest(req);
 }
 
 // GET /api/chat/conversas — Lista todas as conversas ativas do usuário
@@ -20,8 +28,10 @@ export async function GET(req: NextRequest) {
       .from('conversas')
       .select(`
         id, amizade_id, user_id_a, user_id_b, criada_em, ultima_mensagem_em,
-        userA:users!user_id_a (id, nome, apelido, avatar_url, nivel_atual),
-        userB:users!user_id_b (id, nome, apelido, avatar_url, nivel_atual),
+        userA:users!user_id_a (id, nome, apelido, avatar_url, nivel_atual, ultimo_login_em,
+          user_concurso_favoritos (concursos (sigla))),
+        userB:users!user_id_b (id, nome, apelido, avatar_url, nivel_atual, ultimo_login_em,
+          user_concurso_favoritos (concursos (sigla))),
         mensagens:mensagem_chat (id, conteudo_texto, midia_url, tipo, enviado_em, lida, autor_id)
       `)
       .or(`user_id_a.eq.${user.id},user_id_b.eq.${user.id}`)
@@ -50,8 +60,16 @@ export async function GET(req: NextRequest) {
           apelido: outro?.apelido,
           avatar_url: outro?.avatar_url,
           nivel_atual: outro?.nivel_atual || 1,
-          online: true,
-          concurso: 'Geral',
+          // `online: true` era escrito na mão para todo mundo: a bolinha
+          // verde e o texto "Online" apareciam mesmo para quem não entrava
+          // há semanas. Não existe presença em tempo real na plataforma, e
+          // fingir que existe faz o aluno esperar resposta que não vem.
+          // O que existe de verdade é o último login, gravado no /auth/login.
+          ultimo_login_em: outro?.ultimo_login_em ?? null,
+          // Idem para o concurso: era 'Geral' fixo. Agora sai o que a pessoa
+          // realmente favoritou (o primeiro, quando há mais de um).
+          concurso:
+            outro?.user_concurso_favoritos?.[0]?.concursos?.sigla ?? null,
         },
         ultima_mensagem: ultimaMsg
           ? ultimaMsg.tipo === 'audio'

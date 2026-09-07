@@ -1,11 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { limparTexto, uuidOuNulo } from '@/lib/seguranca';
 
-async function getUserFromRequest(req: NextRequest): Promise<string | null> {
-  // Aceita cookie (navegador) e header Bearer (app/mobile).
-  const user = await getAuthUserFromRequest(req);
-  return user?.id ?? null;
+/**
+ * Aceita cookie (navegador) e header Bearer (app/mobile).
+ *
+ * Devolvia só o `id` (`Promise<string | null>`), mas TODO este arquivo usa o
+ * retorno como objeto: `user.id`, `user.role`. Em TypeScript isso é erro de
+ * compilação — o build do Vercel não passaria. Em execução, `user.id` seria
+ * `undefined` e a rota quebraria por inteiro.
+ */
+async function getUserFromRequest(
+  req: NextRequest
+): Promise<{ id: string; role: string } | null> {
+  return getAuthUserFromRequest(req);
+}
+
+/**
+ * O ticket é do usuário, ou quem pergunta é da moderação?
+ *
+ * NÃO EXISTIA. Qualquer pessoa logada lia e respondia o ticket de qualquer
+ * outra só trocando o UUID da URL — e ticket de suporte é onde o aluno
+ * escreve justamente o que não quer que os outros leiam: denúncia de
+ * assédio, problema com a conta, dados de contato.
+ */
+async function podeVerTicket(
+  supabase: SupabaseClient,
+  ticketId: string,
+  user: { id: string; role: string }
+): Promise<boolean> {
+  if (user.role === 'admin') return true;
+
+  const { data } = await supabase
+    .from('tickets')
+    .select('user_id')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  return data?.user_id === user.id;
 }
 
 // GET /api/tickets/[id]/mensagens
@@ -14,11 +48,26 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: ticketId } = await params;
+    const { id } = await params;
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
+    const ticketId = uuidOuNulo(id);
+    if (!ticketId) {
+      return NextResponse.json(
+        { success: false, error: 'Chamado não encontrado' },
+        { status: 404 }
+      );
+    }
+
     const supabase = createServerSupabaseClient();
+
+    if (!(await podeVerTicket(supabase, ticketId, user))) {
+      return NextResponse.json(
+        { success: false, error: 'Chamado não encontrado' },
+        { status: 404 }
+      );
+    }
 
     const { data: mensagens, error } = await supabase
       .from('ticket_mensagens')
@@ -41,18 +90,33 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: ticketId } = await params;
+    const { id } = await params;
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
-    const body = await req.json();
-    const { conteudo } = body;
+    const ticketId = uuidOuNulo(id);
+    if (!ticketId) {
+      return NextResponse.json(
+        { success: false, error: 'Chamado não encontrado' },
+        { status: 404 }
+      );
+    }
 
-    if (!conteudo?.trim()) {
+    const body = await req.json().catch(() => ({}));
+    const texto = limparTexto(body?.conteudo, 4000);
+
+    if (!texto) {
       return NextResponse.json({ success: false, error: 'Mensagem vazia' }, { status: 400 });
     }
 
     const supabase = createServerSupabaseClient();
+
+    if (!(await podeVerTicket(supabase, ticketId, user))) {
+      return NextResponse.json(
+        { success: false, error: 'Chamado não encontrado' },
+        { status: 404 }
+      );
+    }
 
     // Inserir mensagem
     const { data: novaMsg, error: mErr } = await supabase
@@ -61,7 +125,7 @@ export async function POST(
         ticket_id: ticketId,
         autor_id: user.id,
         autor_role: user.role === 'admin' ? 'admin' : 'usuario',
-        conteudo: conteudo.trim(),
+        conteudo: texto,
       })
       .select('*')
       .single();
