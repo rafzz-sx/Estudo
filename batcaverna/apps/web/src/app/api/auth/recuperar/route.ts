@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { aplicarLimite } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { hashToken, generateEmailToken, getEmailTokenExpiry } from '@/lib/auth';
+import { hashToken, hashSenha, generateEmailToken, getEmailTokenExpiry } from '@/lib/auth';
 
 function getSupabase() {
   return createServerSupabaseClient();
@@ -185,8 +185,10 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Atualizar senha
-    const novaSenhaHash = await hashToken(nova_senha);
+    // Atualizar senha — sempre no formato novo (PBKDF2 com sal).
+    // `hashToken` continua sendo usado neste arquivo para o código de
+    // recuperação, que é aleatório e descartável: ali SHA-256 basta.
+    const novaSenhaHash = await hashSenha(nova_senha);
     const { error: updateError } = await supabase
       .from('users')
       .update({ senha_hash: novaSenhaHash })

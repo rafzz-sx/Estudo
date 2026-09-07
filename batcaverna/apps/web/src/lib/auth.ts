@@ -47,6 +47,127 @@ export async function hashToken(token: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ─── Senha do usuário ────────────────────────────────────────
+//
+// A senha era guardada como `hashToken(senha)` — SHA-256 de UMA volta, sem
+// sal. É adequado para o refresh token (que já é 256 bits de aleatoriedade),
+// e é o pior caso possível para senha escolhida por gente:
+//
+//   • sem sal, senhas iguais viram hashes iguais, e uma tabela arco-íris
+//     resolve as comuns instantaneamente;
+//   • uma volta de SHA-256 é medida em BILHÕES por segundo numa GPU comum.
+//
+// Somado à chave `service_role` que esteve num repositório público, quem
+// baixasse a tabela `users` quebraria a maior parte das senhas offline. E o
+// público da plataforma é majoritariamente menor de idade.
+//
+// Agora é PBKDF2-HMAC-SHA256 com sal por usuário. A Web Crypto já traz o
+// algoritmo: nenhuma dependência nova.
+//
+// ─── O formato guardado ─────────────────────────────────────────────────────
+//
+//     pbkdf2$<iteracoes>$<sal em hex>$<derivado em hex>
+//
+// Auto-descritivo de propósito: cabe na coluna `senha_hash` que já existe
+// (VARCHAR), então NÃO PRECISA DE MIGRATION, e guarda o número de iterações
+// junto — dá para aumentar o custo no futuro sem invalidar o que já existe.
+//
+// O hash antigo é reconhecível sem ambiguidade: 64 caracteres hexadecimais,
+// sem `$`. A migração é transparente — ver `verificarSenha`.
+
+/** Custo atual. Fica no hash, então pode subir depois sem quebrar nada. */
+const PBKDF2_ITERACOES = 210_000;
+const PBKDF2_BYTES = 32;
+
+function paraHex(bytes: ArrayBuffer | Uint8Array): string {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return Array.from(view, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function deHex(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+async function derivar(
+  senha: string,
+  sal: Uint8Array,
+  iteracoes: number
+): Promise<string> {
+  const chave = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(senha),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: sal as unknown as BufferSource, iterations: iteracoes, hash: 'SHA-256' },
+    chave,
+    PBKDF2_BYTES * 8
+  );
+  return paraHex(bits);
+}
+
+/**
+ * Comparação em tempo constante.
+ *
+ * `a !== b` sai no primeiro byte diferente, e o tempo até sair conta quantos
+ * bateram. Aqui os dois lados têm o mesmo comprimento e o laço percorre tudo.
+ */
+function iguaisEmTempoConstante(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diferenca = 0;
+  for (let i = 0; i < a.length; i++) {
+    diferenca |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diferenca === 0;
+}
+
+/** Gera o hash de uma senha nova, no formato atual. */
+export async function hashSenha(senha: string): Promise<string> {
+  const sal = new Uint8Array(16);
+  crypto.getRandomValues(sal);
+  const derivado = await derivar(senha, sal, PBKDF2_ITERACOES);
+  return `pbkdf2$${PBKDF2_ITERACOES}$${paraHex(sal)}$${derivado}`;
+}
+
+/**
+ * Confere a senha contra o que está guardado, aceitando os dois formatos.
+ *
+ * `precisaRehash` volta `true` quando a conta ainda está no formato antigo (ou
+ * num custo menor que o atual): quem chamou deve regravar o hash novo depois
+ * de um login bem-sucedido. É assim que a base migra sozinha, sem pedir nada
+ * ao aluno e sem invalidar ninguém.
+ */
+export async function verificarSenha(
+  senha: string,
+  armazenado: string | null | undefined
+): Promise<{ ok: boolean; precisaRehash: boolean }> {
+  if (!armazenado) return { ok: false, precisaRehash: false };
+
+  if (armazenado.startsWith('pbkdf2$')) {
+    const [, iteracoesTexto, salHex, esperado] = armazenado.split('$');
+    const iteracoes = Number(iteracoesTexto);
+
+    if (!Number.isFinite(iteracoes) || iteracoes < 1 || !salHex || !esperado) {
+      return { ok: false, precisaRehash: false };
+    }
+
+    const derivado = await derivar(senha, deHex(salHex), iteracoes);
+    const ok = iguaisEmTempoConstante(derivado, esperado);
+    return { ok, precisaRehash: ok && iteracoes < PBKDF2_ITERACOES };
+  }
+
+  // Formato antigo: SHA-256 de uma volta, sem sal.
+  const antigo = await hashToken(senha);
+  const ok = iguaisEmTempoConstante(antigo, armazenado);
+  return { ok, precisaRehash: ok };
+}
+
 // ─── Verificar Access Token ──────────────────────────────────
 export async function verifyAccessToken(token: string): Promise<{
   sub: string;

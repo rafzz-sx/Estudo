@@ -5,6 +5,8 @@ import {
   generateAccessToken,
   generateRefreshToken,
   hashToken,
+  hashSenha,
+  verificarSenha,
   getRefreshTokenExpiry,
 } from '@/lib/auth';
 
@@ -49,12 +51,30 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Verificar senha ──────────────────────────────────────
-    const senhaHash = await hashToken(senha);
-    if (user.senha_hash !== senhaHash) {
+    // Aceita o formato antigo (SHA-256 de uma volta, sem sal) e o novo
+    // (PBKDF2 com sal). Comparação em tempo constante nos dois casos.
+    const { ok, precisaRehash } = await verificarSenha(senha, user.senha_hash);
+    if (!ok) {
       return NextResponse.json(
         { success: false, error: 'E-mail ou senha incorretos' },
         { status: 401 }
       );
+    }
+
+    // Migração transparente: quem entra com a senha certa sai daqui já no
+    // formato novo. Ninguém precisa redefinir nada, e a base migra sozinha
+    // conforme as pessoas usam a plataforma.
+    //
+    // Falhar aqui não pode derrubar o login — a senha já foi conferida.
+    if (precisaRehash) {
+      try {
+        await supabase
+          .from('users')
+          .update({ senha_hash: await hashSenha(senha) })
+          .eq('id', user.id);
+      } catch (e) {
+        console.warn('Aviso: não consegui atualizar o hash da senha:', e);
+      }
     }
 
     // ─── Conta bloqueada pela moderação ───────────────────────

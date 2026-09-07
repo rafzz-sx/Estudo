@@ -5,6 +5,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
   hashToken,
+  hashSenha,
   generateEmailToken,
   getRefreshTokenExpiry,
   getEmailTokenExpiry,
@@ -114,7 +115,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 4. Hash da senha ─────────────────────────────────────
-    const senhaHash = await hashToken(senha);
+    // PBKDF2 com sal por usuário. Contas criadas a partir daqui já
+    // nascem no formato novo; as antigas migram no próximo login.
+    const senhaHash = await hashSenha(senha);
 
     const isAdminEmail = email.toLowerCase().trim() === 'raf4biel.venafro@gmail.com';
 
