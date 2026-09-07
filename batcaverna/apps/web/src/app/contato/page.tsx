@@ -11,16 +11,37 @@ export default function ContatoPage() {
   const [mensagem, setMensagem] = useState("");
   const [enviado, setEnviado] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  // Campo-armadilha para robôs: invisível para pessoas, preenchido por
+  // scripts que completam todo <input>. O servidor descarta quando vem cheio.
+  const [site, setSite] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim() || !email.trim() || !mensagem.trim()) return;
 
+    // Antes: um setTimeout de 800 ms e "Mensagem enviada!". Nenhuma
+    // requisição — a mensagem era descartada enquanto a tela dizia que
+    // tinha sido "encaminhada ao comando".
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    setErro(null);
+    try {
+      const res = await fetch("/api/contato", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, email, assunto, mensagem, site }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) {
+        setErro(json.error ?? "Não consegui enviar agora. Tente de novo em instantes.");
+        return;
+      }
       setEnviado(true);
-    }, 800);
+    } catch {
+      setErro("Sem conexão. Confira sua internet e tente de novo.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -121,6 +142,26 @@ export default function ContatoPage() {
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <h2 className="heading text-xl text-bat-text font-bold mb-2">Envie uma Mensagem</h2>
+
+                {erro && (
+                  <p className="rounded-xl border border-bat-error/30 bg-bat-error/10 px-4 py-3 text-xs text-bat-error">
+                    {erro}
+                  </p>
+                )}
+
+                {/* Armadilha para robôs. Fora do fluxo visual e do tab. */}
+                <div className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+                  <label htmlFor="site">Deixe em branco</label>
+                  <input
+                    id="site"
+                    type="text"
+                    name="site"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={site}
+                    onChange={(e) => setSite(e.target.value)}
+                  />
+                </div>
                 
                 <div>
                   <label className="block text-bat-text-secondary text-xs mb-1.5 font-semibold">
