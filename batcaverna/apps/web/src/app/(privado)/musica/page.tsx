@@ -45,6 +45,8 @@ export default function MusicaPage() {
   });
 
   const [novaPlaylist, setNovaPlaylist] = useState("");
+  /** Faixa cujo menu "adicionar à playlist" está aberto. */
+  const [menuPara, setMenuPara] = useState<string | null>(null);
 
   // ─── Carregamento ──────────────────────────────────────────
   const carregar = useCallback(async () => {
@@ -64,15 +66,44 @@ export default function MusicaPage() {
     }
   }, [busca, aba]);
 
+  /** Recarrega as playlists (com as faixas de cada uma). */
+  const carregarPlaylists = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/playlists");
+      const json = await res.json();
+      if (json.success) setPlaylists(json.data);
+    } catch {
+      /* silencioso: a aba do acervo continua utilizável sem elas */
+    }
+  }, []);
+
+  // As playlists são carregadas SEMPRE, não só na aba delas: o botão de
+  // "adicionar à playlist" fica em cada faixa do acervo e precisa da lista
+  // para oferecer o destino.
+  useEffect(() => {
+    carregarPlaylists();
+  }, [carregarPlaylists]);
+
+  // Menu de playlists fecha ao clicar fora ou apertar Esc.
+  useEffect(() => {
+    if (!menuPara) return;
+    const fechar = () => setMenuPara(null);
+    const porTecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuPara(null);
+    };
+    // `click` no documento dispara depois do onClick do botão, então abrir
+    // não fecha em seguida.
+    document.addEventListener("click", fechar);
+    document.addEventListener("keydown", porTecla);
+    return () => {
+      document.removeEventListener("click", fechar);
+      document.removeEventListener("keydown", porTecla);
+    };
+  }, [menuPara]);
+
   useEffect(() => {
     if (aba === "playlists") {
-      fetchWithAuth("/api/playlists")
-        .then((r) => r.json())
-        .then((json) => {
-          if (json.success) setPlaylists(json.data);
-        })
-        .catch(() => undefined)
-        .finally(() => setCarregando(false));
+      setCarregando(false);
       return;
     }
     // Busca só dispara depois que o usuário para de digitar.
@@ -118,9 +149,58 @@ export default function MusicaPage() {
     });
     const json = await res.json();
     if (json.success) {
-      setPlaylists((p) => [json.data, ...p]);
+      // A resposta da criação não traz `musicas`; sem isso a playlist recém
+      // criada quebraria o `p.musicas.length` do card.
+      setPlaylists((p) => [{ musicas: [], ...json.data }, ...p]);
       setNovaPlaylist("");
     }
+  };
+
+  /**
+   * Põe (ou tira) uma faixa numa playlist.
+   *
+   * `POST /api/playlists/[id]` existia completa — valida dono, trata
+   * duplicata, calcula a ordem — e NÃO TINHA UM ÚNICO CHAMADOR. Dava para
+   * criar playlist, e ela ficava vazia para sempre; o texto do estado vazio
+   * ainda instruía a "ir adicionando faixas do acervo", coisa que a interface
+   * não permitia. Este é o gatilho que faltava.
+   */
+  const mexerNaPlaylist = async (
+    playlistId: string,
+    musica: Musica,
+    acao: "adicionar" | "remover"
+  ) => {
+    setMenuPara(null);
+    const res = await fetchWithAuth(`/api/playlists/${playlistId}`, {
+      method: "POST",
+      body: JSON.stringify({ musica_id: musica.id, acao }),
+    }).catch(() => null);
+
+    const json = res ? await res.json().catch(() => null) : null;
+
+    if (!json?.success) {
+      setAviso(json?.error ?? "Não consegui atualizar a playlist.");
+      return;
+    }
+
+    // Reflete na tela sem esperar o servidor devolver tudo de novo.
+    setPlaylists((atual) =>
+      atual.map((p) => {
+        if (p.id !== playlistId) return p;
+        const semEla = p.musicas.filter((x) => x.id !== musica.id);
+        return {
+          ...p,
+          musicas: acao === "adicionar" ? [...semEla, musica] : semEla,
+        };
+      })
+    );
+
+    const nome = playlists.find((p) => p.id === playlistId)?.nome ?? "playlist";
+    setAviso(
+      acao === "adicionar"
+        ? `✅ "${musica.titulo}" foi para ${nome}.`
+        : `Removida de ${nome}.`
+    );
   };
 
   const musicaAtual = filaAtual[indiceAtual];
@@ -264,6 +344,76 @@ export default function MusicaPage() {
                     >
                       {m.favorita ? "⭐" : "☆"}
                     </button>
+
+                    {/* Adicionar à playlist. A rota existia desde sempre e
+                        nunca teve este botão: dava para criar playlist e ela
+                        ficava vazia para sempre. */}
+                    <div
+                      className="relative shrink-0"
+                      // O ouvinte de "clicou fora" vive no document, que fica
+                      // acima da raiz do React: sem parar aqui, o mesmo clique
+                      // que abre o menu chegaria lá e o fecharia na sequência.
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() =>
+                          setMenuPara((atual) => (atual === m.id ? null : m.id))
+                        }
+                        className="cursor-pointer rounded-lg px-2 py-1 text-sm text-bat-text-muted transition-colors hover:bg-bat-bg-secondary hover:text-bat-gold-400"
+                        aria-label={`Adicionar ${m.titulo} a uma playlist`}
+                        aria-expanded={menuPara === m.id}
+                      >
+                        ＋
+                      </button>
+
+                      {menuPara === m.id && (
+                        <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-bat-border bg-bat-bg-elevated shadow-xl">
+                          <p className="border-b border-bat-border px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
+                            Adicionar a
+                          </p>
+
+                          {playlists.length === 0 ? (
+                            <p className="px-3 py-3 text-xs text-bat-text-muted">
+                              Você ainda não tem playlists. Crie uma na aba
+                              📚&nbsp;Playlists.
+                            </p>
+                          ) : (
+                            <ul className="max-h-56 overflow-y-auto py-1">
+                              {playlists.map((p) => {
+                                const jaTem = p.musicas.some(
+                                  (x) => x.id === m.id
+                                );
+                                return (
+                                  <li key={p.id}>
+                                    <button
+                                      onClick={() =>
+                                        mexerNaPlaylist(
+                                          p.id,
+                                          m,
+                                          jaTem ? "remover" : "adicionar"
+                                        )
+                                      }
+                                      className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left text-xs text-bat-text transition-colors hover:bg-bat-bg-secondary"
+                                    >
+                                      <span className="truncate">{p.nome}</span>
+                                      <span
+                                        className={
+                                          jaTem
+                                            ? "shrink-0 text-bat-success"
+                                            : "shrink-0 text-bat-text-muted"
+                                        }
+                                      >
+                                        {jaTem ? "✓" : "+"}
+                                      </span>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -296,8 +446,10 @@ export default function MusicaPage() {
             <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-10 text-center">
               <span className="mb-3 block text-4xl">📚</span>
               <p className="text-sm text-bat-text-secondary">
-                Você ainda não tem playlists. Crie uma acima e vá adicionando
-                faixas do acervo.
+                Você ainda não tem playlists. Crie uma acima e depois, no
+                acervo, toque em{" "}
+                <span className="text-bat-gold-400">＋</span> na faixa que
+                quiser guardar.
               </p>
             </div>
           ) : (
@@ -329,26 +481,35 @@ export default function MusicaPage() {
 
                   {p.musicas.length > 0 ? (
                     <ul className="space-y-1">
-                      {p.musicas.slice(0, 5).map((m, i) => (
+                      {p.musicas.map((m, i) => (
                         <li
                           key={m.id}
-                          className="flex items-center gap-2 text-xs text-bat-text-secondary"
+                          className="group flex items-center gap-2 text-xs text-bat-text-secondary"
                         >
                           <span className="w-4 shrink-0 text-bat-text-muted">
                             {i + 1}.
                           </span>
-                          <span className="truncate">{m.titulo}</span>
+                          <button
+                            onClick={() => tocarFila(p.musicas, i)}
+                            className="min-w-0 flex-1 cursor-pointer truncate text-left hover:text-bat-gold-400"
+                          >
+                            {m.titulo}
+                          </button>
+                          <button
+                            onClick={() => mexerNaPlaylist(p.id, m, "remover")}
+                            className="shrink-0 cursor-pointer px-1 text-bat-text-muted opacity-0 transition-opacity hover:text-bat-error focus:opacity-100 group-hover:opacity-100"
+                            aria-label={`Tirar ${m.titulo} de ${p.nome}`}
+                          >
+                            ✕
+                          </button>
                         </li>
                       ))}
-                      {p.musicas.length > 5 && (
-                        <li className="text-xs text-bat-text-muted">
-                          + {p.musicas.length - 5} outras
-                        </li>
-                      )}
                     </ul>
                   ) : (
                     <p className="text-xs text-bat-text-muted">
-                      Playlist vazia.
+                      Playlist vazia. Vá ao acervo e toque em{" "}
+                      <span className="text-bat-gold-400">＋</span> na faixa que
+                      quiser.
                     </p>
                   )}
                 </div>
