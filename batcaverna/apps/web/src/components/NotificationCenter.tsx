@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { calcularNivel } from "@batcaverna/utils";
 import { fetchWithAuth } from "@/stores/auth-store";
 
 interface NotificacaoItem {
@@ -22,13 +21,6 @@ export function NotificationCenter({ align = "auto" }: Props) {
   const [aberto, setAberto] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
-  const [toastAtivo, setToastAtivo] = useState<{
-    titulo: string;
-    mensagem: string;
-    tipo: string;
-    xpGanho?: number;
-    xpTotal?: number;
-  } | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -82,40 +74,18 @@ export function NotificationCenter({ align = "auto" }: Props) {
     return () => document.removeEventListener("mousedown", handleClickFora);
   }, []);
 
-  // Escutar eventos de XP ganho e level-up disparados na aplicação
+  // Ao ganhar XP ou subir de nível, atualiza a lista de notificações no sino
   useEffect(() => {
-    const handleXpGanho = (e: CustomEvent<{ xp: number; totalXp: number; motivo: string }>) => {
-      const { xp, totalXp, motivo } = e.detail;
-      setToastAtivo({
-        tipo: "xp",
-        titulo: `+${xp} XP Conquistado! ⚡`,
-        mensagem: motivo || "Você acertou uma questão e ganhou experiência de combate!",
-        xpGanho: xp,
-        xpTotal: totalXp,
-      });
-
-      setTimeout(() => setToastAtivo(null), 4500);
+    const handleAtualizacao = () => {
       carregarNotificacoes();
     };
 
-    const handleLevelUp = (e: CustomEvent<{ novoNivel: number; titulo: string }>) => {
-      const { novoNivel, titulo } = e.detail;
-      setToastAtivo({
-        tipo: "level_up",
-        titulo: `🎉 SUBIDA DE NÍVEL: Nível ${novoNivel}!`,
-        mensagem: `Você foi promovido a "${titulo}". Continue sua jornada na BatCaverna!`,
-      });
-
-      setTimeout(() => setToastAtivo(null), 6000);
-      carregarNotificacoes();
-    };
-
-    window.addEventListener("batcaverna_xp_ganho" as any, handleXpGanho);
-    window.addEventListener("batcaverna_level_up" as any, handleLevelUp);
+    window.addEventListener("batcaverna_xp_ganho" as any, handleAtualizacao);
+    window.addEventListener("batcaverna_level_up" as any, handleAtualizacao);
 
     return () => {
-      window.removeEventListener("batcaverna_xp_ganho" as any, handleXpGanho);
-      window.removeEventListener("batcaverna_level_up" as any, handleLevelUp);
+      window.removeEventListener("batcaverna_xp_ganho" as any, handleAtualizacao);
+      window.removeEventListener("batcaverna_level_up" as any, handleAtualizacao);
     };
   }, []);
 
@@ -279,49 +249,6 @@ export function NotificationCenter({ align = "auto" }: Props) {
                 </div>
               ))
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ═══ TOAST FLUTUANTE DE XP / LEVEL UP ═══ */}
-      {toastAtivo && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-bat-bg-card border-2 border-bat-gold-400/60 rounded-2xl p-4 shadow-[0_0_30px_rgba(245,197,24,0.3)] animate-in slide-in-from-bottom-5">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">
-              {toastAtivo.tipo === "level_up" ? "🏆" : "⚡"}
-            </span>
-            <div className="flex-1">
-              <h4 className="text-sm font-bold text-bat-gold-400">{toastAtivo.titulo}</h4>
-              <p className="text-xs text-bat-text-secondary mt-1">{toastAtivo.mensagem}</p>
-
-              {toastAtivo.xpTotal !== undefined && (
-                <div className="mt-2.5">
-                  {(() => {
-                    const info = calcularNivel(toastAtivo.xpTotal);
-                    return (
-                      <div>
-                        <div className="flex justify-between text-[10px] text-bat-text-muted mb-1">
-                          <span>Progresso Nv. {info.nivel}</span>
-                          <span>{info.xp_atual_no_nivel} / {info.xp_necessario_proximo} XP</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-bat-bg-primary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-bat-gold-400 to-amber-300 rounded-full transition-all duration-700"
-                            style={{ width: `${info.progresso_percentual}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => setToastAtivo(null)}
-              className="text-bat-text-muted hover:text-bat-text text-xs cursor-pointer"
-            >
-              ✕
-            </button>
           </div>
         </div>
       )}

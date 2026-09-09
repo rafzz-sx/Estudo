@@ -292,8 +292,8 @@ function BancoDeQuestoes() {
         <div className="flex items-center justify-between">
           <h2 className="heading text-lg text-bat-text">Filtros</h2>
           {total > 0 && (
-            <span className="rounded-lg bg-bat-bg-secondary px-2 py-0.5 text-xs text-bat-text-muted">
-              {total.toLocaleString("pt-BR")}
+            <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-0.5 text-xs font-medium text-bat-gold-400">
+              {total >= 2000 ? "+2 mil questões" : `${total.toLocaleString("pt-BR")} questões`}
             </span>
           )}
         </div>
@@ -478,7 +478,7 @@ function BancoDeQuestoes() {
                 <div className="mb-1.5 flex items-center justify-between text-[11px] text-bat-text-muted">
                   <span>
                     Questão {(pagina - 1) * 10 + indice + 1} de{" "}
-                    {total.toLocaleString("pt-BR")}
+                    {total >= 2000 ? "+2 mil" : total.toLocaleString("pt-BR")}
                   </span>
                   {sessao.respondidas > 0 && (
                     <span>

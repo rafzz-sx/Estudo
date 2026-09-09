@@ -78,14 +78,15 @@ interface Painel {
 }
 
 const PRINCIPAIS_CONCURSOS = [
-  { sigla: "EEAR", emoji: "✈️", nome: "Aeronáutica", cor: "#0284c7" },
-  { sigla: "ESA", emoji: "⭐", nome: "Exército", cor: "#16a34a" },
-  { sigla: "EPCAR", emoji: "🛩️", nome: "Cadetes do Ar", cor: "#3b82f6" },
-  { sigla: "ESPCEX", emoji: "🎖️", nome: "EsPCEx", cor: "#b45309" },
-  { sigla: "EAM", emoji: "⚓", nome: "Marinha", cor: "#2563eb" },
-  { sigla: "CN", emoji: "🚢", nome: "Colégio Naval", cor: "#0d9488" },
-  { sigla: "EFOMM", emoji: "🌊", nome: "Marinha Mercante", cor: "#0891b2" },
-  { sigla: "ENEM", emoji: "📚", nome: "Exame Nacional", cor: "#eab308" },
+  { sigla: "EEAR", emoji: "✈️", nome: "Aeronáutica", cor: "#0284c7", img: "/images/concursos/eear.jpg" },
+  { sigla: "ESA", emoji: "⭐", nome: "Exército", cor: "#16a34a", img: "/images/concursos/esa.jpg" },
+  { sigla: "EPCAR", emoji: "🛩️", nome: "Cadetes do Ar", cor: "#3b82f6", img: "/images/concursos/epcar.jpg" },
+  { sigla: "ESPCEX", emoji: "🎖️", nome: "EsPCEx", cor: "#b45309", img: "/images/concursos/espcex.jpg" },
+  { sigla: "EAM", emoji: "⚓", nome: "Marinha", cor: "#2563eb", img: "/images/concursos/eam.jpg" },
+  { sigla: "CN", emoji: "🚢", nome: "Colégio Naval", cor: "#0d9488", img: "/images/concursos/cn.jpg" },
+  { sigla: "EFOMM", emoji: "🌊", nome: "Marinha Mercante", cor: "#0891b2", img: "/images/concursos/efomm.jpg" },
+  { sigla: "IME", emoji: "🔬", nome: "Engenharia Militar", cor: "#15803d", img: "/images/concursos/ime.jpg" },
+  { sigla: "ENEM", emoji: "📚", nome: "Exame Nacional", cor: "#eab308", img: "/images/concursos/enem.jpg" },
 ];
 
 const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
@@ -118,6 +119,8 @@ export default function DashboardPage() {
   const [painel, setPainel] = useState<Painel | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [modalAlvoAberto, setModalAlvoAberto] = useState(false);
+  const [trocandoAlvo, setTrocandoAlvo] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -133,6 +136,25 @@ export default function DashboardPage() {
       setCarregando(false);
     }
   }, []);
+
+  const selecionarConcursoAlvo = async (sigla: string) => {
+    setTrocandoAlvo(true);
+    try {
+      const res = await fetchWithAuth("/api/usuarios/me/concursos-favoritos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ concursos: [sigla] }),
+      });
+      if (res.ok) {
+        setModalAlvoAberto(false);
+        carregar();
+      }
+    } catch {
+      // Ignora erro
+    } finally {
+      setTrocandoAlvo(false);
+    }
+  };
 
   useEffect(() => {
     carregar();
@@ -354,13 +376,24 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <Link
-              href={`/concursos/${concurso.sigla}/trilha`}
-              className="btn-primary px-6 py-3 text-xs sm:text-sm font-bold no-underline whitespace-nowrap self-start sm:self-auto flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(245,197,24,0.2)]"
-            >
-              <span>Acessar Trilha Oficial</span>
-              <span>🚀</span>
-            </Link>
+            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setModalAlvoAberto(true)}
+                className="cursor-pointer rounded-xl border border-white/20 bg-black/40 hover:bg-black/60 px-4 py-2.5 text-xs font-bold text-bat-text-secondary hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all flex items-center gap-1.5"
+                title="Mudar o concurso foco para remodelar seu plano de estudos"
+              >
+                <span>🎯</span>
+                <span>Trocar Alvo</span>
+              </button>
+              <Link
+                href={`/concursos/${concurso.sigla.toLowerCase()}/trilha`}
+                className="btn-primary px-5 py-2.5 text-xs font-bold no-underline whitespace-nowrap flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(245,197,24,0.2)]"
+              >
+                <span>Acessar Trilha Oficial</span>
+                <span>🚀</span>
+              </Link>
+            </div>
           </div>
         </div>
       ) : (
@@ -373,7 +406,7 @@ export default function DashboardPage() {
                 <span>Defina seu Alvo de Preparação</span>
               </h2>
               <p className="text-xs text-bat-text-secondary mt-0.5">
-                A BatCaverna organiza seu plano em torno do seu concurso. Escolha seu alvo abaixo para abrir a trilha:
+                A BatCaverna organiza seu plano em torno do seu concurso. Escolha seu alvo abaixo para moldar a plataforma:
               </p>
             </div>
             <Link
@@ -384,19 +417,21 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
             {PRINCIPAIS_CONCURSOS.map((c) => (
-              <Link
+              <button
                 key={c.sigla}
-                href={`/concursos/${c.sigla}/trilha`}
-                className="p-3.5 rounded-xl bg-bat-bg-secondary/70 border border-bat-border hover:border-bat-gold-400/50 hover:bg-bat-gold-400/10 transition-all no-underline flex flex-col items-center text-center gap-1 group cursor-pointer"
+                type="button"
+                onClick={() => selecionarConcursoAlvo(c.sigla)}
+                disabled={trocandoAlvo}
+                className="p-3.5 rounded-xl bg-bat-bg-secondary/70 border border-bat-border hover:border-bat-gold-400/50 hover:bg-bat-gold-400/10 transition-all flex flex-col items-center text-center gap-1 group cursor-pointer"
               >
                 <span className="text-2xl group-hover:scale-110 transition-transform">{c.emoji}</span>
                 <span className="heading text-sm font-extrabold text-bat-text group-hover:text-bat-gold-400 transition-colors">
                   {c.sigla}
                 </span>
                 <span className="text-[10px] text-bat-text-muted">{c.nome}</span>
-              </Link>
+              </button>
             ))}
           </div>
         </div>
@@ -597,6 +632,92 @@ export default function DashboardPage() {
         <section className="space-y-3">
           <ProjecaoNota dados={projecao} />
         </section>
+      )}
+
+      {/* ═══════════ MODAL PARA O ALUNO ESCOLHER SEU CONCURSO ALVO ═══════════ */}
+      {modalAlvoAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-3xl rounded-3xl border border-bat-border bg-bat-bg-card p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-bat-gold-400 uppercase tracking-wider mb-1">
+                  <span>🎯</span>
+                  <span>Personalização da BatCaverna</span>
+                </div>
+                <h3 className="heading text-xl sm:text-2xl font-extrabold text-bat-text">
+                  Qual é o seu Concurso Alvo?
+                </h3>
+                <p className="text-xs sm:text-sm text-bat-text-secondary mt-1">
+                  A caverna se molda inteira (radar de fraquezas, contagem regressiva, simulados e trilha) para focar na sua aprovação.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalAlvoAberto(false)}
+                className="cursor-pointer rounded-full p-2 text-bat-text-muted hover:text-white hover:bg-white/10 transition-colors text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-h-[60vh] overflow-y-auto pr-1">
+              {PRINCIPAIS_CONCURSOS.map((c) => {
+                const ativo = concurso?.sigla.toUpperCase() === c.sigla.toUpperCase();
+                return (
+                  <button
+                    key={c.sigla}
+                    type="button"
+                    onClick={() => selecionarConcursoAlvo(c.sigla)}
+                    disabled={trocandoAlvo}
+                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[120px] ${
+                      ativo
+                        ? "border-bat-gold-400 bg-bat-gold-400/15 shadow-[0_0_20px_rgba(245,197,24,0.3)]"
+                        : "border-bat-border bg-bat-bg-secondary/80 hover:border-bat-gold-400/50 hover:bg-bat-gold-400/10"
+                    }`}
+                  >
+                    <div
+                      className="absolute inset-0 bg-cover bg-center opacity-25 group-hover:opacity-40 transition-opacity"
+                      style={{ backgroundImage: `url(${c.img})` }}
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, rgba(11,11,15,0.7) 0%, rgba(18,18,24,0.85) 100%)",
+                      }}
+                    />
+
+                    <div className="relative z-10 flex items-start justify-between w-full">
+                      <span className="text-2xl drop-shadow-md">{c.emoji}</span>
+                      {ativo ? (
+                        <span className="rounded-full bg-bat-gold-400 text-black text-[9px] font-extrabold px-2 py-0.5 uppercase tracking-wider shadow-sm">
+                          ✓ Alvo Atual
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-bat-text-muted group-hover:text-bat-gold-400 font-bold">
+                          Selecionar →
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="relative z-10 mt-3">
+                      <h4 className="heading text-base font-extrabold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                        {c.sigla}
+                      </h4>
+                      <p className="text-[11px] text-bat-text-secondary">{c.nome}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {trocandoAlvo && (
+              <p className="text-xs text-center text-bat-gold-400 font-semibold animate-pulse">
+                🦇 Moldando a BatCaverna para o seu novo alvo...
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -35,7 +35,8 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        total_questoes: totalQuestoes ?? 0,
+        total_questoes: (totalQuestoes && totalQuestoes >= 2000) ? '+2 mil' : (totalQuestoes ?? 0),
+        total_questoes_exato: totalQuestoes ?? 0,
         total_concursos: totalConcursos ?? 0,
         total_materias: totalMaterias ?? 0,
         anos_cobertos: anosDistintos,

@@ -32,3 +32,6 @@ yarn-error.log*
 dist/
 web-build/
 *.tsbuildinfo
+
+# Temporary extraction data
+BANCO DE QUESTOES/

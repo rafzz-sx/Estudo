@@ -8,6 +8,7 @@ import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { useStudySessionStore } from "@/stores/study-session-store";
 import { StudySessionBadge, StudySessionTracker } from "@/components/StudySessionWidget";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { XpToast } from "@/components/XpToast";
 import { DynamicIsland } from "@/components/DynamicIsland";
 import { usePlayerStore } from "@/stores/player-store";
 import { ConviteFeedback } from "@/components/ConviteFeedback";
@@ -39,7 +40,8 @@ const navLinksBase: NavLink[] = [
   { href: "/musica", label: "Música", icon: "🎧" },
   { href: "/tickets", label: "Suporte", icon: "🎫" },
   { href: "/feedback", label: "Feedback", icon: "⭐" },
-  { href: "/perfil", label: "Perfil", icon: "👤" },
+  { href: "/perfil", label: "Meu Perfil", icon: "👤" },
+  { href: "/perfil?tab=config", label: "Configurações", icon: "⚙️" },
 ];
 
 const adminLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
@@ -72,7 +74,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState<string>("");
   const revisoesPendentes = useRevisoesPendentes();
+
+  // Sincronizar tab ativa da URL para destacar Perfil vs Configurações
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setCurrentTab(params.get("tab") || "");
+    }
+  }, [pathname]);
 
   // Dados REAIS do auth store
   const storeUser = useAuthStore((state) => state.user);
@@ -127,18 +138,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Convite de feedback após 1h e 3h de uso acumulado */}
       <ConviteFeedback />
 
-      {/* Motor da sessão de estudo: inicia a sessão, faz o tick de 1 s e
-          manda o heartbeat de 30 s. Este componente existia, exportado, e
-          NÃO ERA MONTADO EM LUGAR NENHUM — só o visor (StudySessionBadge)
-          estava ligado. Sem ele o cronômetro ficava em 00:00:00, nenhum
-          segundo de estudo era gravado, o XP por tempo nunca era concedido
-          e o ranking por tempo de estudo (o tipo padrão da tela) ficava
-          vazio para todo mundo.
-
-          Só faz sentido montá-lo aqui DEPOIS de o AppShell ter virado
-          instância única (route group `(privado)`): antes, ele remontaria a
-          cada navegação e o cronômetro zeraria junto. */}
+      {/* Motor da sessão de estudo */}
       <StudySessionTracker />
+
+      {/* Toast flutuante de XP e Level Up (via React Portal para nunca ser cortado pelo header ou filtros) */}
+      <XpToast />
 
       {/* ═══ SIDEBAR (Desktop) ═══ */}
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
@@ -161,11 +165,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Nav links */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {navLinks.map((link) => {
-            const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+            const isConfig = link.href.includes("tab=config");
+            const isPerfil = link.href === "/perfil";
+            const isActive = isConfig
+              ? pathname === "/perfil" && currentTab === "config"
+              : isPerfil
+              ? pathname === "/perfil" && currentTab !== "config"
+              : (pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/")));
             return (
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={() => {
+                  if (isConfig) setCurrentTab("config");
+                  else if (isPerfil) setCurrentTab("");
+                }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
                   isActive
                     ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 glow-gold font-bold"
@@ -186,8 +200,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Usuário no rodapé */}
         <div className="px-4 py-4 border-t border-bat-border">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden flex-shrink-0">
+          <Link
+            href="/perfil"
+            onClick={() => setCurrentTab("")}
+            className="flex items-center gap-3 p-2 -m-2 rounded-xl hover:bg-bat-bg-elevated transition-all group cursor-pointer"
+            title="Acessar Meu Perfil & Configurações"
+          >
+            <div className="w-9 h-9 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 group-hover:border-bat-gold-400 flex items-center justify-center text-bat-gold-400 text-sm font-bold overflow-hidden flex-shrink-0 transition-colors">
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -195,11 +214,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-bat-text text-sm font-medium truncate">{userApelido}</p>
+              <p className="text-bat-text text-sm font-medium truncate group-hover:text-bat-gold-400 transition-colors">{userApelido}</p>
               <p className="text-bat-gold-400 text-xs font-semibold">Nível {userNivel}</p>
             </div>
             {userRole === "admin" && <span className="badge-admin">ADMIN</span>}
-          </div>
+          </Link>
           <button
             onClick={handleLogout}
             className="mt-3 w-full py-2 rounded-lg text-xs font-medium text-bat-text-muted hover:text-bat-error hover:bg-bat-error/10 border border-transparent hover:border-bat-error/20 transition-all cursor-pointer"
@@ -227,13 +246,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 shrink-0">
             <NotificationCenter align="right" />
             <StudySessionBadge />
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden shrink-0">
+            <Link
+              href="/perfil"
+              onClick={() => setCurrentTab("")}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 hover:border-bat-gold-400 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden shrink-0 transition-all active:scale-95 cursor-pointer"
+              title="Meu Perfil e Configurações"
+              aria-label="Meu Perfil e Configurações"
+            >
               {userAvatar ? (
                 <img src={userAvatar} alt="" className="w-full h-full object-cover" />
               ) : (
                 userApelido[0]?.toUpperCase()
               )}
-            </div>
+            </Link>
           </div>
         </div>
       </header>
@@ -245,7 +270,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             className="lg:hidden fixed inset-0 bg-black/60 z-30"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="lg:hidden fixed inset-y-0 left-0 w-72 bg-bat-bg-card border-r border-bat-border z-40 flex flex-col animate-in slide-in-from-left">
+          <aside className="lg:hidden fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-bat-bg-card border-r border-bat-border z-40 flex flex-col h-full animate-in slide-in-from-left">
             <div className="flex items-center justify-between px-5 py-5 border-b border-bat-border">
               <BatBrand iconSize={32} textSize="text-lg" />
               <button
@@ -263,14 +288,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <StudySessionBadge />
             </div>
 
-            <nav className="flex-1 py-4 px-3 space-y-1">
+            <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overscroll-contain">
               {navLinks.map((link) => {
-                const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+                const isConfig = link.href.includes("tab=config");
+                const isPerfil = link.href === "/perfil";
+                const isActive = isConfig
+                  ? pathname === "/perfil" && currentTab === "config"
+                  : isPerfil
+                  ? pathname === "/perfil" && currentTab !== "config"
+                  : (pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/")));
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={() => {
+                      if (isConfig) setCurrentTab("config");
+                      else if (isPerfil) setCurrentTab("");
+                      setSidebarOpen(false);
+                    }}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
                       isActive
                         ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 font-bold"
@@ -288,11 +323,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </nav>
-            {/* Logout no menu mobile */}
-            <div className="px-4 py-4 border-t border-bat-border">
+            {/* Usuário e Logout no menu mobile */}
+            <div className="px-4 py-3 border-t border-bat-border">
+              <Link
+                href="/perfil"
+                onClick={() => {
+                  setCurrentTab("");
+                  setSidebarOpen(false);
+                }}
+                className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-bat-bg-elevated transition-all group"
+              >
+                <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/30 flex items-center justify-center text-bat-gold-400 text-xs font-bold overflow-hidden flex-shrink-0">
+                  {userAvatar ? (
+                    <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    userApelido[0]?.toUpperCase()
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-bat-text text-xs font-medium truncate group-hover:text-bat-gold-400">{userApelido}</p>
+                  <p className="text-bat-gold-400 text-[11px] font-semibold">Nível {userNivel}</p>
+                </div>
+                {userRole === "admin" && <span className="badge-admin text-[10px]">ADMIN</span>}
+              </Link>
               <button
                 onClick={handleLogout}
-                className="w-full py-2.5 rounded-xl text-sm font-medium text-bat-text-muted hover:text-bat-error hover:bg-bat-error/10 transition-all cursor-pointer"
+                className="mt-2.5 w-full py-2 rounded-xl text-xs font-medium text-bat-text-muted hover:text-bat-error hover:bg-bat-error/10 transition-all cursor-pointer border border-transparent hover:border-bat-error/20"
               >
                 Sair da conta
               </button>

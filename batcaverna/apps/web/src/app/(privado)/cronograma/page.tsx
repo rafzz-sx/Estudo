@@ -73,20 +73,22 @@ export default function CronogramaPage() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [rPlanos, rConcursos] = await Promise.all([
+      const [rPlanos, rConcursos, rFavoritos] = await Promise.all([
         fetchWithAuth("/api/planos"),
         fetchWithAuth("/api/concursos"),
+        fetchWithAuth("/api/usuarios/me/concursos-favoritos"),
       ]);
       const jPlanos = await rPlanos.json();
       const jConcursos = await rConcursos.json();
+      const jFavoritos = rFavoritos.ok ? await rFavoritos.json() : null;
 
       if (jPlanos.success) setPlanos(jPlanos.data);
-      if (jConcursos.success) {
-        const comQuestoes = jConcursos.data.filter(
-          (c: ConcursoOpcao) => c.total_questoes > 0
-        );
-        setConcursos(comQuestoes);
-        setForm((f) => ({ ...f, concurso: f.concurso || comQuestoes[0]?.sigla || "" }));
+      if (jConcursos.success && Array.isArray(jConcursos.data)) {
+        setConcursos(jConcursos.data);
+        const alvo = jFavoritos?.success && Array.isArray(jFavoritos.data) && jFavoritos.data.length > 0
+          ? jFavoritos.data[0]
+          : null;
+        setForm((f) => ({ ...f, concurso: f.concurso || alvo || jConcursos.data[0]?.sigla || "" }));
       }
     } catch {
       /* estado vazio cobre */

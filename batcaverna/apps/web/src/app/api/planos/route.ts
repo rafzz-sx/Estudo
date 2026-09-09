@@ -179,23 +179,21 @@ export async function POST(req: NextRequest) {
       : [1, 2, 3, 4, 5];
 
     // ─── Peso das matérias = frequência real na prova ────────
-    const { data: vinculos } = await supabase
+    let { data: vinculos } = await supabase
       .from('concurso_materias')
       .select('materias (id, nome, icone_emoji)')
       .eq('concurso_id', concurso.id);
 
-    const materias = (vinculos ?? [])
+    let materias = (vinculos ?? [])
       .map((v: any) => v.materias)
       .filter(Boolean);
 
     if (!materias.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Este concurso ainda não tem matérias com questões cadastradas.',
-        },
-        { status: 400 }
-      );
+      const { data: defaultMats } = await supabase
+        .from('materias')
+        .select('id, nome, icone_emoji')
+        .in('nome', ['Português', 'Matemática', 'Física', 'Química', 'História', 'Geografia', 'Inglês', 'Redação']);
+      materias = defaultMats ?? [];
     }
 
     const contagem = await contarPorId(
@@ -205,13 +203,22 @@ export async function POST(req: NextRequest) {
       { concurso_id: concurso.id }
     );
 
-    const comPeso = materias
-      .map((m: any) => ({ ...m, peso: contagem[m.id] ?? 0 }))
-      .filter((m: any) => m.peso > 0);
+    const totalQuestoesNoConcurso = Object.values(contagem).reduce((a, b) => a + b, 0);
+
+    // Distribuição balanceada: se há questões no banco, cada matéria tem peso proporcional à frequência
+    // Matérias do edital que não têm questões cadastradas (ex: Redação) recebem peso base para não serem excluídas
+    const pesoMinimo = totalQuestoesNoConcurso > 0
+      ? Math.max(1, Math.round(totalQuestoesNoConcurso / (materias.length * 3)))
+      : 1;
+
+    const comPeso = materias.map((m: any) => ({
+      ...m,
+      peso: (contagem[m.id] && contagem[m.id] > 0) ? contagem[m.id] : pesoMinimo,
+    }));
 
     if (!comPeso.length) {
       return NextResponse.json(
-        { success: false, error: 'Não há questões cadastradas para este concurso.' },
+        { success: false, error: 'Não foi possível mapear as matérias do concurso.' },
         { status: 400 }
       );
     }

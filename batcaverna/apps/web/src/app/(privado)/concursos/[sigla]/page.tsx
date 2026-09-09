@@ -76,16 +76,29 @@ export default function ConcursoPage() {
   const [concurso, setConcurso] = useState<ConcursoDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [gerandoSimulado, setGerandoSimulado] = useState(false);
+  const [isAlvo, setIsAlvo] = useState(false);
+  const [salvandoAlvo, setSalvandoAlvo] = useState(false);
+  const [msgAlvo, setMsgAlvo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     const carregar = async () => {
       setCarregando(true);
       try {
-        const res = await fetchWithAuth(`/api/concursos/${sigla}`);
-        const json = await res.json();
+        const [resConcurso, resFav] = await Promise.all([
+          fetchWithAuth(`/api/concursos/${sigla}`),
+          fetchWithAuth("/api/usuarios/me/concursos-favoritos"),
+        ]);
+        const json = await resConcurso.json();
         if (json.success) setConcurso(json.data);
         else setErro(json.error ?? "Concurso não encontrado");
+
+        if (resFav.ok) {
+          const jsonFav = await resFav.json();
+          if (jsonFav?.success && Array.isArray(jsonFav.data) && jsonFav.data.length > 0) {
+            setIsAlvo(jsonFav.data[0]?.toUpperCase() === sigla.toUpperCase());
+          }
+        }
       } catch {
         setErro("Não consegui carregar este concurso.");
       } finally {
@@ -94,6 +107,34 @@ export default function ConcursoPage() {
     };
     if (sigla) carregar();
   }, [sigla]);
+
+  const definirComoAlvo = async () => {
+    if (!concurso) return;
+    setSalvandoAlvo(true);
+    try {
+      // Buscar favoritos atuais e mover este para o topo
+      const resAtuais = await fetchWithAuth("/api/usuarios/me/concursos-favoritos");
+      const jsonAtuais = await resAtuais.json();
+      const atuais: string[] = jsonAtuais?.success && Array.isArray(jsonAtuais.data) ? jsonAtuais.data : [];
+      const novaLista = [concurso.sigla, ...atuais.filter((s) => s.toUpperCase() !== concurso.sigla.toUpperCase())];
+
+      const res = await fetchWithAuth("/api/usuarios/me/concursos-favoritos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ concursos: novaLista }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setIsAlvo(true);
+        setMsgAlvo("🎯 Este concurso agora é seu Alvo Principal! A caverna inteira se adaptou para sua aprovação.");
+        setTimeout(() => setMsgAlvo(null), 6000);
+      }
+    } catch {
+      // Ignora erro de rede
+    } finally {
+      setSalvandoAlvo(false);
+    }
+  };
 
   /**
    * Simulado rápido já no contexto do concurso em que o aluno está.
@@ -230,13 +271,13 @@ export default function ConcursoPage() {
     <div>
       {/* ═══════════ CABEÇALHO ═══════════ */}
       <header className="relative mb-8 overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card shadow-2xl">
-        {concurso.imagem_fundo_url && (
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-80"
-            style={{ backgroundImage: `url(${concurso.imagem_fundo_url})` }}
-          />
-        )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/90 via-black/55 to-transparent" />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-80"
+          style={{
+            backgroundImage: `url(${concurso.imagem_fundo_url || `/images/concursos/${concurso.sigla.toLowerCase()}.jpg`})`,
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/40" />
 
         <div className="relative p-6 sm:p-8">
           <Link
@@ -246,6 +287,21 @@ export default function ConcursoPage() {
             ← Voltar a todos os concursos
           </Link>
 
+          {msgAlvo && (
+            <div className="mb-4 flex items-center justify-between rounded-2xl border border-bat-gold-400/50 bg-bat-gold-400/20 px-4 py-3 text-sm font-semibold text-bat-gold-400 shadow-xl animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <span>🦇</span>
+                <span>{msgAlvo}</span>
+              </div>
+              <button
+                onClick={() => setMsgAlvo(null)}
+                className="cursor-pointer text-xs text-bat-text-muted hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="mt-2 flex flex-col gap-5 sm:flex-row sm:items-center">
             <div
               className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border text-4xl shadow-xl backdrop-blur-md"
@@ -254,7 +310,7 @@ export default function ConcursoPage() {
               {concurso.emoji ?? "🎯"}
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="heading text-3xl font-bold text-bat-text sm:text-4xl">
                   {concurso.sigla}
@@ -269,6 +325,25 @@ export default function ConcursoPage() {
                 >
                   {NOME_FORCA[concurso.forca] ?? concurso.forca}
                 </span>
+
+                {/* Botão / Selo de Concurso Alvo Decidido pelo Aluno */}
+                {isAlvo ? (
+                  <span className="rounded-full border border-bat-gold-400/80 bg-bat-gold-400/25 px-3.5 py-1 text-xs font-extrabold uppercase tracking-wider text-bat-gold-400 shadow-[0_0_15px_rgba(245,197,24,0.35)] flex items-center gap-1.5">
+                    <span>⭐</span>
+                    <span>Seu Alvo Principal</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={definirComoAlvo}
+                    disabled={salvandoAlvo}
+                    className="cursor-pointer rounded-full border border-bat-gold-400/50 bg-bat-gold-400/15 hover:bg-bat-gold-400 hover:text-black px-3.5 py-1 text-xs font-bold text-bat-gold-400 transition-all shadow-md flex items-center gap-1.5"
+                    title="Configurar este concurso como o foco principal da sua preparação"
+                  >
+                    <span>🎯</span>
+                    <span>{salvandoAlvo ? "Definindo..." : "Definir como meu Concurso Alvo"}</span>
+                  </button>
+                )}
               </div>
               <p className="mt-1 max-w-xl text-base text-bat-text-secondary">
                 {concurso.nome}

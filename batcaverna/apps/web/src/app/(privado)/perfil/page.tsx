@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
@@ -39,9 +40,19 @@ const TODOS_CONCURSOS = [
 
 type TabPerfil = "visao_geral" | "amigos" | "badges" | "config";
 
-export default function PerfilPage() {
+function PerfilConteudo() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as TabPerfil | null;
   const [visible, setVisible] = useState(false);
-  const [tab, setTab] = useState<TabPerfil>("visao_geral");
+  const [tab, setTab] = useState<TabPerfil>(
+    tabParam === "config" || tabParam === "amigos" || tabParam === "badges" ? tabParam : "visao_geral"
+  );
+
+  useEffect(() => {
+    if (tabParam && (tabParam === "config" || tabParam === "amigos" || tabParam === "badges" || tabParam === "visao_geral")) {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
   const [editandoBio, setEditandoBio] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [msgFeedback, setMsgFeedback] = useState<string | null>(null);
@@ -1001,5 +1012,13 @@ export default function PerfilPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PerfilPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen p-6 text-bat-text-muted flex items-center justify-center">Carregando perfil...</div>}>
+      <PerfilConteudo />
+    </Suspense>
   );
 }

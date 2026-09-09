@@ -354,10 +354,14 @@ function AuthForm() {
       <AuthSpotlight />
 
       {/* Logo */}
-      <div className="relative z-10">
-        <Link href="/" className="mb-8 no-underline inline-block">
+      <div className="relative z-10 text-center mb-6">
+        <Link href="/" className="no-underline inline-block">
           <BatBrand iconSize={44} textSize="text-2xl sm:text-3xl" />
         </Link>
+        <div className="mt-2.5 flex items-center justify-center gap-1.5 text-xs text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-3 py-1 rounded-full w-fit mx-auto font-semibold shadow-sm">
+          <span>🎯</span>
+          <span>+2 mil questões oficiais</span>
+        </div>
       </div>
 
       {/* Card de autenticação */}

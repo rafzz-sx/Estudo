@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { BatLogo, BatBrand } from "@/components/BatLogo";
+import { useAuthStore } from "@/stores/auth-store";
 
 // ─── Dados dos 9 concursos com suporte a fotos reais de banner ────────
 const concursos = [
@@ -218,7 +219,7 @@ function SpotlightEffect() {
 
 // ─── Números reais do banco, exibidos na home ────────────────
 interface EstatisticasPublicas {
-  total_questoes: number;
+  total_questoes: number | string;
   total_concursos: number;
   total_materias: number;
   anos_cobertos: number;
@@ -237,6 +238,10 @@ function NumeroDestaque({ valor, rotulo }: { valor: string; rotulo: string }) {
 
 // ─── Página Principal (Landing Page) ─────────────────────────
 export default function LandingPage() {
+  const user = useAuthStore((s) => s.user);
+  const [montado, setMontado] = useState(false);
+  const estaLogado = montado && Boolean(user);
+
   const [heroVisible, setHeroVisible] = useState(false);
   const [estatisticas, setEstatisticas] = useState<EstatisticasPublicas | null>(
     null
@@ -245,6 +250,7 @@ export default function LandingPage() {
   const [depoimentoAtual, setDepoimentoAtual] = useState(0);
 
   useEffect(() => {
+    setMontado(true);
     setTimeout(() => setHeroVisible(true), 100);
 
     // Rota pública: a home não exige login.
@@ -315,15 +321,26 @@ export default function LandingPage() {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/auth" className="btn-primary text-lg px-10 py-4 inline-block no-underline">
-              Entrar na Caverna
-            </Link>
-            <Link
-              href="/auth?tab=cadastro"
-              className="btn-secondary text-lg px-10 py-4 inline-block no-underline"
-            >
-              Criar minha conta
-            </Link>
+            {estaLogado ? (
+              <Link
+                href="/dashboard"
+                className="btn-primary text-lg px-10 py-4 inline-block no-underline shadow-[0_0_20px_rgba(245,197,24,0.35)]"
+              >
+                Ir para a BatCaverna ⚡
+              </Link>
+            ) : (
+              <>
+                <Link href="/auth" className="btn-primary text-lg px-10 py-4 inline-block no-underline">
+                  Entrar na Caverna
+                </Link>
+                <Link
+                  href="/auth?tab=cadastro"
+                  className="btn-secondary text-lg px-10 py-4 inline-block no-underline"
+                >
+                  Criar minha conta
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Indicador de scroll */}
@@ -573,12 +590,12 @@ export default function LandingPage() {
           {estatisticas && (
             <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4">
               <NumeroDestaque
-                valor={estatisticas.total_questoes.toLocaleString("pt-BR")}
+                valor={typeof estatisticas.total_questoes === "string" ? estatisticas.total_questoes : estatisticas.total_questoes >= 2000 ? "+2 mil" : estatisticas.total_questoes.toLocaleString("pt-BR")}
                 rotulo="questões oficiais"
               />
               <NumeroDestaque
                 valor={String(estatisticas.total_concursos)}
-                rotulo="concursos"
+                rotulo="concursos atendidos"
               />
               <NumeroDestaque
                 valor={String(estatisticas.total_materias)}
@@ -586,7 +603,7 @@ export default function LandingPage() {
               />
               <NumeroDestaque
                 valor={String(estatisticas.anos_cobertos)}
-                rotulo="anos de prova"
+                rotulo="anos de provas reais"
               />
             </div>
           )}
@@ -600,14 +617,43 @@ export default function LandingPage() {
             <BatLogo size={52} glow />
           </div>
           <h2 className="heading text-3xl sm:text-4xl mb-4 text-bat-text font-bold">
-            Pronto para entrar na <span className="text-bat-gold-400 drop-shadow-[0_0_15px_rgba(245,197,24,0.4)]">Caverna</span>?
+            {estaLogado ? (
+              <>
+                Sua missão continua na{" "}
+                <span className="text-bat-gold-400 drop-shadow-[0_0_15px_rgba(245,197,24,0.4)]">
+                  Caverna
+                </span>
+              </>
+            ) : (
+              <>
+                Pronto para entrar na{" "}
+                <span className="text-bat-gold-400 drop-shadow-[0_0_15px_rgba(245,197,24,0.4)]">
+                  Caverna
+                </span>
+                ?
+              </>
+            )}
           </h2>
           <p className="text-bat-text-secondary text-lg mb-8 max-w-xl mx-auto">
-            Crie sua conta gratuitamente e comece a dominar os concursos militares hoje.
+            {estaLogado
+              ? "Acesse seu painel diário, resolva questões do seu concurso e acompanhe seu progresso."
+              : "Crie sua conta gratuitamente e comece a dominar os concursos militares hoje."}
           </p>
-          <Link href="/auth?tab=cadastro" className="btn-primary text-lg px-12 py-4 inline-block no-underline">
-            Criar minha conta grátis
-          </Link>
+          {estaLogado ? (
+            <Link
+              href="/dashboard"
+              className="btn-primary text-lg px-12 py-4 inline-block no-underline shadow-[0_0_20px_rgba(245,197,24,0.35)]"
+            >
+              Acessar Painel ⚡
+            </Link>
+          ) : (
+            <Link
+              href="/auth?tab=cadastro"
+              className="btn-primary text-lg px-12 py-4 inline-block no-underline"
+            >
+              Criar minha conta grátis
+            </Link>
+          )}
         </div>
       </section>
 
@@ -631,11 +677,19 @@ export default function LandingPage() {
             <div>
               <h4 className="heading text-sm text-bat-text-secondary uppercase tracking-wider mb-3">Plataforma</h4>
               <ul className="space-y-2 text-sm text-bat-text-muted">
-                <li><Link href="/auth" className="hover:text-bat-gold-400 transition-colors">Entrar</Link></li>
-                <li><Link href="/auth?tab=cadastro" className="hover:text-bat-gold-400 transition-colors">Criar conta</Link></li>
-                <li><Link href="/questoes" className="hover:text-bat-gold-400 transition-colors">Banco de Questões</Link></li>
-                <li><Link href="/simulado" className="hover:text-bat-gold-400 transition-colors">Simulados</Link></li>
-                <li><Link href="/ranking" className="hover:text-bat-gold-400 transition-colors">Ranking</Link></li>
+                {estaLogado ? (
+                  <>
+                    <li><Link href="/dashboard" className="hover:text-bat-gold-400 transition-colors">Plano de Hoje</Link></li>
+                    <li><Link href="/questoes" className="hover:text-bat-gold-400 transition-colors">Banco de Questões</Link></li>
+                    <li><Link href="/simulado" className="hover:text-bat-gold-400 transition-colors">Simulados</Link></li>
+                    <li><Link href="/ranking" className="hover:text-bat-gold-400 transition-colors">Ranking</Link></li>
+                  </>
+                ) : (
+                  <>
+                    <li><Link href="/auth" className="hover:text-bat-gold-400 transition-colors">Entrar</Link></li>
+                    <li><Link href="/auth?tab=cadastro" className="hover:text-bat-gold-400 transition-colors">Criar conta</Link></li>
+                  </>
+                )}
               </ul>
             </div>
 
