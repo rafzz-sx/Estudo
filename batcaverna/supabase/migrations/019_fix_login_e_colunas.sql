@@ -21,14 +21,5 @@ ALTER TABLE users
 -- Garante que nenhum usuário fique com ativo nulo
 UPDATE users SET ativo = TRUE WHERE ativo IS NULL;
 
--- 2. Redefine a senha do Admin (raf4biel.venafro@gmail.com) e de rafaelolavo28@gmail.com
--- para a senha temporária: Batcaverna123!
--- (Hash SHA-256 de Batcaverna123!: 7733a30edf8682c7ac947e607dd550aadde231e6d7fd4c100c7c862a3e9f939d)
-UPDATE users 
-SET senha_hash = '7733a30edf8682c7ac947e607dd550aadde231e6d7fd4c100c7c862a3e9f939d',
-    ativo = TRUE,
-    email_verified = TRUE
-WHERE email IN ('raf4biel.venafro@gmail.com', 'rafaelolavo28@gmail.com');
-
--- 3. Confirmação
-SELECT id, nome, email, role, ativo, atualizado_em FROM users;
+-- 2. Confirmação das colunas da tabela users
+SELECT id, nome, email, role, ativo, criado_em FROM users;
