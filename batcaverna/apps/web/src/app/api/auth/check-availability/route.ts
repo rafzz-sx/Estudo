@@ -65,11 +65,11 @@ export async function GET(req: NextRequest) {
     try {
       supabase = createServerSupabaseClient();
     } catch (clientErr) {
-      console.warn('Supabase client warning in check-availability:', clientErr);
+      console.error('Supabase client FAILED in check-availability:', clientErr);
       return NextResponse.json({
-        available: true,
-        message: '✓ Válido para cadastro!',
-      });
+        available: false,
+        error: 'Não foi possível verificar no momento. Tente novamente.',
+      }, { status: 503 });
     }
 
     const cleanValue = value.trim();
@@ -104,21 +104,26 @@ export async function GET(req: NextRequest) {
       }
 
       // Verificar duplicidade no banco
-      try {
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', emailLower)
-          .maybeSingle();
+      const { data: existingUser, error: emailErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', emailLower)
+        .maybeSingle();
 
-        if (existingUser) {
-          return NextResponse.json({
-            available: false,
-            error: 'Este e-mail já está cadastrado na plataforma.',
-          });
-        }
-      } catch (dbErr) {
-        console.warn('Database lookup error in check-availability email:', dbErr);
+      // Se houve erro na query (ex: RLS bloqueou), NÃO dizer que está disponível
+      if (emailErr) {
+        console.error('DB error checking email availability:', emailErr);
+        return NextResponse.json({
+          available: false,
+          error: 'Não foi possível verificar. Tente novamente.',
+        }, { status: 503 });
+      }
+
+      if (existingUser) {
+        return NextResponse.json({
+          available: false,
+          error: 'Este e-mail já está cadastrado na plataforma.',
+        });
       }
 
       return NextResponse.json({
@@ -138,21 +143,26 @@ export async function GET(req: NextRequest) {
       }
 
       // Verificar duplicidade no banco (case insensitive)
-      try {
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .ilike('apelido', cleanValue)
-          .maybeSingle();
+      const { data: existingApelido, error: apelidoErr } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('apelido', cleanValue)
+        .maybeSingle();
 
-        if (existingUser) {
-          return NextResponse.json({
-            available: false,
-            error: '⚠️ Este apelido já está em uso por outro soldado.',
-          });
-        }
-      } catch (dbErr) {
-        console.warn('Database lookup error in check-availability apelido:', dbErr);
+      // Se houve erro na query, NÃO dizer que está disponível
+      if (apelidoErr) {
+        console.error('DB error checking apelido availability:', apelidoErr);
+        return NextResponse.json({
+          available: false,
+          error: 'Não foi possível verificar. Tente novamente.',
+        }, { status: 503 });
+      }
+
+      if (existingApelido) {
+        return NextResponse.json({
+          available: false,
+          error: '⚠️ Este apelido já está em uso por outro soldado.',
+        });
       }
 
       return NextResponse.json({
@@ -166,10 +176,10 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   } catch (error: any) {
-    console.error('Error in check-availability:', error);
+    console.error('CRITICAL error in check-availability:', error);
     return NextResponse.json({
-      available: true,
-      message: '✓ Válido para cadastro!',
-    });
+      available: false,
+      error: 'Erro ao verificar disponibilidade. Tente novamente.',
+    }, { status: 500 });
   }
 }

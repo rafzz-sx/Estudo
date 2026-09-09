@@ -61,6 +61,12 @@ export default function PerfilPage() {
   const [categoriaEscrita, setCategoriaEscrita] = useState<string>("");
   const [ocultarRanking, setOcultarRanking] = useState(false);
 
+  // Redefinição de Senha
+  const [modalResetAberto, setModalResetAberto] = useState(false);
+  const [motivoReset, setMotivoReset] = useState("");
+  const [solicitandoReset, setSolicitandoReset] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
+
   // Informações de Versão do App
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
     versao_atual: "1.1.0",
@@ -341,6 +347,39 @@ export default function PerfilPage() {
     } finally {
       setSalvando(false);
       setTimeout(() => setMsgFeedback(null), 4000);
+    }
+  };
+
+  const handleSolicitarReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSolicitandoReset(true);
+    setResetFeedback(null);
+    try {
+      const res = await fetchWithAuth("/api/auth/solicitar-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: motivoReset }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setResetFeedback({
+          tipo: "ok",
+          msg: json.message || "Solicitação enviada com sucesso ao administrador!",
+        });
+        setMotivoReset("");
+      } else {
+        setResetFeedback({
+          tipo: "erro",
+          msg: json.error || "Erro ao solicitar redefinição.",
+        });
+      }
+    } catch {
+      setResetFeedback({
+        tipo: "erro",
+        msg: "Falha de conexão ao enviar solicitação.",
+      });
+    } finally {
+      setSolicitandoReset(false);
     }
   };
 
@@ -889,6 +928,70 @@ export default function PerfilPage() {
             >
               {salvando ? "Salvando..." : "Salvar Alterações ⚡"}
             </button>
+          </div>
+
+          {/* Segurança & Redefinição de Senha */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="heading text-sm text-bat-text-secondary uppercase tracking-wider flex items-center gap-2">
+                  <span>🔑</span>
+                  <span>Segurança & Redefinição de Senha</span>
+                </h3>
+                <p className="text-xs text-bat-text-muted mt-1">
+                  Esqueceu ou precisa redefinir sua senha? Solicite aos administradores da BatCaverna.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalResetAberto(!modalResetAberto);
+                  setResetFeedback(null);
+                }}
+                className="btn-primary py-2 px-4 text-xs font-bold cursor-pointer whitespace-nowrap self-start sm:self-auto"
+              >
+                {modalResetAberto ? "Fechar" : "Solicitar Redefinição 🔑"}
+              </button>
+            </div>
+
+            {modalResetAberto && (
+              <form onSubmit={handleSolicitarReset} className="pt-3 border-t border-bat-border/50 space-y-3">
+                <div>
+                  <label className="text-xs text-bat-text-secondary block mb-1">
+                    Motivo da solicitação (opcional)
+                  </label>
+                  <textarea
+                    value={motivoReset}
+                    onChange={(e) => setMotivoReset(e.target.value)}
+                    placeholder="Ex: Não lembro a senha anterior, gostaria de trocar por segurança..."
+                    rows={2}
+                    className="input-field text-xs resize-none"
+                  />
+                </div>
+
+                {resetFeedback && (
+                  <div
+                    className={`p-3 rounded-xl text-xs font-medium ${
+                      resetFeedback.tipo === "ok"
+                        ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                        : "bg-bat-error/15 border border-bat-error/30 text-bat-error"
+                    }`}
+                  >
+                    {resetFeedback.msg}
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="submit"
+                    disabled={solicitandoReset}
+                    className="btn-primary py-2 px-5 text-xs font-bold disabled:opacity-50 cursor-pointer"
+                  >
+                    {solicitandoReset ? "Enviando..." : "Confirmar Solicitação 🚀"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Rodapé Dinâmico de Versão */}

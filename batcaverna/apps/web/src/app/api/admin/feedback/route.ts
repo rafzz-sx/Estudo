@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('feedback_plataforma')
-      .select('*, users (apelido, avatar_url, nivel_atual)')
+      .select('*, users (nome, apelido, avatar_url, nivel_atual)')
       .order('criado_em', { ascending: false })
       .limit(200);
 
@@ -84,9 +84,16 @@ export async function PATCH(req: NextRequest) {
         .update({ lido_por_admin: true })
         .eq('lido_por_admin', false);
     } else if (body?.id) {
+      const patch: Record<string, unknown> = { lido_por_admin: true };
+
+      // Suporte a aprovar/remover da vitrine
+      if (typeof body.aprovado_para_vitrine === 'boolean') {
+        patch.aprovado_para_vitrine = body.aprovado_para_vitrine;
+      }
+
       await supabase
         .from('feedback_plataforma')
-        .update({ lido_por_admin: true })
+        .update(patch)
         .eq('id', body.id);
     }
 

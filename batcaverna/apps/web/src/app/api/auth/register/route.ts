@@ -92,11 +92,20 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase();
 
     // ─── 2. Verificar e-mail já cadastrado ────────────────────
-    const { data: existingUser } = await supabase
+    const { data: existingUser, error: emailCheckErr } = await supabase
       .from('users')
       .select('id')
       .eq('email', email.toLowerCase().trim())
       .maybeSingle();
+
+    // Se a query falhou (ex: RLS bloqueou), NÃO permitir cadastro
+    if (emailCheckErr) {
+      console.error('DB error checking email in register:', emailCheckErr);
+      return NextResponse.json(
+        { success: false, error: 'Erro ao verificar disponibilidade. Tente novamente.' },
+        { status: 503 }
+      );
+    }
 
     if (existingUser) {
       return NextResponse.json(
@@ -106,11 +115,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── 3. Verificar apelido já em uso ───────────────────────
-    const { data: existingApelido } = await supabase
+    const { data: existingApelido, error: apelidoCheckErr } = await supabase
       .from('users')
       .select('id')
       .ilike('apelido', apelido.trim())
       .maybeSingle();
+
+    // Se a query falhou, NÃO permitir cadastro
+    if (apelidoCheckErr) {
+      console.error('DB error checking apelido in register:', apelidoCheckErr);
+      return NextResponse.json(
+        { success: false, error: 'Erro ao verificar disponibilidade. Tente novamente.' },
+        { status: 503 }
+      );
+    }
 
     if (existingApelido) {
       return NextResponse.json(
@@ -118,6 +136,7 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
+
 
     // ─── 4. Hash da senha ─────────────────────────────────────
     // PBKDF2 com sal por usuário. Contas criadas a partir daqui já

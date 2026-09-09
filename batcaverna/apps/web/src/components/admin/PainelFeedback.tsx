@@ -10,8 +10,9 @@ interface Feedback {
   mensagem: string;
   marco_horas: number | null;
   lido_por_admin: boolean;
+  aprovado_para_vitrine?: boolean;
   criado_em: string;
-  users: { apelido: string; avatar_url: string | null; nivel_atual: number } | null;
+  users: { apelido: string; nome?: string; avatar_url: string | null; nivel_atual: number } | null;
 }
 
 interface Resumo {
@@ -78,6 +79,18 @@ export function PainelFeedback({
     await fetchWithAuth("/api/admin/feedback", {
       method: "PATCH",
       body: JSON.stringify({ todos: true }),
+    }).catch(() => undefined);
+  };
+
+  const toggleVitrine = async (id: string, atual: boolean) => {
+    setItens((list) =>
+      list.map((f) =>
+        f.id === id ? { ...f, aprovado_para_vitrine: !atual } : f
+      )
+    );
+    await fetchWithAuth("/api/admin/feedback", {
+      method: "PATCH",
+      body: JSON.stringify({ id, aprovado_para_vitrine: !atual }),
     }).catch(() => undefined);
   };
 
@@ -212,6 +225,28 @@ export function PainelFeedback({
               <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
                 {f.mensagem}
               </p>
+
+              {/* Botão aprovar para vitrine */}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleVitrine(f.id, !!f.aprovado_para_vitrine);
+                  }}
+                  className={`cursor-pointer rounded-lg border px-3 py-1 text-[11px] font-bold transition-all ${
+                    f.aprovado_para_vitrine
+                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-400"
+                      : "border-bat-border bg-bat-bg-card text-bat-text-secondary hover:border-bat-gold-400/40 hover:text-bat-gold-400"
+                  }`}
+                >
+                  {f.aprovado_para_vitrine ? "✅ Na Vitrine" : "🏪 Colocar na Vitrine"}
+                </button>
+                {f.aprovado_para_vitrine && (
+                  <span className="text-[10px] text-emerald-400/70">
+                    Aparece na página inicial
+                  </span>
+                )}
+              </div>
             </li>
           ))}
         </ul>

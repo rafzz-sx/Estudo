@@ -38,6 +38,7 @@ const navLinksBase: NavLink[] = [
   { href: "/chat", label: "Chat & Squad", icon: "💬" },
   { href: "/musica", label: "Música", icon: "🎧" },
   { href: "/tickets", label: "Suporte", icon: "🎫" },
+  { href: "/feedback", label: "Feedback", icon: "⭐" },
   { href: "/perfil", label: "Perfil", icon: "👤" },
 ];
 

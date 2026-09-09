@@ -2,11 +2,61 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
-/**
- * POST /api/feedback
- * Body: { tipo, nota?, mensagem, marco_horas? }
- *   ou  { acao: "adiar" | "nunca_mais", marco_horas? }
- */
+// ═══════════════════════════════════════════════════════════════
+// GET /api/feedback — Retorna depoimentos aprovados para a vitrine (público)
+// ═══════════════════════════════════════════════════════════════
+export async function GET() {
+  try {
+    const supabase = createServerSupabaseClient();
+
+    const { data: depoimentos, error } = await supabase
+      .from('feedback_plataforma')
+      .select(`
+        id,
+        nota,
+        mensagem,
+        criado_em,
+        users!inner (
+          nome,
+          apelido,
+          avatar_url
+        )
+      `)
+      .eq('aprovado_para_vitrine', true)
+      .order('criado_em', { ascending: false })
+      .limit(12);
+
+    if (error) {
+      console.error('Erro ao buscar depoimentos:', error);
+      return NextResponse.json(
+        { success: true, data: [] }
+      );
+    }
+
+    // Formatar para o frontend
+    const formatados = (depoimentos || []).map((d: any) => ({
+      id: d.id,
+      nota: d.nota,
+      mensagem: d.mensagem,
+      criado_em: d.criado_em,
+      autor_nome: d.users?.nome || 'Aluno BatCaverna',
+      autor_apelido: d.users?.apelido || '',
+      autor_avatar: d.users?.avatar_url || null,
+    }));
+
+    return NextResponse.json({ success: true, data: formatados });
+  } catch (error: any) {
+    console.error('Erro em GET /api/feedback:', error);
+    // Retorna array vazio para não quebrar a landing page
+    return NextResponse.json({ success: true, data: [] });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/feedback
+// Body: { tipo, nota?, mensagem, marco_horas? }
+//   ou  { acao: "adiar" | "nunca_mais", marco_horas? }
+// ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUserFromRequest(req);
@@ -50,7 +100,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tipo = ['opiniao', 'bug', 'ideia'].includes(body?.tipo)
+    const tipo = ['opiniao', 'bug', 'ideia', 'depoimento'].includes(body?.tipo)
       ? body.tipo
       : 'opiniao';
     const nota = Number(body?.nota);
@@ -75,6 +125,28 @@ export async function POST(req: NextRequest) {
         },
         { onConflict: 'user_id' }
       );
+    }
+
+    // Notificar admins sobre novo feedback (best-effort)
+    try {
+      const { data: admins } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+
+      if (admins && admins.length > 0) {
+        const notificacoes = admins.map((admin: any) => ({
+          user_id: admin.id,
+          tipo: 'sistema',
+          titulo: '📝 Novo feedback recebido',
+          mensagem: `Um aluno enviou um novo ${tipo}${nota >= 1 ? ` (nota: ${nota}/5)` : ''}.`,
+          lida: false,
+        }));
+
+        await supabase.from('notificacoes').insert(notificacoes);
+      }
+    } catch (notifErr) {
+      console.warn('Erro ao notificar admin sobre feedback:', notifErr);
     }
 
     return NextResponse.json({

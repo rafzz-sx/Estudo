@@ -44,6 +44,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error || !user) {
+      // Log detalhado para diagnóstico (nunca exposto ao cliente)
+      if (error) {
+        console.error('LOGIN DB ERROR for', email.toLowerCase().trim(), ':', error.code, error.message);
+      }
       return NextResponse.json(
         { success: false, error: 'E-mail ou senha incorretos' },
         { status: 401 }

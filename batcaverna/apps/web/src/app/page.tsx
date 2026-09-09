@@ -241,6 +241,8 @@ export default function LandingPage() {
   const [estatisticas, setEstatisticas] = useState<EstatisticasPublicas | null>(
     null
   );
+  const [depoimentos, setDepoimentos] = useState<any[]>([]);
+  const [depoimentoAtual, setDepoimentoAtual] = useState(0);
 
   useEffect(() => {
     setTimeout(() => setHeroVisible(true), 100);
@@ -252,7 +254,26 @@ export default function LandingPage() {
         if (json?.success) setEstatisticas(json.data);
       })
       .catch(() => undefined);
+
+    // Buscar depoimentos aprovados
+    fetch("/api/feedback")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.success && json.data?.length > 0) {
+          setDepoimentos(json.data);
+        }
+      })
+      .catch(() => undefined);
   }, []);
+
+  // Auto-rotate depoimentos
+  useEffect(() => {
+    if (depoimentos.length <= 1) return;
+    const timer = setInterval(() => {
+      setDepoimentoAtual((prev) => (prev + 1) % depoimentos.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [depoimentos.length]);
 
   return (
     <main className="relative min-h-screen overflow-hidden">
@@ -425,55 +446,128 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══ SEÇÃO: COMO A PLATAFORMA ENSINA ═══ */}
-      {/* Antes havia aqui três cartões de "depoimentos em breve" que eram
-          esqueletos de carregamento infinitos — davam a impressão de página
-          quebrada. Trocados por conteúdo real sobre o método. */}
+      {/* ═══ SEÇÃO: DEPOIMENTOS / COMO A PLATAFORMA ENSINA ═══ */}
       <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
-          <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
-            Não é só marcar alternativa. É <span className="text-bat-gold-400">entender</span>.
-          </h2>
-          <p className="text-bat-text-secondary text-center text-lg mb-14 max-w-2xl mx-auto">
-            Errar aqui vale mais do que acertar por sorte — desde que você
-            entenda o porquê antes de seguir.
-          </p>
+          {depoimentos.length > 0 ? (
+            <>
+              <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
+                Quem estudou na <span className="text-bat-gold-400">Caverna</span> fala
+              </h2>
+              <p className="text-bat-text-secondary text-center text-lg mb-14 max-w-2xl mx-auto">
+                Depoimentos reais de soldados que usam a plataforma.
+              </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {[
-              {
-                icone: "📖",
-                titulo: "Gabarito que explica",
-                texto:
-                  "Toda questão de cálculo traz a resolução quebrada em passos numerados. Você vê onde o seu raciocínio se separou do caminho certo — não só qual letra era.",
-              },
-              {
-                icone: "🎯",
-                titulo: "Provas oficiais, não simulacros",
-                texto:
-                  "Milhares de questões extraídas das provas reais das bancas, com texto base, figura e o gabarito oficial. Nada de questão inventada.",
-              },
-              {
-                icone: "📊",
-                titulo: "Seu ponto fraco, nomeado",
-                texto:
-                  "A plataforma acompanha seu acerto por matéria e aponta exatamente onde investir a próxima hora de estudo.",
-              },
-            ].map((item) => (
-              <div
-                key={item.titulo}
-                className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 hover:border-bat-gold-400/30 transition-colors"
-              >
-                <span className="text-3xl block mb-3">{item.icone}</span>
-                <h3 className="heading text-lg text-bat-text font-bold mb-2">
-                  {item.titulo}
-                </h3>
-                <p className="text-bat-text-secondary text-sm leading-relaxed">
-                  {item.texto}
-                </p>
+              {/* Carousel de depoimentos */}
+              <div className="relative max-w-2xl mx-auto">
+                <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-8 min-h-[200px] flex flex-col justify-between transition-all duration-500">
+                  {/* Estrelas */}
+                  {depoimentos[depoimentoAtual]?.nota && (
+                    <div className="flex gap-1 mb-4">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span
+                          key={s}
+                          className={`text-xl ${
+                            s <= depoimentos[depoimentoAtual].nota
+                              ? "text-bat-gold-400"
+                              : "text-bat-border"
+                          }`}
+                        >
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Mensagem */}
+                  <p className="text-bat-text text-base sm:text-lg leading-relaxed italic mb-6">
+                    &ldquo;{depoimentos[depoimentoAtual]?.mensagem}&rdquo;
+                  </p>
+
+                  {/* Autor */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-bat-gold-400/20 flex items-center justify-center text-bat-gold-400 font-bold text-sm">
+                      {depoimentos[depoimentoAtual]?.autor_nome?.charAt(0)?.toUpperCase() || "A"}
+                    </div>
+                    <div>
+                      <p className="text-bat-text font-semibold text-sm">
+                        {depoimentos[depoimentoAtual]?.autor_nome}
+                      </p>
+                      {depoimentos[depoimentoAtual]?.autor_apelido && (
+                        <p className="text-bat-text-muted text-xs">
+                          @{depoimentos[depoimentoAtual].autor_apelido}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dots de navegação */}
+                {depoimentos.length > 1 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    {depoimentos.map((_: any, i: number) => (
+                      <button
+                        key={i}
+                        onClick={() => setDepoimentoAtual(i)}
+                        className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                          i === depoimentoAtual
+                            ? "bg-bat-gold-400 w-6"
+                            : "bg-bat-border hover:bg-bat-text-muted"
+                        }`}
+                        aria-label={`Depoimento ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
+                Não é só marcar alternativa. É <span className="text-bat-gold-400">entender</span>.
+              </h2>
+              <p className="text-bat-text-secondary text-center text-lg mb-14 max-w-2xl mx-auto">
+                Errar aqui vale mais do que acertar por sorte — desde que você
+                entenda o porquê antes de seguir.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {[
+                  {
+                    icone: "📖",
+                    titulo: "Gabarito que explica",
+                    texto:
+                      "Toda questão de cálculo traz a resolução quebrada em passos numerados. Você vê onde o seu raciocínio se separou do caminho certo — não só qual letra era.",
+                  },
+                  {
+                    icone: "🎯",
+                    titulo: "Provas oficiais, não simulacros",
+                    texto:
+                      "Milhares de questões extraídas das provas reais das bancas, com texto base, figura e o gabarito oficial. Nada de questão inventada.",
+                  },
+                  {
+                    icone: "📊",
+                    titulo: "Seu ponto fraco, nomeado",
+                    texto:
+                      "A plataforma acompanha seu acerto por matéria e aponta exatamente onde investir a próxima hora de estudo.",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.titulo}
+                    className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 hover:border-bat-gold-400/30 transition-colors"
+                  >
+                    <span className="text-3xl block mb-3">{item.icone}</span>
+                    <h3 className="heading text-lg text-bat-text font-bold mb-2">
+                      {item.titulo}
+                    </h3>
+                    <p className="text-bat-text-secondary text-sm leading-relaxed">
+                      {item.texto}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Números reais do banco */}
           {estatisticas && (

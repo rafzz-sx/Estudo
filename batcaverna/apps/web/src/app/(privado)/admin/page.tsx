@@ -14,6 +14,7 @@ import { PainelResolucoes } from "@/components/admin/PainelResolucoes";
 import { PainelContestacoes } from "@/components/admin/PainelContestacoes";
 import { PainelContatos } from "@/components/admin/PainelContatos";
 import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
+import { PainelResetSenha } from "@/components/admin/PainelResetSenha";
 
 interface UsuarioAdmin {
   id: string;
@@ -62,6 +63,7 @@ type AbaAdmin =
   | "feedback"
   | "contatos"
   | "teoria"
+  | "reset_senha"
   | "sessoes";
 
 interface ResumoFeedback {
@@ -360,6 +362,7 @@ export default function AdminPage() {
             }`,
           },
           { key: "contatos", label: "📨 Mensagens de Contato" },
+          { key: "reset_senha", label: "🔑 Redefinir Senhas" },
           { key: "auditoria", label: "📝 Log de Auditoria" },
           { key: "banners", label: "🖼️ Banners & Temas" },
         ].map((item) => (
@@ -901,6 +904,9 @@ export default function AdminPage() {
       {aba === "contatos" && <PainelContatos />}
 
       {aba === "teoria" && <PainelLacunasTeoria />}
+
+      {/* ═══ TAB: REDEFINIÇÕES DE SENHA ═══ */}
+      {aba === "reset_senha" && <PainelResetSenha />}
     </div>
   );
 }
