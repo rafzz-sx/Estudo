@@ -9,23 +9,15 @@ import {
   ProjecaoNota,
   type ProjecaoDados,
 } from "@/components/estudo/ProjecaoNota";
+import { BatLogo } from "@/components/BatLogo";
+import { calcularNivel } from "@batcaverna/utils";
+import {
+  useStudySessionStore,
+  formatarTempoLegivel,
+} from "@/stores/study-session-store";
 
 // ═══════════════════════════════════════════════════════════════
-// PLANO DO DIA — a primeira tela de quem entra
-// ═══════════════════════════════════════════════════════════════
-// A tela inicial anterior (que virou /progresso) mostrava Streak, Tempo
-// Total, Questões e Maior Combo. É uma vitrine de troféus: conta o que o
-// aluno já fez e nunca o que fazer em seguida.
-//
-// Quem abre a plataforma às 20h de uma terça não está perguntando "quanto eu
-// já estudei". Está perguntando "por onde eu começo hoje" — e essa pergunta
-// a plataforma tinha todos os dados para responder e não respondia.
-//
-// A ordem daqui até o fim da tela É a recomendação:
-//   1. o que está vencido (revisão, erro em aberto)
-//   2. onde a próxima hora rende mais ponto (radar de fraqueza)
-//   3. o que você nunca abriu (ponto cego)
-//   4. como você está evoluindo
+// PLANO DO DIA — Central de Operações da BatCaverna
 // ═══════════════════════════════════════════════════════════════
 
 interface Acao {
@@ -85,6 +77,17 @@ interface Painel {
   reta_final?: boolean;
 }
 
+const PRINCIPAIS_CONCURSOS = [
+  { sigla: "EEAR", emoji: "✈️", nome: "Aeronáutica", cor: "#0284c7" },
+  { sigla: "ESA", emoji: "⭐", nome: "Exército", cor: "#16a34a" },
+  { sigla: "EPCAR", emoji: "🛩️", nome: "Cadetes do Ar", cor: "#3b82f6" },
+  { sigla: "ESPCEX", emoji: "🎖️", nome: "EsPCEx", cor: "#b45309" },
+  { sigla: "EAM", emoji: "⚓", nome: "Marinha", cor: "#2563eb" },
+  { sigla: "CN", emoji: "🚢", nome: "Colégio Naval", cor: "#0d9488" },
+  { sigla: "EFOMM", emoji: "🌊", nome: "Marinha Mercante", cor: "#0891b2" },
+  { sigla: "ENEM", emoji: "📚", nome: "Exame Nacional", cor: "#eab308" },
+];
+
 const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
   alta: "#EF4444",
   media: "#F5C518",
@@ -93,14 +96,25 @@ const CORES_URGENCIA: Record<Acao["urgencia"], string> = {
 
 function saudacao(): string {
   const h = new Date().getHours();
-  if (h < 5) return "Ainda de pé";
+  if (h < 5) return "Boa madrugada";
   if (h < 12) return "Bom dia";
   if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
 
+function dataHojeFormatada(): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+}
+
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
+  const tempoEstudoHoje = useStudySessionStore((s) => s.tempoEstudoHoje);
+  const tempoEstudoTotal = useStudySessionStore((s) => s.tempoEstudoTotal);
+
   const [painel, setPainel] = useState<Painel | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -124,18 +138,27 @@ export default function DashboardPage() {
     carregar();
   }, [carregar]);
 
-  const primeiroNome = (user?.nome ?? user?.apelido ?? "soldado").split(" ")[0];
+  // Dados do usuário
+  const apelido = user?.apelido || user?.nome || "Soldado";
+  const role = user?.role || "user";
+  const xp = user?.xp_total ?? 0;
+  const nivelInfo = calcularNivel(xp);
+  const streak = user?.streak_dias ?? 0;
+  const questoesRespondidas = user?.questoes_respondidas ?? 0;
+  const taxaAcerto = user?.taxa_acerto ?? 0;
 
   // ─── Carregando ────────────────────────────────────────────
   if (carregando) {
     return (
       <div className="space-y-6">
-        <div className="skeleton h-28 w-full rounded-3xl" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="skeleton h-36 rounded-2xl" />
-          <div className="skeleton h-36 rounded-2xl" />
+        <div className="skeleton h-32 w-full rounded-3xl" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
         </div>
-        <div className="skeleton h-72 w-full rounded-2xl" />
+        <div className="skeleton h-64 w-full rounded-2xl" />
       </div>
     );
   }
@@ -156,118 +179,394 @@ export default function DashboardPage() {
   const cor = concurso?.cor_tema ?? "#F5C518";
 
   return (
-    <div className="space-y-7">
-      {/* ═══════════ CABEÇALHO ═══════════ */}
-      <header className="relative overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 sm:p-7">
+    <div className="space-y-7 pb-12">
+      {/* ═══════════ CABEÇALHO OFICIAL BATCAVERNA ═══════════ */}
+      <header className="relative overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 sm:p-8">
         <div
-          className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full opacity-20 blur-3xl"
+          className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full opacity-15 blur-3xl"
           style={{ background: cor }}
         />
 
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs text-bat-text-muted">
-              {saudacao()}, <strong className="text-bat-text">{primeiroNome}</strong>
-            </p>
-            <h1 className="heading mt-1 text-2xl font-bold text-bat-text sm:text-3xl">
-              {concurso ? (
-                <>
-                  Seu plano de hoje{" "}
-                  <span style={{ color: cor }}>
-                    {concurso.emoji} {concurso.sigla}
-                  </span>
-                </>
-              ) : (
-                "Vamos começar"
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            {/* Pill de Saudação com Morcego e Data */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-3 py-1 rounded-full w-fit mb-3">
+              <span>🦇</span>
+              <span>{saudacao()}, soldado!</span>
+              <span className="text-bat-border">·</span>
+              <span className="text-bat-text-muted capitalize">{dataHojeFormatada()}</span>
+            </div>
+
+            {/* Saudação Oficial com Logo */}
+            <div className="flex items-center gap-3">
+              <BatLogo size={40} glow />
+              <h1 className="heading text-2xl sm:text-3xl lg:text-4xl text-bat-text font-bold tracking-tight">
+                Bem-vindo à{" "}
+                <span className="text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]">
+                  Bat
+                </span>
+                <span className="text-[#F5C518] drop-shadow-[0_0_20px_rgba(245,197,24,0.45)]">
+                  Caverna
+                </span>
+                , {apelido}
+              </h1>
+              {role === "admin" && (
+                <Link href="/admin" className="badge-admin no-underline ml-1">
+                  ADMIN
+                </Link>
               )}
-            </h1>
+            </div>
+
+            <p className="text-sm text-bat-text-secondary mt-2 max-w-2xl leading-relaxed">
+              Sua central de operações e plano estratégico. Vamos dominar mais um dia de estudos? 💪
+            </p>
           </div>
 
-          {/* Contagem regressiva — o número mais motivador que existe para
-              quem presta concurso, e que estava gravado no banco sem
-              aparecer em lugar nenhum. */}
+          {/* Contagem regressiva (se concurso selecionado com data) */}
           {dias !== null && dias >= 0 && (
             <Link
               href="/cronograma"
-              className="shrink-0 rounded-2xl border px-5 py-3 text-center no-underline transition-transform hover:scale-105"
+              className="shrink-0 rounded-2xl border px-6 py-4 text-center no-underline transition-transform hover:scale-105"
               style={{ borderColor: `${cor}55`, background: `${cor}12` }}
             >
               <p className="heading text-3xl font-extrabold tabular-nums" style={{ color: cor }}>
                 {dias}
               </p>
-              <p className="text-[10px] uppercase tracking-wider text-bat-text-muted">
+              <p className="text-[10px] uppercase tracking-wider text-bat-text-muted mt-0.5">
                 {dias === 1 ? "dia para a prova" : "dias para a prova"}
               </p>
             </Link>
           )}
         </div>
-
-        {/* Resumo do concurso em foco */}
-        {radar && radar.respondidas > 0 && (
-          <div className="relative mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-bat-text-secondary">
-            <span>
-              <strong className="text-bat-text">{radar.respondidas}</strong> questões
-              respondidas no {concurso?.sigla}
-            </span>
-            <span>
-              <strong className="text-bat-gold-400">{radar.taxa}%</strong> de acerto
-            </span>
-            <span>
-              <strong className="text-bat-success">{radar.dominados}</strong> de{" "}
-              {radar.total_assuntos} assuntos dominados
-            </span>
-          </div>
-        )}
       </header>
 
-      {/* ═══════════ RETA FINAL ═══════════
-          A data da prova já estava no banco e a tela só a contava para trás.
-          A menos de 30 dias o plano muda de objetivo — e dizer isso em voz
-          alta é metade do valor da mudança. */}
+      {/* ═══════════ CARDS DE COMBATE (MÉTRICAS DO SOLDADO) ═══════════ */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* Streak */}
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 flex flex-col justify-between hover:border-bat-gold-400/30 transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-bat-text-muted uppercase font-bold tracking-wider">Sequência</span>
+            <span className="text-xl">🔥</span>
+          </div>
+          <div>
+            <p className="heading text-2xl font-extrabold text-bat-text">
+              {streak} {streak === 1 ? "dia" : "dias"}
+            </p>
+            <p className="text-[11px] text-bat-text-muted mt-0.5">
+              {streak > 0 ? "Chama de estudos acesa!" : "Comece hoje sua ofensiva"}
+            </p>
+          </div>
+        </div>
+
+        {/* Nível & Patente */}
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 flex flex-col justify-between hover:border-bat-gold-400/30 transition-colors">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-bat-text-muted uppercase font-bold tracking-wider">Patente</span>
+            <span className="text-xs font-bold text-bat-gold-400">Nível {nivelInfo.nivel}</span>
+          </div>
+          <div>
+            <p className="heading text-lg font-extrabold text-bat-text truncate">
+              {nivelInfo.titulo}
+            </p>
+            {/* Barra de XP */}
+            <div className="w-full h-1.5 bg-bat-bg-secondary rounded-full overflow-hidden mt-1.5 mb-1">
+              <div
+                className="h-full bg-gradient-to-r from-bat-gold-500 to-amber-400 rounded-full transition-all"
+                style={{ width: `${Math.min(100, Math.max(0, nivelInfo.progresso_percentual))}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-bat-text-muted flex justify-between">
+              <span>{xp} XP</span>
+              <span>{nivelInfo.xp_necessario_proximo} XP</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Tempo de Estudo */}
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 flex flex-col justify-between hover:border-bat-gold-400/30 transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-bat-text-muted uppercase font-bold tracking-wider">Tempo Real</span>
+            <span className="text-xl">⏱️</span>
+          </div>
+          <div>
+            <p className="heading text-2xl font-extrabold text-bat-text">
+              {formatarTempoLegivel(tempoEstudoHoje)}
+            </p>
+            <p className="text-[11px] text-bat-text-muted mt-0.5">
+              {formatarTempoLegivel(tempoEstudoTotal)} acumulados
+            </p>
+          </div>
+        </div>
+
+        {/* Questões & Taxa */}
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 flex flex-col justify-between hover:border-bat-gold-400/30 transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-bat-text-muted uppercase font-bold tracking-wider">Aproveitamento</span>
+            <span className="text-xl">🎯</span>
+          </div>
+          <div>
+            <p className="heading text-2xl font-extrabold text-bat-text">
+              {taxaAcerto}%
+            </p>
+            <p className="text-[11px] text-bat-text-muted mt-0.5">
+              {questoesRespondidas} questões resolvidas
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════ ALVO / CONCURSO EM FOCO ═══════════ */}
+      {concurso ? (
+        <div
+          className="rounded-2xl border p-6 relative overflow-hidden transition-all"
+          style={{
+            borderColor: `${cor}40`,
+            background: `linear-gradient(135deg, ${cor}10 0%, rgba(18, 20, 26, 0.95) 100%)`,
+          }}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-xs uppercase font-bold tracking-wider text-bat-text-muted flex items-center gap-1.5">
+                <span>🎯</span>
+                <span>Seu Concurso Alvo em Foco</span>
+              </span>
+              <h2 className="heading text-xl sm:text-2xl font-extrabold text-bat-text flex items-center gap-2">
+                <span>{concurso.emoji}</span>
+                <span>{concurso.sigla}</span>
+                <span className="text-sm font-normal text-bat-text-secondary">· {concurso.nome}</span>
+              </h2>
+              {radar && radar.respondidas > 0 ? (
+                <div className="flex flex-wrap gap-x-5 gap-y-1 pt-1 text-xs text-bat-text-secondary">
+                  <span>
+                    <strong className="text-bat-text">{radar.respondidas}</strong> questões resolvidas
+                  </span>
+                  <span>
+                    <strong className="text-bat-gold-400">{radar.taxa}%</strong> de acerto
+                  </span>
+                  <span>
+                    <strong className="text-bat-success">{radar.dominados}</strong> de {radar.total_assuntos} assuntos dominados
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-bat-text-muted pt-1">
+                  Trilha pronta para você conquistar sua farda ou vaga universitária.
+                </p>
+              )}
+            </div>
+
+            <Link
+              href={`/concursos/${concurso.sigla}/trilha`}
+              className="btn-primary px-6 py-3 text-xs sm:text-sm font-bold no-underline whitespace-nowrap self-start sm:self-auto flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(245,197,24,0.2)]"
+            >
+              <span>Acessar Trilha Oficial</span>
+              <span>🚀</span>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        /* Caso ainda não tenha concurso selecionado (Grid tático de escolha imediata) */
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 sm:p-7 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="heading text-lg font-bold text-bat-text flex items-center gap-2">
+                <span>🎯</span>
+                <span>Defina seu Alvo de Preparação</span>
+              </h2>
+              <p className="text-xs text-bat-text-secondary mt-0.5">
+                A BatCaverna organiza seu plano em torno do seu concurso. Escolha seu alvo abaixo para abrir a trilha:
+              </p>
+            </div>
+            <Link
+              href="/concursos"
+              className="text-xs font-bold text-bat-gold-400 hover:text-bat-gold-300 no-underline whitespace-nowrap"
+            >
+              Ver todos os concursos →
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            {PRINCIPAIS_CONCURSOS.map((c) => (
+              <Link
+                key={c.sigla}
+                href={`/concursos/${c.sigla}/trilha`}
+                className="p-3.5 rounded-xl bg-bat-bg-secondary/70 border border-bat-border hover:border-bat-gold-400/50 hover:bg-bat-gold-400/10 transition-all no-underline flex flex-col items-center text-center gap-1 group cursor-pointer"
+              >
+                <span className="text-2xl group-hover:scale-110 transition-transform">{c.emoji}</span>
+                <span className="heading text-sm font-extrabold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  {c.sigla}
+                </span>
+                <span className="text-[10px] text-bat-text-muted">{c.nome}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ RETA FINAL (se aplicável) ═══════════ */}
       {painel.reta_final && dias !== null && (
         <div className="rounded-2xl border border-bat-gold-400/40 bg-bat-gold-400/10 px-5 py-4">
           <p className="heading text-base font-bold text-bat-gold-400">
             🔥 Reta final — {dias === 0 ? "a prova é hoje" : `faltam ${dias} ${dias === 1 ? "dia" : "dias"}`}
           </p>
           <p className="mt-1 text-sm text-bat-text-secondary">
-            A partir daqui o plano muda: em vez de abrir assunto novo, o que
-            rende é <strong className="text-bat-text">consolidar o que você já
-            viu</strong> e treinar no formato e no ritmo da banca. As primeiras
-            ações abaixo já seguem essa ordem.
+            A partir daqui o plano muda: em vez de abrir assunto novo, o que rende é{" "}
+            <strong className="text-bat-text">consolidar o que você já viu</strong> e treinar no formato e no ritmo da banca.
           </p>
         </div>
       )}
 
-      {/* ═══════════ O QUE FAZER AGORA ═══════════ */}
-      <section>
-        <h2 className="heading mb-3 text-lg text-bat-text">
-          {painel.reta_final ? "Prioridade agora" : "Por onde começar"}
+      {/* ═══════════ PLANO DE AÇÃO & MISSÕES DO DIA ═══════════ */}
+      <section className="space-y-3">
+        <h2 className="heading text-lg font-bold text-bat-text flex items-center gap-2">
+          <span>⚡</span>
+          <span>{painel.reta_final ? "Missões Prioritárias da Reta Final" : "Missões do Plano de Hoje"}</span>
         </h2>
+
         <div className="grid gap-3 sm:grid-cols-2">
-          {painel.acoes.map((a) => (
-            <Link
-              key={a.chave}
-              href={a.href}
-              className="group relative overflow-hidden rounded-2xl border border-bat-border bg-bat-bg-card p-5 no-underline transition-all duration-300 hover:scale-[1.01] hover:border-bat-gold-400/40"
-            >
-              <div
-                className="absolute bottom-0 left-0 top-0 w-1"
-                style={{ background: CORES_URGENCIA[a.urgencia] }}
-              />
-              <div className="pl-2">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-2xl">{a.emoji}</span>
-                  {a.urgencia === "alta" && (
-                    <span className="rounded-md bg-bat-error/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-bat-error">
-                      agora
+          {painel.acoes && painel.acoes.length > 0 ? (
+            painel.acoes.map((a) => (
+              <Link
+                key={a.chave}
+                href={a.href}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-bat-border bg-bat-bg-card p-5 no-underline transition-all hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated cursor-pointer"
+              >
+                <div
+                  className="absolute inset-y-0 left-0 w-1 transition-all group-hover:w-1.5"
+                  style={{ background: CORES_URGENCIA[a.urgencia] ?? "#F5C518" }}
+                />
+
+                <div className="flex items-start gap-3 pl-2">
+                  <span className="text-2xl shrink-0">{a.emoji}</span>
+                  <div>
+                    <span
+                      className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                      style={{
+                        background: `${CORES_URGENCIA[a.urgencia]}20`,
+                        color: CORES_URGENCIA[a.urgencia],
+                      }}
+                    >
+                      {a.urgencia === "alta" ? "Prioridade Máxima" : a.urgencia === "media" ? "Recomendado" : "Opcional"}
                     </span>
-                  )}
+                    <h3 className="heading mt-2 text-base font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                      {a.titulo}
+                    </h3>
+                    <p className="mt-1 text-xs text-bat-text-secondary leading-relaxed">
+                      {a.descricao}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="heading text-base font-bold text-bat-text transition-colors group-hover:text-bat-gold-400">
-                  {a.titulo}
+
+                <div className="mt-4 flex items-center justify-end text-xs font-bold text-bat-gold-400 group-hover:translate-x-1 transition-transform">
+                  Executar Missão →
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="col-span-2 p-6 rounded-2xl bg-bat-bg-card border border-bat-border text-center text-xs text-bat-text-muted">
+              Nenhuma missão pendente no momento. Você está em dia com seu cronograma!
+            </div>
+          )}
+
+          {/* Card permanente de Questão do Dia */}
+          <Link
+            href="/questoes"
+            className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-bat-border bg-bat-bg-card p-5 no-underline transition-all hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated cursor-pointer"
+          >
+            <div className="absolute inset-y-0 left-0 w-1 bg-bat-gold-400 group-hover:w-1.5 transition-all" />
+            <div className="flex items-start gap-3 pl-2">
+              <span className="text-2xl shrink-0">❓</span>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-bat-gold-400/20 text-bat-gold-400">
+                  Desafio Diário
+                </span>
+                <h3 className="heading mt-2 text-base font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  Treino de Questões
                 </h3>
-                <p className="mt-1 text-xs leading-relaxed text-bat-text-secondary">
-                  {a.descricao}
+                <p className="mt-1 text-xs text-bat-text-secondary leading-relaxed">
+                  Pratique questões oficiais de bancas militares com gabarito passo a passo e acumule XP.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-end text-xs font-bold text-bat-gold-400 group-hover:translate-x-1 transition-transform">
+              Praticar Questões →
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      {/* ═══════════ ARMAS DA BATCAVERNA (ACESSO RÁPIDO) ═══════════ */}
+      <section className="space-y-3">
+        <h2 className="heading text-lg font-bold text-bat-text flex items-center gap-2">
+          <span>🛡️</span>
+          <span>Armas da Caverna (Central de Acesso)</span>
+        </h2>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            {
+              href: "/concursos",
+              icone: "🎯",
+              titulo: "Trilhas Militares",
+              desc: "Aulas e temas do edital",
+            },
+            {
+              href: "/questoes",
+              icone: "❓",
+              titulo: "Banco de Questões",
+              desc: "Milhares de questões",
+            },
+            {
+              href: "/simulado",
+              icone: "⏱️",
+              titulo: "Simulados",
+              desc: "Treino cronometrado",
+            },
+            {
+              href: "/caderno",
+              icone: "📓",
+              titulo: "Caderno de Erros",
+              desc: "Destrua suas falhas",
+            },
+            {
+              href: "/revisoes",
+              icone: "🔁",
+              titulo: "Revisões",
+              desc: "Repetição espaçada",
+            },
+            {
+              href: "/bizus",
+              icone: "💡",
+              titulo: "Bizus Táticos",
+              desc: "Macetes de aprovação",
+            },
+            {
+              href: "/ranking",
+              icone: "🏆",
+              titulo: "Ranking",
+              desc: "Disputa com a tropa",
+            },
+            {
+              href: "/chat",
+              icone: "💬",
+              titulo: "Chat & Squad",
+              desc: "Comunidade e soldados",
+            },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="p-4 rounded-2xl bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated transition-all no-underline flex flex-col justify-between gap-2 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-2xl group-hover:scale-110 transition-transform">{item.icone}</span>
+                <span className="text-bat-text-muted text-xs group-hover:text-bat-gold-400 transition-colors">→</span>
+              </div>
+              <div>
+                <p className="heading text-sm font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  {item.titulo}
+                </p>
+                <p className="text-[11px] text-bat-text-muted mt-0.5">
+                  {item.desc}
                 </p>
               </div>
             </Link>
@@ -275,42 +574,30 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ═══════════ QUANTO FALTA PARA O CORTE ═══════════
-          Vem antes do radar de propósito: primeiro o alvo e a distância,
-          depois onde atacar. */}
-      {concurso && projecao && (
-        <ProjecaoNota dados={projecao} sigla={concurso.sigla} />
+      {/* ═══════════ RADAR DE FRAQUEZAS (SE DISPONÍVEL) ═══════════ */}
+      {radar && radar.fracos.length > 0 && (
+        <section className="space-y-3">
+          <RadarFraqueza
+            fracos={radar.fracos}
+            pontosCegos={radar.pontos_cegos}
+            concursoSigla={concurso?.sigla ?? "Seu concurso"}
+          />
+        </section>
       )}
 
-      {/* ═══════════ RADAR DE FRAQUEZA ═══════════ */}
-      {concurso && radar && (
-        <RadarFraqueza
-          fracos={radar.fracos}
-          pontosCegos={radar.pontos_cegos}
-          sigla={concurso.sigla}
-          totalAssuntos={radar.total_assuntos}
-          dominados={radar.dominados}
-        />
+      {/* ═══════════ GRÁFICO DE EVOLUÇÃO (SE DISPONÍVEL) ═══════════ */}
+      {evolucao && evolucao.length > 1 && (
+        <section className="space-y-3">
+          <GraficoEvolucao pontos={evolucao} />
+        </section>
       )}
 
-      {/* ═══════════ EVOLUÇÃO ═══════════ */}
-      {evolucao.length >= 2 && (
-        <GraficoEvolucao pontos={evolucao} compacto />
+      {/* ═══════════ PROJEÇÃO DE NOTA (SE DISPONÍVEL) ═══════════ */}
+      {projecao && (
+        <section className="space-y-3">
+          <ProjecaoNota dados={projecao} />
+        </section>
       )}
-
-      {/* ═══════════ ATALHO PARA O HISTÓRICO ═══════════ */}
-      <Link
-        href="/progresso"
-        className="flex items-center justify-between rounded-2xl border border-bat-border bg-bat-bg-card px-5 py-4 no-underline transition-all hover:border-bat-gold-400/40"
-      >
-        <div>
-          <p className="text-sm font-bold text-bat-text">📊 Meu progresso</p>
-          <p className="mt-0.5 text-xs text-bat-text-secondary">
-            Streak, tempo de estudo, XP, insígnias e a evolução completa.
-          </p>
-        </div>
-        <span className="text-bat-gold-400">→</span>
-      </Link>
     </div>
   );
 }
