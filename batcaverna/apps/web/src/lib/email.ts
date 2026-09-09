@@ -47,7 +47,7 @@ export function temProvedorDeEmail(): boolean {
 function remetente(): string {
   // `EMAIL_FROM` é o nome que o .env.example já documentava antes deste
   // módulo existir. Aceita "fulano@dominio" ou "Nome <fulano@dominio>".
-  const configurado = process.env.EMAIL_FROM?.trim();
+  const configurado = (process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL)?.trim();
   if (!configurado) return 'BatCaverna <onboarding@resend.dev>';
   return configurado.includes('<') ? configurado : `BatCaverna <${configurado}>`;
 }
