@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
       'Versão registrada',
       !!versao,
       versao
-        ? `${versao.versao_atual} · ${new Date(versao.atualizado_em).toLocaleString('pt-BR')}`
+        ? `${versao.versao_atual} · ${new Date(versao.atualizado_em).toLocaleDateString('pt-BR')} às ${new Date(versao.atualizado_em).getHours()}h`
         : 'nenhuma — rode o seed de versão',
       false
     );

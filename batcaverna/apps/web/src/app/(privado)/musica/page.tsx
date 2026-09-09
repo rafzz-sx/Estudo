@@ -156,6 +156,23 @@ export default function MusicaPage() {
     }
   };
 
+  const apagarPlaylist = async (id: string, nome: string) => {
+    if (!confirm(`Tem certeza que deseja apagar a playlist "${nome}"?`)) return;
+    try {
+      const res = await fetchWithAuth(`/api/playlists/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setPlaylists((prev) => prev.filter((p) => p.id !== id));
+        setAviso(`Playlist "${nome}" apagada.`);
+      } else {
+        setAviso(json.error || "Erro ao apagar playlist.");
+      }
+    } catch (err) {
+      console.error("Erro ao apagar playlist:", err);
+      setAviso("Erro ao conectar com o servidor.");
+    }
+  };
+
   /**
    * Põe (ou tira) uma faixa numa playlist.
    *
@@ -469,14 +486,24 @@ export default function MusicaPage() {
                         {p.musicas.length !== 1 ? "s" : ""}
                       </p>
                     </div>
-                    {p.musicas.length > 0 && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {p.musicas.length > 0 && (
+                        <button
+                          onClick={() => tocarFila(p.musicas, 0)}
+                          className="cursor-pointer rounded-lg bg-bat-gold-400/15 px-3 py-1.5 text-xs font-bold text-bat-gold-400 hover:bg-bat-gold-400/25 transition-colors"
+                        >
+                          ▶ Tocar
+                        </button>
+                      )}
                       <button
-                        onClick={() => tocarFila(p.musicas, 0)}
-                        className="shrink-0 cursor-pointer rounded-lg bg-bat-gold-400/15 px-3 py-1.5 text-xs font-bold text-bat-gold-400"
+                        onClick={() => apagarPlaylist(p.id, p.nome)}
+                        title="Excluir playlist"
+                        className="cursor-pointer rounded-lg border border-red-500/20 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                        aria-label={`Excluir playlist ${p.nome}`}
                       >
-                        ▶ Tocar
+                        🗑️
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   {p.musicas.length > 0 ? (

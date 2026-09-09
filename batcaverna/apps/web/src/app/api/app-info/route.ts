@@ -5,7 +5,7 @@ import { createServerSupabaseClient } from '@/lib/supabase';
  * Versão de reserva, usada só quando `app_info` está vazia.
  * Mantenha em sincronia com o último seed `versao_*.sql`.
  */
-const VERSAO_APP = '2.8.0';
+const VERSAO_APP = '2.9.0';
 
 // GET /api/app-info — Retorna versão atual e data de atualização
 export async function GET() {
@@ -20,14 +20,15 @@ export async function GET() {
       .single();
 
     if (error || !data) {
-      // Reserva para quando a tabela ainda não foi semeada. Estava fixo em
-      // '1.2.0' desde sempre: com o banco novo e o seed de versão pendente,
-      // o rodapé mostrava uma versão três releases atrás.
+      // Data truncada na hora (SOMENTE A HORA SEM OS MINUTOS)
+      const dataHoraCheia = new Date();
+      dataHoraCheia.setMinutes(0, 0, 0);
+
       return NextResponse.json({
         success: true,
         data: {
           versao_atual: VERSAO_APP,
-          atualizado_em: new Date().toISOString(),
+          atualizado_em: dataHoraCheia.toISOString(),
         },
       });
     }

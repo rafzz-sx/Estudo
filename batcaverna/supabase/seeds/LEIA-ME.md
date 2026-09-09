@@ -101,17 +101,18 @@ assunto lado a lado.
 ## 4. Versão (por último)
 
 ```
-versao_2_8_0.sql
+versao_2_9_0.sql
 ```
 
-Grava a versão do rodapé com a **hora cheia**, sem minutos.
+Grava a versão do rodapé com a **hora cheia**, sem minutos (SOMENTE A HORA SEM OS MINUTOS).
 
 > As versões anteriores continuam no diretório só como histórico. Rodar mais
 > de uma não quebra nada (cada uma apaga o registro anterior antes de
-> inserir), mas só a **2.8.0** precisa ser executada.
+> inserir), mas só a **2.9.0** precisa ser executada.
 >
-> **A 2.8.0 traz a migration 017** (contestação de gabarito). Rode-a antes
-> deste seed. Ela é aditiva: só cria `questao_contestacoes`.
+> **A 2.9.0 traz a migration 018** (`018_chat_e_fixes.sql`). Rode-a antes
+> deste seed. Ela preserva conversas com ON DELETE SET NULL, adiciona status
+> 'desfeita' a amizades e corrige o índice único de questões.
 >
 > A 2.6.0 não trouxe migration — a correção do hash de senha usa um formato
 > que cabe na coluna `senha_hash VARCHAR(255)` que já existia.

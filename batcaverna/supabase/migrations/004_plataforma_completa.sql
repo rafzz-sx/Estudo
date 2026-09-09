@@ -79,7 +79,7 @@ ALTER TABLE questoes ALTER COLUMN explicacao DROP NOT NULL;
 
 -- Deduplicação: mesmo enunciado do mesmo concurso/ano entra uma única vez.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_questoes_hash
-  ON questoes(hash_conteudo) WHERE hash_conteudo IS NOT NULL;
+  ON questoes(hash_conteudo);
 
 CREATE INDEX IF NOT EXISTS idx_questoes_area    ON questoes(area_conhecimento);
 CREATE INDEX IF NOT EXISTS idx_questoes_ativa   ON questoes(ativa);

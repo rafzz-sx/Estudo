@@ -170,3 +170,29 @@ export function modeloCodigoDeSenha(codigo: string, minutos: number) {
       `Se você não pediu isto, ignore esta mensagem.`,
   };
 }
+
+/** E-mail de confirmação de cadastro com token */
+export function modeloVerificacaoEmail(token: string, nome: string) {
+  const urlBase = process.env.NEXT_PUBLIC_APP_URL || 'https://batcaverna.app';
+  const link = `${urlBase}/verificar-email?token=${token}`;
+
+  return {
+    assunto: `Confirme seu e-mail na BatCaverna, ${nome}`,
+    html: moldura(
+      'Confirmação de e-mail',
+      `<p style="margin:0 0 16px 0;">Olá, <strong>${nome}</strong>! Bem-vindo à BatCaverna.</p>
+       <p style="margin:0 0 16px 0;">Para ativar seu acesso e validar seu endereço, clique no botão abaixo:</p>
+       <p style="margin:0 0 20px 0;text-align:center;">
+         <a href="${link}" style="display:inline-block;padding:12px 24px;background:#F5C518;color:#0B0B0F;text-decoration:none;font-weight:bold;border-radius:8px;">
+           Confirmar meu e-mail
+         </a>
+       </p>
+       <p style="margin:0;font-size:12px;color:#8E8E98;">Ou acesse diretamente: <a href="${link}" style="color:#F5C518;">${link}</a></p>`
+    ),
+    texto:
+      `Olá, ${nome}! Bem-vindo à BatCaverna.\n\n` +
+      `Para ativar sua conta e confirmar seu e-mail, acesse:\n${link}\n\n` +
+      `Se você não criou esta conta, ignore esta mensagem.`,
+  };
+}
+

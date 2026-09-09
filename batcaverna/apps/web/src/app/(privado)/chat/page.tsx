@@ -68,6 +68,11 @@ export default function ChatPage() {
   const { user } = useAuthStore();
   const [conversas, setConversas] = useState<Conversa[]>([]);
   const [conversaAtivaId, setConversaAtivaId] = useState<string>("");
+  const conversaAtivaIdRef = useRef(conversaAtivaId);
+  useEffect(() => {
+    conversaAtivaIdRef.current = conversaAtivaId;
+  }, [conversaAtivaId]);
+
   // No celular a lista e a conversa não cabem lado a lado. Antes as duas
   // empilhavam: para ler uma mensagem o aluno rolava a lista inteira, e para
   // trocar de conversa rolava tudo de volta. Agora é uma tela de cada vez,
@@ -137,7 +142,7 @@ export default function ChatPage() {
                 }
               } catch {}
             }
-          } else if (lista.length > 0 && !conversaAtivaId) {
+          } else if (lista.length > 0 && !conversaAtivaIdRef.current) {
             setConversaAtivaId(lista[0].id);
           }
         }
@@ -339,9 +344,13 @@ export default function ChatPage() {
             )
           );
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        alert(errJson?.error || "Não foi possível enviar a mensagem.");
       }
     } catch (err) {
       console.error("Erro ao enviar mensagem:", err);
+      alert("Erro de conexão ao enviar mensagem.");
     }
   };
 

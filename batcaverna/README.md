@@ -5,9 +5,9 @@
 
 ---
 
-## 🚨 Versão 2.8.0 — leia antes de rodar
+## 🚨 Versão 2.9.0 — leia antes de rodar
 
-Se você está subindo o projeto depois da atualização 2.8.0, a ordem é:
+Se você está subindo o projeto depois da atualização 2.9.0, a ordem é:
 
 ```bash
 npm install                                  # requer Node.js >= 20
@@ -31,17 +31,13 @@ Depois, no **SQL Editor do Supabase**, siga
 12. `supabase/migrations/015_contatos_publicos.sql` — mensagens do formulário público de contato
 13. `supabase/migrations/016_redacao.sql` — módulo de redação (temas e redações do aluno)
 14. `supabase/migrations/017_contestar_gabarito.sql` — o aluno avisa que uma questão está errada
-15. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
-16. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
-17. `versao_2_8_0.sql` — registra a versão e a hora exibidas no rodapé
+15. `supabase/migrations/018_chat_e_fixes.sql` — preservação de histórico do chat, correção de constraint UNIQUE em questoes e enum de amizade
+16. os 12 arquivos de `supabase/seeds/*.sql` do banco de questões (**3.247 publicadas**, de 3.281 extraídas)
+17. `teoria_*.sql`, `bizus_01.sql`, `videoaulas_01.sql`, `musicas_01.sql` — conteúdo
+18. `versao_2_9_0.sql` — registra a versão e a hora (SOMENTE A HORA SEM OS MINUTOS) exibidas no rodapé
 
-> **Atenção à ordem:** a `011` REMAPEIA assuntos já gravados, então precisa
-> rodar **depois** dos seeds de questões (item 15). A `014` casa o tema da
-> teoria com o nome do assunto, então precisa rodar depois da `011` **e** dos
-> seeds de teoria (item 16). Rodar fora de ordem não dá erro — simplesmente
-> não faz efeito, que é pior.
->
-> **A 2.8.0 acrescentou a `017`** (contestação de gabarito), que é aditiva.
+> **A 2.9.0 acrescentou a `018`** (chat history SET NULL, unificação de constraint de deduplicação e amizades).
+> **O seed de versão agora é `versao_2_9_0.sql`** (grava a hora cheia no rodapé).
 >
 > **Se você já rodou a 011 antes da 2.8.0, RODE-A DE NOVO.** 39 questões
 > estavam no assunto errado: o casamento de termos era substring crua e

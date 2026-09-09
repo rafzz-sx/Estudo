@@ -358,6 +358,27 @@ export default function PerfilPage() {
     } catch {}
   };
 
+  // Desfazer Amizade
+  const desfazerAmizade = async (amigo: any) => {
+    const apelido = amigo.usuario?.apelido || "este soldado";
+    if (!confirm(`Deseja desfazer a amizade com ${apelido}? O histórico de conversas será mantido em modo leitura.`)) return;
+    try {
+      const res = await fetchWithAuth(`/api/amizades/${amigo.amizade_id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setAmigos((prev) => prev.filter((a) => a.amizade_id !== amigo.amizade_id));
+        setMsgFeedback(`✓ Amizade com ${apelido} desfeita.`);
+      } else {
+        setMsgFeedback("⚠️ Erro ao desfazer amizade.");
+      }
+    } catch {
+      setMsgFeedback("⚠️ Erro ao conectar com o servidor.");
+    } finally {
+      setTimeout(() => setMsgFeedback(null), 3500);
+    }
+  };
+
   // Alternar Concurso Favorito
   const toggleConcursoFavorito = (sigla: string) => {
     setConcursosFavoritos((prev) =>
@@ -726,10 +747,17 @@ export default function PerfilPage() {
                         💬 Chat
                       </Link>
 
-                      {/* Bloquear. A rota /api/amizades/[id]/bloquear existia
-                          completa e não tinha botão em lugar nenhum — numa
-                          plataforma de comunidade com menores de idade, poder
-                          cortar contato é segurança, não enfeite. */}
+                      {/* Desfazer amizade: preserva o histórico no chat e remove do esquadrão */}
+                      <button
+                        onClick={() => desfazerAmizade(a)}
+                        className="p-2 rounded-xl border border-bat-border text-bat-text-muted hover:border-red-500/40 hover:text-red-400 transition-all text-xs font-bold cursor-pointer"
+                        title={`Desfazer amizade com ${a.usuario?.apelido ?? "este soldado"}`}
+                        aria-label={`Desfazer amizade com ${a.usuario?.apelido ?? "este soldado"}`}
+                      >
+                        ✕
+                      </button>
+
+                      {/* Bloquear */}
                       <button
                         onClick={() => bloquearAmigo(a)}
                         disabled={bloqueando === a.amizade_id}

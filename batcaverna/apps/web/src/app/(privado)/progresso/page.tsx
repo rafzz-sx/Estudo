@@ -145,21 +145,34 @@ export default function ProgressoPage() {
           setEvolucao(json.data.evolucao);
         }
       })
-      .catch(() => undefined);
+      .catch((err) => console.warn("Erro ao carregar evolução:", err));
 
-    // Concursos alvo do aluno
-    fetchWithAuth("/api/usuarios/me/concursos-favoritos")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json?.success && Array.isArray(json.data)) {
-          setFavoritos(
-            json.data
-              .map((f: any) => f.concursos ?? f)
-              .filter((c: any) => c?.sigla)
-          );
-        }
+    // Concursos alvo do aluno: mapeia siglas com o catálogo de concursos
+    Promise.all([
+      fetchWithAuth("/api/usuarios/me/concursos-favoritos").then((r) => (r.ok ? r.json() : null)),
+      fetchWithAuth("/api/concursos").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([favJson, concJson]) => {
+        const rawFavs = favJson?.success && Array.isArray(favJson.data) ? favJson.data : [];
+        const catalog = concJson?.success && Array.isArray(concJson.data) ? concJson.data : [];
+        const catalogMap = new Map<string, any>(catalog.map((c: any) => [String(c.sigla).toUpperCase(), c]));
+
+        const listaMapeada: ConcursoFavorito[] = rawFavs
+          .map((item: any) => {
+            const siglaStr = typeof item === "string" ? item : item?.sigla || item?.concursos?.sigla;
+            if (!siglaStr) return null;
+            const conc = catalogMap.get(siglaStr.toUpperCase());
+            return {
+              sigla: siglaStr,
+              nome: conc?.nome || siglaStr,
+              emoji: conc?.emoji || "🎯",
+            };
+          })
+          .filter(Boolean) as ConcursoFavorito[];
+
+        setFavoritos(listaMapeada);
       })
-      .catch(() => undefined);
+      .catch((err) => console.warn("Erro ao carregar concursos favoritos:", err));
 
     // Questão do dia
     fetchWithAuth("/api/questoes/do-dia")
@@ -167,7 +180,7 @@ export default function ProgressoPage() {
       .then((json) => {
         if (json?.success && json.data) setQuestaoDoDia(json.data);
       })
-      .catch(() => undefined);
+      .catch((err) => console.warn("Erro ao carregar questão do dia:", err));
   }, []);
 
   // Dados REAIS do usuário autenticado com 15 níveis oficiais

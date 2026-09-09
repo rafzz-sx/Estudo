@@ -168,12 +168,15 @@ export async function GET(req: NextRequest) {
       .from('mensagem_chat')
       .select('*, autor:users!autor_id (id, apelido, avatar_url)')
       .eq('conversa_id', conversaId)
-      .order('enviado_em', { ascending: true })
+      .order('enviado_em', { ascending: false })
       .limit(100);
 
     if (error) throw error;
 
-    const formatadas = (mensagens || []).map((m: any) => ({
+    // Inverte para exibir em ordem cronológica as 100 mensagens mais recentes
+    const ordenadas = (mensagens || []).reverse();
+
+    const formatadas = ordenadas.map((m: any) => ({
       id: m.id,
       conversa_id: m.conversa_id,
       remetente_id: m.autor_id,
@@ -249,7 +252,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Áudio de voz: 10 minutos é generoso e impede estourar o INTEGER.
-    const duracao = inteiroNaFaixa(duracao_segundos, 0, 600);
+    const duracao = inteiroNaFaixa(duracao_segundos, 0, 600, 0);
 
     const supabase = createServerSupabaseClient();
 
@@ -258,6 +261,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Conversa não encontrada' },
         { status: 404 }
+      );
+    }
+
+    // Conferir se a amizade ainda está ativa (preserva histórico sem permitir novos envios)
+    const { data: convInfo } = await supabase
+      .from('conversas')
+      .select('amizade_id')
+      .eq('id', conversaId)
+      .maybeSingle();
+
+    if (!convInfo?.amizade_id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Esta amizade foi desfeita. O chat está disponível apenas para leitura do histórico.',
+        },
+        { status: 403 }
+      );
+    }
+
+    const { data: amizadeInfo } = await supabase
+      .from('amizades')
+      .select('status')
+      .eq('id', convInfo.amizade_id)
+      .maybeSingle();
+
+    if (!amizadeInfo || amizadeInfo.status !== 'aceita') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Não é possível enviar mensagens: esta amizade não está ativa.',
+        },
+        { status: 403 }
       );
     }
 

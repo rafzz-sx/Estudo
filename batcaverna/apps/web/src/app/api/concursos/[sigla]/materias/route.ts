@@ -2,22 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { uuidOuNulo } from '@/lib/seguranca';
 
-// GET /api/concursos/[id]/materias — Matérias de um concurso com seus assuntos
+// GET /api/concursos/[sigla]/materias — Matérias de um concurso com seus assuntos
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ sigla: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { sigla } = await params;
+    const supabase = createServerSupabaseClient();
 
-    // O `id` vem da URL. Texto solto no lugar de um UUID derruba a rota com
-    // 22P02 do Postgres em vez de devolver lista vazia.
-    const concursoId = uuidOuNulo(id);
+    let concursoId = uuidOuNulo(sigla);
+    if (!concursoId) {
+      // Se não for UUID direto, busca pelo sigla (case-insensitive)
+      const { data: conc } = await supabase
+        .from('concursos')
+        .select('id')
+        .ilike('sigla', sigla)
+        .maybeSingle();
+
+      concursoId = conc?.id ?? null;
+    }
+
     if (!concursoId) {
       return NextResponse.json({ success: true, data: [] });
     }
-
-    const supabase = createServerSupabaseClient();
 
     const { data, error } = await supabase
       .from('concurso_materias')
@@ -35,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error('GET /api/concursos/[id]/materias error:', error);
+    console.error('GET /api/concursos/[sigla]/materias error:', error);
     return NextResponse.json(
       { success: false, error: 'Erro ao buscar matérias' },
       { status: 500 }

@@ -193,6 +193,24 @@ export default function RedacaoPage() {
     if (json?.success) setLendo({ id, texto: json.data.texto });
   };
 
+  const apagarRedacao = async (id: string, tema: string) => {
+    if (!confirm(`Tem certeza que deseja apagar a redação "${tema}"?`)) return;
+    try {
+      const res = await fetchWithAuth(`/api/redacao/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setMinhas((prev) => prev.filter((r) => r.id !== id));
+        if (lendo?.id === id) setLendo(null);
+        setAviso("Redação apagada com sucesso.");
+      } else {
+        alert(json.error || "Erro ao apagar redação.");
+      }
+    } catch (err) {
+      console.error("Erro ao apagar redação:", err);
+      alert("Erro ao conectar com o servidor.");
+    }
+  };
+
   const somaParcial = COMPETENCIAS.reduce(
     (a, c) => a + (notas[`c${c.numero}`] ?? 0),
     0
@@ -477,6 +495,15 @@ export default function RedacaoPage() {
                       className="shrink-0 cursor-pointer rounded-lg border border-bat-border px-3 py-1.5 text-xs text-bat-text-secondary transition-colors hover:text-bat-text"
                     >
                       {lendo?.id === r.id ? "fechar" : "ler"}
+                    </button>
+
+                    <button
+                      onClick={() => apagarRedacao(r.id, r.tema_titulo)}
+                      title="Excluir redação"
+                      className="shrink-0 cursor-pointer rounded-lg border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                      aria-label={`Excluir redação ${r.tema_titulo}`}
+                    >
+                      🗑️
                     </button>
                   </div>
 

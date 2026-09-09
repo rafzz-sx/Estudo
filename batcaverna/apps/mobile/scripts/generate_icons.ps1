@@ -1,7 +1,9 @@
-Add-Type -AssemblyName System.Drawing
+param(
+    [string]$sourcePath = "$PSScriptRoot\..\assets\icon.png",
+    [string]$resBase = "$PSScriptRoot\..\android\app\src\main\res"
+)
 
-$sourcePath = "C:\Users\perei\.gemini\antigravity-ide\brain\19d6e335-5fed-4a55-88a8-a42ccaa82ea9\.user_uploaded\media_1788300519084.png"
-$resBase = "C:\Users\perei\OneDrive\Documentos\Estudo\batcaverna\apps\mobile\android\app\src\main\res"
+Add-Type -AssemblyName System.Drawing
 
 if (-not (Test-Path $sourcePath)) {
     Write-Error "Source image not found: $sourcePath"

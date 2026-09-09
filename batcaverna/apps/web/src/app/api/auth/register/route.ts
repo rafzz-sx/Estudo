@@ -16,6 +16,11 @@ import {
   isStrongPassword,
   isValidApelido,
 } from '@/lib/validators';
+import {
+  enviarEmail,
+  temProvedorDeEmail,
+  modeloVerificacaoEmail,
+} from '@/lib/email';
 
 function getSupabase() {
   return createServerSupabaseClient();
@@ -194,7 +199,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── 7. Gerar token de verificação de e-mail ───────────────
+    // ─── 7. Gerar token de verificação de e-mail e enviar ─────
     try {
       const emailToken = generateEmailToken();
       await supabase.from('email_verification_tokens').insert({
@@ -203,8 +208,21 @@ export async function POST(req: NextRequest) {
         expira_em: getEmailTokenExpiry().toISOString(),
         usado: false,
       });
+
+      if (temProvedorDeEmail()) {
+        const template = modeloVerificacaoEmail(
+          emailToken,
+          newUser.apelido || newUser.nome
+        );
+        await enviarEmail({
+          para: newUser.email,
+          assunto: template.assunto,
+          html: template.html,
+          texto: template.texto,
+        });
+      }
     } catch (emailTokenErr) {
-      console.warn('Warning saving email token:', emailTokenErr);
+      console.warn('Warning saving/sending email token:', emailTokenErr);
     }
 
     // ─── 8. Gerar tokens de autenticação ───────────────────────
