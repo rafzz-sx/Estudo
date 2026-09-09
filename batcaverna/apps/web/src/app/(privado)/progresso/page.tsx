@@ -200,26 +200,26 @@ export default function ProgressoPage() {
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      {/* ═══ CABEÇALHO COM BADGE DE SESSÃO AUTOMÁTICA (8H) ═══ */}
+      {/* ═══ CABEÇALHO DO MEU PROGRESSO ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <BatLogo size={36} glow />
+            <span className="text-3xl">📊</span>
             <h1 className="heading text-2xl sm:text-3xl text-bat-text font-bold">
-              Bem-vindo à <span className="text-white">Bat</span><span className="text-bat-gold-400 drop-shadow-[0_0_12px_rgba(245,197,24,0.4)]">Caverna</span>, {apelido}
+              Meu <span className="text-bat-gold-400">Progresso</span>
             </h1>
             {role === "admin" && (
-              <Link href="/admin" className="badge-admin no-underline">
+              <Link href="/admin" className="badge-admin no-underline ml-1">
                 ADMIN
               </Link>
             )}
           </div>
-          <p className="text-bat-text-secondary text-sm ml-10">
-            Vamos dominar mais um dia de estudos? 💪
+          <p className="text-bat-text-secondary text-sm">
+            Estatísticas de combate, histórico de ofensivas, patentes e conquistas do soldado {apelido}.
           </p>
         </div>
 
-        {/* Widget de Sessão Automática de 8h */}
+        {/* Widget de Sessão de Estudo */}
         <div className="self-start sm:self-center">
           <StudySessionBadge variant="full" />
         </div>

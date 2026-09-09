@@ -57,8 +57,7 @@ export async function contarQuestoes(
 ): Promise<number> {
   let query = supabase
     .from('questoes')
-    .select('id', { count: 'exact', head: true })
-    .eq('ativa', true);
+    .select('id', { count: 'exact', head: true });
 
   if (filtro.concurso_id) query = query.eq('concurso_id', filtro.concurso_id);
   if (filtro.materia_id) query = query.eq('materia_id', filtro.materia_id);
@@ -111,7 +110,6 @@ export async function anosDisponiveis(
     let query = supabase
       .from('questoes')
       .select('ano')
-      .eq('ativa', true)
       .not('ano', 'is', null)
       .range(inicio, inicio + PAGINA - 1);
 

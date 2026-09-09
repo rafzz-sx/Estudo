@@ -3,6 +3,30 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { limparTermoBusca, uuidOuNulo } from '@/lib/seguranca';
 
+const EMOJIS_CONCURSO: Record<string, string> = {
+  EEAR: '✈️',
+  ESA: '⭐',
+  EAM: '⚓',
+  CN: '🚢',
+  EPCAR: '🛩️',
+  ESPCEX: '🎖️',
+  EFOMM: '🌊',
+  IME: '🔬',
+  ENEM: '📚',
+};
+
+const CORES_CONCURSO: Record<string, string> = {
+  EEAR: '#0284c7',
+  ESA: '#16a34a',
+  EAM: '#2563eb',
+  CN: '#0d9488',
+  EPCAR: '#3b82f6',
+  ESPCEX: '#b45309',
+  EFOMM: '#0891b2',
+  IME: '#dc2626',
+  ENEM: '#eab308',
+};
+
 /**
  * GET /api/questoes
  *
@@ -13,7 +37,6 @@ import { limparTermoBusca, uuidOuNulo } from '@/lib/seguranca';
  *   materia_id    UUID
  *   assunto       nome
  *   assunto_id    UUID
- *   area          natureza | humanas | linguagens | matematica  (ENEM)
  *   ano           2025
  *   dificuldade   facil | medio | dificil
  *   busca         texto livre no enunciado
@@ -21,10 +44,6 @@ import { limparTermoBusca, uuidOuNulo } from '@/lib/seguranca';
  *   comentadas=1        só as que têm gabarito comentado escrito
  *   ordem         recentes | antigas | aleatoria
  *   page, per_page
- *
- * O gabarito só é devolvido a quem já respondeu a questão — quem está
- * resolvendo recebe a questão sem `resposta_correta`/`explicacao`, senão
- * bastaria abrir o DevTools para colar.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -78,29 +97,20 @@ export async function GET(req: NextRequest) {
       .select(
         `
         id, concurso_id, materia_id, assunto_id,
-        texto_base, enunciado, alternativas,
-        ano, banca, dificuldade, dia_prova, numero_ordem, numero_original,
-        area_conhecimento, figura_descricao, figura_svg, precisa_resolucao, anulada,
-        tem_comentario,
-        vezes_respondida, vezes_acertada,
-        concursos (id, sigla, nome, emoji, cor_tema),
+        enunciado, alternativas,
+        ano, banca, dificuldade, explicacao, criado_em,
+        concursos (id, sigla, nome),
         materias  (id, nome, icone_emoji),
         assuntos  (id, nome)
       `,
         { count: 'exact' }
-      )
-      .eq('ativa', true);
+      );
 
     if (concursoId) query = query.eq('concurso_id', concursoId);
     if (materiaId) query = query.eq('materia_id', materiaId);
 
-    // UUID conferido antes de virar filtro: texto solto aqui faz o PostgREST
-    // devolver 22P02 e a tela inteira quebra por causa de um link ruim.
     const assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
     if (assuntoId) query = query.eq('assunto_id', assuntoId);
-
-    const area = searchParams.get('area');
-    if (area && area !== 'todas') query = query.eq('area_conhecimento', area);
 
     const ano = searchParams.get('ano');
     if (ano && ano !== 'todos') query = query.eq('ano', parseInt(ano));
@@ -110,18 +120,11 @@ export async function GET(req: NextRequest) {
       query = query.eq('dificuldade', dificuldade.toLowerCase());
     }
 
-    // `%` e `_` são curingas do LIKE: um termo com `%` sozinho força varredura
-    // completa das 3 mil questões a cada tecla digitada. `limparTermoBusca`
-    // também tira os metacaracteres da linguagem de filtro do PostgREST.
     const busca = limparTermoBusca(searchParams.get('busca'), 80);
     if (busca.length >= 3) {
       query = query.ilike('enunciado', `%${busca}%`);
     }
 
-    // Só as que têm gabarito comentado escrito. As 361 questões do ENEM
-    // 2024/2025 vieram das provas oficiais com a chave de respostas e nenhum
-    // comentário — quem está estudando para entender, e não só para conferir
-    // a letra, liga este filtro e não esbarra nelas.
     if (searchParams.get('comentadas') === '1') {
       query = query.not('explicacao', 'is', null);
     }
@@ -129,13 +132,6 @@ export async function GET(req: NextRequest) {
     // ─── Esconde o que o usuário já respondeu ────────────────
     const user = await getAuthUserFromRequest(req);
     if (user && searchParams.get('nao_respondidas') === '1') {
-      // Um `NOT IN` com milhares de UUIDs vira uma URL gigantesca e o
-      // PostgREST rejeita. Pegamos as mais recentes, que é o que importa
-      // para não repetir questão logo em seguida.
-      // 800 UUIDs viravam uma querystring de ~30 KB — acima do que o proxy
-      // do Supabase aceita na linha de requisição, e a listagem voltava vazia
-      // exatamente para quem mais usa a plataforma. 200 cabe com folga e
-      // continua cobrindo 20 páginas de 10 questões sem repetir nada.
       const LIMITE_EXCLUSAO = 200;
 
       const { data: respondidas } = await supabase
@@ -145,7 +141,7 @@ export async function GET(req: NextRequest) {
         .order('respondido_em', { ascending: false })
         .limit(LIMITE_EXCLUSAO);
 
-      const ids = [...new Set((respondidas ?? []).map((r) => r.questao_id))];
+      const ids = [...new Set((respondidas ?? []).map((r: any) => r.questao_id))];
       if (ids.length) query = query.not('id', 'in', `(${ids.join(',')})`);
     }
 
@@ -154,21 +150,67 @@ export async function GET(req: NextRequest) {
     if (ordem === 'antigas') {
       query = query
         .order('ano', { ascending: true, nullsFirst: false })
-        .order('numero_ordem', { ascending: true });
+        .order('criado_em', { ascending: true });
     } else {
       query = query
         .order('ano', { ascending: false, nullsFirst: false })
-        .order('numero_ordem', { ascending: true });
+        .order('criado_em', { ascending: false });
     }
 
     const offset = (page - 1) * perPage;
     const { data, count, error } = await query.range(offset, offset + perPage - 1);
     if (error) throw error;
 
+    // Formatar itens para atender com precisão o contrato esperado pelo frontend
+    const formatados = (data ?? []).map((q: any) => {
+      const sigla = (q.concursos?.sigla || '').toUpperCase();
+      return {
+        id: q.id,
+        texto_base: q.texto_base ?? null,
+        enunciado: q.enunciado,
+        alternativas: Array.isArray(q.alternativas) ? q.alternativas : [],
+        ano: q.ano ?? null,
+        banca: q.banca ?? null,
+        dificuldade: q.dificuldade ?? 'medio',
+        dia_prova: q.dia_prova ?? null,
+        numero_ordem: q.numero_ordem ?? null,
+        numero_original: q.numero_original ?? null,
+        figura_descricao: q.figura_descricao ?? null,
+        figura_svg: q.figura_svg ?? null,
+        precisa_resolucao: q.precisa_resolucao ?? false,
+        anulada: q.anulada ?? false,
+        tem_comentario: q.tem_comentario ?? Boolean(q.explicacao),
+        vezes_respondida: q.vezes_respondida ?? 0,
+        vezes_acertada: q.vezes_acertada ?? 0,
+        concursos: q.concursos
+          ? {
+              id: q.concursos.id,
+              sigla: q.concursos.sigla,
+              nome: q.concursos.nome,
+              emoji: q.concursos.emoji ?? EMOJIS_CONCURSO[sigla] ?? '🎯',
+              cor_tema: q.concursos.cor_tema ?? CORES_CONCURSO[sigla] ?? '#F5C518',
+            }
+          : null,
+        materias: q.materias
+          ? {
+              id: q.materias.id,
+              nome: q.materias.nome,
+              icone_emoji: q.materias.icone_emoji ?? '📚',
+            }
+          : null,
+        assuntos: q.assuntos
+          ? {
+              id: q.assuntos.id,
+              nome: q.assuntos.nome,
+            }
+          : null,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        items: data ?? [],
+        items: formatados,
         total: count ?? 0,
         page,
         per_page: perPage,

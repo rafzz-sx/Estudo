@@ -44,7 +44,6 @@ export async function GET(
         .from('questoes')
         .select('materia_id, assunto_id')
         .eq('concurso_id', concurso.id)
-        .eq('ativa', true)
         .range(inicio, inicio + PAGINA - 1);
 
       if (!fatia?.length) break;

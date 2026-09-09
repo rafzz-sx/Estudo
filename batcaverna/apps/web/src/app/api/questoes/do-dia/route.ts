@@ -26,8 +26,7 @@ export async function GET(req: NextRequest) {
 
     let contagem = supabase
       .from('questoes')
-      .select('id', { count: 'exact', head: true })
-      .eq('ativa', true);
+      .select('id', { count: 'exact', head: true });
     if (concursoIds.length) contagem = contagem.in('concurso_id', concursoIds);
 
     const { count } = await contagem;
@@ -49,7 +48,6 @@ export async function GET(req: NextRequest) {
         `id, enunciado, ano,
          concursos (sigla), materias (nome), assuntos (nome)`
       )
-      .eq('ativa', true)
       // Sem ORDER BY, o Postgres não garante ordem estável entre execuções —
       // ela muda com atualização, VACUUM ou plano diferente. O `offset` abaixo
       // é determinístico, mas caía numa linha diferente ao longo do dia, e a

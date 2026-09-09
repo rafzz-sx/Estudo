@@ -2,6 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { anosDisponiveis, contarPorId, contarQuestoes } from '@/lib/contagens';
 
+const EMOJIS_CONCURSO: Record<string, string> = {
+  EEAR: '✈️',
+  ESA: '⭐',
+  EAM: '⚓',
+  CN: '🚢',
+  EPCAR: '🛩️',
+  ESPCEX: '🎖️',
+  EFOMM: '🌊',
+  IME: '🔬',
+  ENEM: '📚',
+};
+
+const CORES_CONCURSO: Record<string, string> = {
+  EEAR: '#0284c7',
+  ESA: '#16a34a',
+  EAM: '#2563eb',
+  CN: '#0d9488',
+  EPCAR: '#3b82f6',
+  ESPCEX: '#b45309',
+  EFOMM: '#0891b2',
+  IME: '#dc2626',
+  ENEM: '#eab308',
+};
+
 /**
  * GET /api/questoes/filtros?concurso=EEAR
  *
@@ -14,10 +38,13 @@ export async function GET(req: NextRequest) {
     const supabase = createServerSupabaseClient();
     const sigla = searchParams.get('concurso');
 
-    const { data: concursos } = await supabase
+    const { data: concursos, error: concErr } = await supabase
       .from('concursos')
-      .select('id, sigla, nome, emoji, cor_tema, forca, tem_taf')
-      .order('ordem_exibicao', { ascending: true });
+      .select('id, sigla, nome, forca');
+
+    if (concErr) {
+      console.warn('Aviso ao buscar concursos em filtros:', concErr.message);
+    }
 
     const lista = concursos ?? [];
 
@@ -41,10 +68,10 @@ export async function GET(req: NextRequest) {
         .from('concurso_materias')
         .select('materia_id')
         .eq('concurso_id', concursoId);
-      materiaIds = (vinculos ?? []).map((v) => v.materia_id);
+      materiaIds = (vinculos ?? []).map((v: any) => v.materia_id);
     } else {
       const { data: todas } = await supabase.from('materias').select('id');
-      materiaIds = (todas ?? []).map((m) => m.id);
+      materiaIds = (todas ?? []).map((m: any) => m.id);
     }
 
     const contagemMateria = await contarPorId(
@@ -71,14 +98,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        concursos: lista.map((c) => ({
-          ...c,
-          total_questoes: totalPorConcurso[c.id] ?? 0,
-        })),
-        // Matéria sem nenhuma questão não deve poluir o seletor.
+        concursos: lista.map((c: any) => {
+          const s = (c.sigla || '').toUpperCase();
+          return {
+            id: c.id,
+            sigla: c.sigla,
+            nome: c.nome,
+            forca: c.forca,
+            emoji: c.emoji ?? EMOJIS_CONCURSO[s] ?? '🎯',
+            cor_tema: c.cor_tema ?? CORES_CONCURSO[s] ?? '#F5C518',
+            total_questoes: totalPorConcurso[c.id] ?? 0,
+          };
+        }),
+        // Matérias disponíveis com contagem
         materias: (materias ?? [])
-          .map((m) => ({ ...m, total_questoes: contagemMateria[m.id] ?? 0 }))
-          .filter((m) => m.total_questoes > 0),
+          .map((m: any) => ({
+            ...m,
+            total_questoes: contagemMateria[m.id] ?? 0,
+          }))
+          .filter((m: any) => m.total_questoes > 0 || !concursoId),
         anos,
         total,
       },

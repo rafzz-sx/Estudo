@@ -14,8 +14,7 @@ export async function GET() {
 
     const { count: totalQuestoes } = await supabase
       .from('questoes')
-      .select('id', { count: 'exact', head: true })
-      .eq('ativa', true);
+      .select('id', { count: 'exact', head: true });
 
     const { count: totalConcursos } = await supabase
       .from('concursos')
@@ -28,7 +27,6 @@ export async function GET() {
     const { data: anos } = await supabase
       .from('questoes')
       .select('ano')
-      .eq('ativa', true)
       .not('ano', 'is', null)
       .limit(20000);
 

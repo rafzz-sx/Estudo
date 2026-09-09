@@ -84,7 +84,6 @@ export async function radarDeFraqueza(
       .from('questoes')
       .select('id, assunto_id')
       .eq('concurso_id', concursoId)
-      .eq('ativa', true)
   );
 
   const totalPorAssunto = new Map<string, number>();
