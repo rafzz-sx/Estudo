@@ -267,7 +267,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {sidebarOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 bg-black/60 z-30"
+            className="lg:hidden fixed inset-0 bg-black/70 backdrop-blur-xs z-40"
             onClick={() => setSidebarOpen(false)}
           />
           <aside className="lg:hidden fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-bat-bg-card border-r border-bat-border z-40 flex flex-col h-full animate-in slide-in-from-left">

@@ -5,6 +5,7 @@ import { calcularNivel } from '@batcaverna/utils';
 interface StudySessionState {
   isActive: boolean;
   isPaused: boolean;
+  isManuallyPaused: boolean;
   sessionId: string | null;
   duracaoSegundos: number;
   tempoEstudoHoje: number;
@@ -16,7 +17,7 @@ interface StudySessionState {
   // Actions
   initSession: () => Promise<void>;
   sendHeartbeat: (opcoes?: { keepalive?: boolean; forcar?: boolean }) => Promise<void>;
-  pauseSession: () => void;
+  pauseSession: (manual?: boolean) => void;
   resumeSession: () => void;
   stopSession: () => Promise<void>;
   tick: () => void;
@@ -61,6 +62,7 @@ export function formatarTempoLegivel(totalSegundos: number): string {
 export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   isActive: false,
   isPaused: false,
+  isManuallyPaused: false,
   sessionId: null,
   duracaoSegundos: 0,
   tempoEstudoHoje: 0,
@@ -92,6 +94,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             set({
               isActive: true,
               isPaused: false,
+              isManuallyPaused: false,
               sessionId: sessao_ativa.id,
               duracaoSegundos: sessao_ativa.duracao_segundos || 0,
               multiplicador: sessao_ativa.multiplicador || 1.0,
@@ -116,6 +119,7 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
           set({
             isActive: true,
             isPaused: false,
+            isManuallyPaused: false,
             sessionId: startData.data.session_id,
             duracaoSegundos: startData.data.duracao_segundos || 0,
             multiplicador: startData.data.multiplicador || 1.0,
@@ -239,13 +243,16 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     }));
   },
 
-  pauseSession: () => {
-    set({ isPaused: true });
+  pauseSession: (manual = true) => {
+    set((state) => ({
+      isPaused: true,
+      isManuallyPaused: manual ? true : state.isManuallyPaused,
+    }));
     // Pausa é fronteira: vale sincronizar mesmo que o valor não tenha mudado.
     get().sendHeartbeat({ forcar: true });
   },
 
-  resumeSession: () => set({ isPaused: false }),
+  resumeSession: () => set({ isPaused: false, isManuallyPaused: false }),
 
   stopSession: async () => {
     // Grava o tempo restante antes de fechar. Reusa o próprio heartbeat em vez
@@ -260,6 +267,6 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       console.warn('Erro ao finalizar sessão:', e);
     }
     ultimaDuracaoEnviada = -1;
-    set({ isActive: false, isPaused: false, sessionId: null, duracaoSegundos: 0 });
+    set({ isActive: false, isPaused: false, isManuallyPaused: false, sessionId: null, duracaoSegundos: 0 });
   },
 }));

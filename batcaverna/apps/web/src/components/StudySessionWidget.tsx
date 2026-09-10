@@ -33,6 +33,7 @@ export function StudySessionTracker() {
   const {
     isActive,
     isPaused,
+    isManuallyPaused,
     initSession,
     sendHeartbeat,
     tick,
@@ -47,16 +48,17 @@ export function StudySessionTracker() {
     if (!user?.id) return;
 
     if (emRota) {
-      if (!isActive && !isPaused) {
+      if (!isActive && !isPaused && !isManuallyPaused) {
         initSession();
-      } else if (isActive && isPaused) {
+      } else if (isActive && isPaused && !isManuallyPaused) {
+        // Só despausa automaticamente se não tiver sido pausado manualmente pelo aluno!
         resumeSession();
       }
     } else if (isActive && !isPaused) {
-      // Saiu da trilha para dashboard, chat, ranking, perfil: pausa imediatamente para evitar fraudes!
-      pauseSession();
+      // Saiu da trilha para dashboard, chat, ranking, perfil: pausa automaticamente para evitar fraudes!
+      pauseSession(false);
     }
-  }, [user?.id, emRota, isActive, isPaused, initSession, resumeSession, pauseSession]);
+  }, [user?.id, emRota, isActive, isPaused, isManuallyPaused, initSession, resumeSession, pauseSession]);
 
   // 2. Cronômetro de 1 segundo: SÓ avança se estiver na trilha, ativo e com aba visível
   useEffect(() => {
@@ -172,8 +174,11 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
       {/* ═══ POPOVER DE DETALHES DA SESSÃO ═══ */}
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 bg-bat-bg-card border border-bat-border rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in-50 zoom-in-95">
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="fixed inset-x-3 top-16 sm:top-auto sm:inset-x-auto sm:absolute sm:right-0 sm:mt-2 w-auto sm:w-80 max-w-[calc(100vw-1.5rem)] bg-bat-bg-card border border-bat-border rounded-2xl p-4 shadow-2xl z-50 animate-in fade-in-50 zoom-in-95 mx-auto">
             <div className="flex items-center justify-between pb-3 border-b border-bat-border/50 mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-lg">⏱️</span>
@@ -182,15 +187,25 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
                   <p className="text-[10px] text-bat-text-muted">Proteção anti-fraude ativa</p>
                 </div>
               </div>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  pausadoPorEstarForaDaTrilha || isPaused
-                    ? "bg-amber-500/20 text-amber-300"
-                    : "bg-bat-success/20 text-bat-success"
-                }`}
-              >
-                {pausadoPorEstarForaDaTrilha ? "Pausado (Fora da Trilha)" : isPaused ? "Pausado" : "Ativo na Trilha"}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    pausadoPorEstarForaDaTrilha || isPaused
+                      ? "bg-amber-500/20 text-amber-300"
+                      : "bg-bat-success/20 text-bat-success"
+                  }`}
+                >
+                  {pausadoPorEstarForaDaTrilha ? "Fora da Trilha" : isPaused ? "Pausado" : "Ativo na Trilha"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="w-6 h-6 rounded-lg bg-bat-bg-secondary text-bat-text-muted hover:text-bat-text flex items-center justify-center text-xs transition cursor-pointer"
+                  aria-label="Fechar detalhes"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {pausadoPorEstarForaDaTrilha && (
@@ -229,21 +244,23 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
                 <Link
                   href="/concursos"
                   onClick={() => setIsOpen(false)}
-                  className="btn-primary flex-1 py-2 text-xs font-bold text-center no-underline"
+                  className="btn-primary flex-1 py-2.5 text-xs font-bold text-center no-underline cursor-pointer active:scale-95"
                 >
                   🎯 Ir para uma Trilha
                 </Link>
               ) : isPaused ? (
                 <button
+                  type="button"
                   onClick={() => resumeSession()}
-                  className="btn-primary flex-1 py-2 text-xs font-bold"
+                  className="btn-primary flex-1 py-2.5 text-xs font-bold cursor-pointer active:scale-95 transition-transform"
                 >
                   ▶️ Retomar Estudo
                 </button>
               ) : (
                 <button
-                  onClick={() => pauseSession()}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold bg-bat-bg-secondary border border-bat-border hover:bg-bat-bg-elevated text-bat-text transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => pauseSession(true)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-bat-bg-secondary border border-bat-border hover:bg-bat-bg-elevated text-bat-text transition-colors cursor-pointer active:scale-95"
                 >
                   ⏸️ Pausar
                 </button>

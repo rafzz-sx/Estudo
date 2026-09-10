@@ -299,28 +299,61 @@ export async function POST(req: NextRequest) {
 
     const analise = analisarMensagem(textoFinal);
 
-    const { data: novaMsg, error: mErr } = await supabase
+    let novaMsg: any = null;
+    let mErr: any = null;
+
+    // Tentativa 1: Inserir com colunas estendidas de moderação
+    const insertPayload: Record<string, any> = {
+      conversa_id: conversaId,
+      autor_id: user,
+      conteudo_texto: textoFinal,
+      tipo,
+      midia_url: midia_url || null,
+      duracao_segundos: duracao,
+      sinalizada_para_revisao: analise.sinalizada,
+    };
+    if (analise.gravidade) insertPayload.gravidade_moderacao = analise.gravidade;
+    if (analise.categorias.length) insertPayload.categorias_moderacao = analise.categorias;
+    if (analise.ocorrencias.length) {
+      insertPayload.termos_detectados = analise.ocorrencias.map((o) => o.trecho);
+    }
+
+    const resComModeracao = await supabase
       .from('mensagem_chat')
-      .insert({
-        conversa_id: conversaId,
-        autor_id: user,
-        conteudo_texto: textoFinal,
-        tipo,
-        midia_url: midia_url || null,
-        duracao_segundos: duracao,
-        sinalizada_para_revisao: analise.sinalizada,
-        // Guardar a classificação, e não só o booleano, é o que deixa a fila
-        // do painel ordenar por gravidade em vez de por data.
-        gravidade_moderacao: analise.gravidade,
-        categorias_moderacao: analise.categorias.length ? analise.categorias : null,
-        termos_detectados: analise.ocorrencias.length
-          ? analise.ocorrencias.map((o) => o.trecho)
-          : null,
-      })
+      .insert(insertPayload)
       .select('*, autor:users!autor_id (id, apelido, avatar_url)')
       .single();
 
-    if (mErr) throw mErr;
+    if (resComModeracao.error) {
+      // Se a tabela ainda não tiver as colunas de moderação no banco, insere com os campos base
+      const erroColuna =
+        resComModeracao.error.code === '42703' ||
+        resComModeracao.error.message?.includes('gravidade_moderacao') ||
+        resComModeracao.error.message?.includes('schema cache');
+
+      if (erroColuna) {
+        const resBase = await supabase
+          .from('mensagem_chat')
+          .insert({
+            conversa_id: conversaId,
+            autor_id: user,
+            conteudo_texto: textoFinal,
+            tipo,
+            midia_url: midia_url || null,
+            duracao_segundos: duracao,
+            sinalizada_para_revisao: analise.sinalizada,
+          })
+          .select('*, autor:users!autor_id (id, apelido, avatar_url)')
+          .single();
+
+        if (resBase.error) throw resBase.error;
+        novaMsg = resBase.data;
+      } else {
+        throw resComModeracao.error;
+      }
+    } else {
+      novaMsg = resComModeracao.data;
+    }
 
     // Atualizar timestamp da conversa
     await supabase
