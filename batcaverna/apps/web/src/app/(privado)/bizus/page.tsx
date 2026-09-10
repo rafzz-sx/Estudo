@@ -115,17 +115,17 @@ function Bizus() {
       </header>
 
       {/* ═══ FILTROS ═══ */}
-      <div className="mb-5 flex flex-wrap gap-3">
+      <div className="mb-5 flex flex-wrap gap-2.5 sm:gap-3">
         <input
           value={filtros.busca}
           onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
-          placeholder="Buscar bizu..."
-          className="input-field min-w-0 flex-1 text-sm"
+          placeholder="Buscar bizu por macete, tema ou fórmula..."
+          className="input-field min-w-0 w-full sm:w-auto sm:flex-1 text-sm"
         />
         <select
           value={filtros.materia}
           onChange={(e) => setFiltros({ ...filtros, materia: e.target.value })}
-          className="input-field shrink-0 text-sm"
+          className="input-field w-full sm:w-auto shrink-0 text-sm"
         >
           <option value="todas">Todas as matérias</option>
           {materias.map((m) => (
@@ -137,7 +137,7 @@ function Bizus() {
         <select
           value={filtros.impacto}
           onChange={(e) => setFiltros({ ...filtros, impacto: e.target.value })}
-          className="input-field shrink-0 text-sm"
+          className="input-field w-full sm:w-auto shrink-0 text-sm"
         >
           {IMPACTOS.map((i) => (
             <option key={i.valor} value={i.valor}>
@@ -145,7 +145,7 @@ function Bizus() {
             </option>
           ))}
         </select>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-bat-border bg-bat-bg-card px-3.5 py-2">
+        <label className="flex w-full sm:w-auto shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border border-bat-border bg-bat-bg-card px-3.5 py-2 hover:border-bat-gold-400/40 transition-colors">
           <input
             type="checkbox"
             checked={filtros.favoritos}
@@ -154,7 +154,7 @@ function Bizus() {
             }
             className="accent-bat-gold-400"
           />
-          <span className="text-xs text-bat-text-secondary">⭐ Favoritos</span>
+          <span className="text-xs font-medium text-bat-text-secondary">⭐ Favoritos</span>
         </label>
       </div>
 

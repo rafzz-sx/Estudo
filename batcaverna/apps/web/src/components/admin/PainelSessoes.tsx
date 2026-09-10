@@ -173,8 +173,93 @@ export function PainelSessoes() {
         </label>
       </div>
 
-      {/* ═══ TABELA ═══ */}
-      <div className="overflow-x-auto rounded-2xl border border-bat-border bg-bat-bg-card">
+      {/* ═══ VISUALIZAÇÃO MOBILE (Cards sem rolagem lateral) ═══ */}
+      <div className="sm:hidden space-y-3">
+        {visiveis.length === 0 ? (
+          <p className="py-8 text-center text-xs text-bat-text-muted bg-bat-bg-card rounded-2xl border border-bat-border">
+            Nenhum usuário com esses filtros.
+          </p>
+        ) : (
+          visiveis.map((u) => (
+            <div
+              key={u.id}
+              className="p-4 rounded-xl border border-bat-border bg-bat-bg-card space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {u.online && (
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-pulse"
+                        title="Online agora"
+                      />
+                    )}
+                    <p className="font-bold text-bat-text text-sm truncate">{u.apelido}</p>
+                    {u.role === "admin" && (
+                      <span className="rounded bg-bat-gold-400/20 px-1.5 text-[9px] font-bold text-bat-gold-400">
+                        ADMIN
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-bat-text-muted truncate mt-0.5">{u.email}</p>
+                </div>
+
+                <span
+                  className="rounded-lg px-2 py-0.5 text-[10px] font-bold shrink-0"
+                  style={
+                    u.sessao_segundos_restantes === null
+                      ? { color: "#64748B" }
+                      : u.sessao_expirada
+                      ? { color: "#EF4444", background: "#EF444415" }
+                      : u.sessao_segundos_restantes < 3600
+                      ? { color: "#F97316", background: "#F9731615" }
+                      : { color: "#22C55E", background: "#22C55E15" }
+                  }
+                >
+                  {restanteLegivel(u.sessao_segundos_restantes)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-bat-border/40 text-center font-mono text-[11px]">
+                <div className="p-2 rounded-lg bg-bat-bg-primary border border-bat-border/50">
+                  <span className="text-bat-text-muted block text-[10px]">Nível</span>
+                  <span className="font-bold text-bat-gold-400">Nv. {u.nivel_atual}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-bat-bg-primary border border-bat-border/50">
+                  <span className="text-bat-text-muted block text-[10px]">Questões</span>
+                  <span className="font-bold text-bat-text">{u.total_questoes_respondidas}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-bat-bg-primary border border-bat-border/50">
+                  <span className="text-bat-text-muted block text-[10px]">Acerto</span>
+                  <span
+                    className="font-bold"
+                    style={{
+                      color:
+                        u.taxa_acerto >= 70
+                          ? "#22C55E"
+                          : u.taxa_acerto >= 50
+                          ? "#F5C518"
+                          : u.taxa_acerto > 0
+                          ? "#EF4444"
+                          : undefined,
+                    }}
+                  >
+                    {u.total_questoes_respondidas > 0 ? `${u.taxa_acerto}%` : "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-bat-text-muted pt-1 border-t border-bat-border/30 font-mono">
+                <span>🔥 Streak: {u.streak_dias > 0 ? `${u.streak_dias}d` : "0"}</span>
+                <span>Estudo: {tempoLegivel(u.tempo_estudo)}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ═══ VISUALIZAÇÃO DESKTOP (Tabela) ═══ */}
+      <div className="hidden sm:block overflow-x-auto rounded-2xl border border-bat-border bg-bat-bg-card">
         <table className="w-full min-w-[880px] text-sm">
           <thead>
             <tr className="border-b border-bat-border text-left">

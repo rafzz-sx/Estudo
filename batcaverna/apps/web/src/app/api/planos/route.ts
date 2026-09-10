@@ -263,36 +263,55 @@ export async function POST(req: NextRequest) {
     // A última semana é de revisão e simulado, não de conteúdo novo.
     const semanasConteudo = Math.max(1, semanas - 1);
 
+    // Determina a Segunda-feira da semana 1 para referência exata dos dias da semana
+    const diaDaSemanaHoje = hoje.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sab
+    const diasAteSegunda = diaDaSemanaHoje === 0 ? -6 : 1 - diaDaSemanaHoje;
+    const segundaSemana1 = new Date(hoje);
+    segundaSemana1.setDate(segundaSemana1.getDate() + diasAteSegunda);
+
+    // Função utilitária para calcular a data exata do dia da semana (0=Dom, 1=Seg, ..., 6=Sáb)
+    const obterDataDiaSemana = (segundaDaSemana: Date, diaEscolhido: number, semanaNum: number): string => {
+      // 1=Seg (offset 0), 2=Ter (1), ..., 6=Sáb (5), 0=Dom (6)
+      const offset = diaEscolhido === 0 ? 6 : diaEscolhido - 1;
+      const d = new Date(segundaDaSemana);
+      d.setDate(d.getDate() + offset);
+      // Se na primeira semana o dia já passou antes de hoje, agenda para hoje
+      if (semanaNum === 1 && d < hoje) {
+        return hoje.toISOString().slice(0, 10);
+      }
+      return d.toISOString().slice(0, 10);
+    };
+
     for (let semana = 1; semana <= semanas; semana++) {
-      const inicioSemana = new Date(hoje);
-      inicioSemana.setDate(inicioSemana.getDate() + (semana - 1) * 7);
+      const segundaDaSemana = new Date(segundaSemana1);
+      segundaDaSemana.setDate(segundaDaSemana.getDate() + (semana - 1) * 7);
 
       // Semana final: reta de chegada
       if (semana === semanas && semanas > 1) {
-        const dataAlvo = new Date(inicioSemana);
-        dataAlvo.setDate(dataAlvo.getDate() + diasSemana[0]);
+        const diaSimulado = diasSemana[0] ?? 1;
+        const dataAlvoSimulado = obterDataDiaSemana(segundaDaSemana, diaSimulado, semana);
 
         itens.push({
           plano_id: plano.id,
           materia_id: null,
           titulo: 'Simulado completo em condições de prova',
           semana,
-          data_alvo: dataAlvo.toISOString().slice(0, 10),
+          data_alvo: dataAlvoSimulado,
           minutos_alvo: 180,
           tipo: 'simulado',
           peso: 1,
           ordem: 0,
         });
 
-        const dataRevisao = new Date(inicioSemana);
-        dataRevisao.setDate(dataRevisao.getDate() + (diasSemana[1] ?? 2));
+        const diaRevisao = diasSemana[1] ?? diasSemana[0] ?? 2;
+        const dataAlvoRevisao = obterDataDiaSemana(segundaDaSemana, diaRevisao, semana);
 
         itens.push({
           plano_id: plano.id,
           materia_id: null,
           titulo: 'Revisar o caderno de erros inteiro',
           semana,
-          data_alvo: dataRevisao.toISOString().slice(0, 10),
+          data_alvo: dataAlvoRevisao,
           minutos_alvo: 120,
           tipo: 'revisar',
           peso: 1,
@@ -303,12 +322,12 @@ export async function POST(req: NextRequest) {
 
       let ordem = 0;
       for (const m of comPeso) {
-        const minutos = distribuicao[m.id] ?? 0;
-        if (minutos < 20) continue; // menos que isso não vira sessão de estudo
+        // Garante no mínimo 25 minutos para que matérias com menor peso não sejam descartadas
+        const minutosCalculados = distribuicao[m.id] ?? 0;
+        const minutos = Math.max(25, minutosCalculados);
 
         const dia = diasSemana[ordem % diasSemana.length];
-        const dataAlvo = new Date(inicioSemana);
-        dataAlvo.setDate(dataAlvo.getDate() + dia);
+        const dataAlvo = obterDataDiaSemana(segundaDaSemana, dia, semana);
 
         // Alterna teoria e questões; o assunto gira a cada semana para
         // cobrir a ementa em vez de repetir sempre o primeiro tópico.
@@ -326,7 +345,7 @@ export async function POST(req: NextRequest) {
             ? `${m.nome}: ${assunto}`
             : `${m.nome} — bateria de questões`,
           semana,
-          data_alvo: dataAlvo.toISOString().slice(0, 10),
+          data_alvo: dataAlvo,
           minutos_alvo: minutos,
           tipo: ehTeoria ? 'estudar_teoria' : 'resolver_questoes',
           peso: Number(((m.peso / comPeso.reduce((a: number, x: any) => a + x.peso, 0)) * 100).toFixed(2)),

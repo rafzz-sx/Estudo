@@ -44,7 +44,7 @@ const navLinksBase: NavLink[] = [
   { href: "/perfil?tab=config", label: "Configurações", icon: "⚙️" },
 ];
 
-const adminLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
+const adminLink: NavLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
 
 /** Quantas revisões espaçadas venceram — vira o selo vermelho no menu. */
 function useRevisoesPendentes() {
@@ -130,7 +130,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const tocandoAlgo = usePlayerStore((s) => s.fila.length > 0);
 
   return (
-    <div className="min-h-screen bg-bat-bg flex">
+    <div className="min-h-screen bg-bat-bg flex w-full max-w-full overflow-x-hidden">
       {/* Player global: fica fora da árvore de páginas para a música não
           parar a cada navegação. Só aparece quando há algo tocando. */}
       <DynamicIsland />
@@ -362,11 +362,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           ele cobria o título da página; o respiro extra desce o conteúdo
           exatamente a altura dele — e some junto com o player. */}
       <main
-        className={`flex-1 lg:ml-64 min-h-screen ${
+        className={`flex-1 lg:ml-64 min-w-0 w-full max-w-full min-h-screen overflow-x-hidden ${
           tocandoAlgo ? "pt-32 lg:pt-20" : "pt-16 lg:pt-0"
         }`}
       >
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full min-w-0">
           {children}
         </div>
       </main>

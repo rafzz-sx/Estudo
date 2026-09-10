@@ -464,8 +464,85 @@ export default function AdminPage() {
       </div>
 
       {/* ═══ ABAS DE NAVEGAÇÃO ═══ */}
-      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 sm:pb-0">
-        <div className="flex gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-xl w-max sm:w-fit sm:flex-wrap">
+      {/* Mobile: Seletor Inteligente Categorizado + Atalhos */}
+      <div className="sm:hidden bg-bat-bg-card border border-bat-border p-3.5 rounded-2xl space-y-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold uppercase tracking-wider text-[11px] text-bat-gold-400">
+            Módulo Administrativo
+          </span>
+          <span className="text-[10px] text-bat-text-muted">18 painéis disponíveis</span>
+        </div>
+        <div className="relative">
+          <select
+            value={aba}
+            onChange={(e) => trocarAba(e.target.value as AbaAdmin)}
+            className="w-full bg-bat-bg-primary border border-bat-gold-400/40 text-bat-text font-bold text-xs rounded-xl px-3.5 py-3 appearance-none focus:outline-none focus:border-bat-gold-400 pr-8"
+          >
+            <optgroup label="📊 Monitoramento Geral">
+              <option value="visao_geral">📊 Visão Geral</option>
+              <option value="online">🟢 Online Agora {metricas?.online_agora ? `(${metricas.online_agora})` : ""}</option>
+              <option value="saude">🩺 Diagnóstico da Instalação {resumoSaude && !resumoSaude.saudavel ? `(🚨 ${resumoSaude.problemas_criticos})` : ""}</option>
+              <option value="sessoes">⏳ Sessões de Estudo</option>
+            </optgroup>
+            <optgroup label="👥 Soldados & Suporte">
+              <option value="usuarios">👥 Contas & Moderação de Soldados</option>
+              <option value="tickets">🎫 Tickets de Atendimento {tickets.filter((t) => t.status === "aberto").length ? `(${tickets.filter((t) => t.status === "aberto").length})` : ""}</option>
+              <option value="feedback">💬 Feedback dos Alunos {resumoFeedback?.nao_lidos ? `(${resumoFeedback.nao_lidos})` : ""}</option>
+              <option value="contatos">📨 Contatos do Fale Conosco {contadoresAbas.contatos_nao_lidos ? `(${contadoresAbas.contatos_nao_lidos})` : ""}</option>
+              <option value="reset_senha">🔑 Redefinições de Senha {contadoresAbas.reset_pendentes ? `(${contadoresAbas.reset_pendentes})` : ""}</option>
+            </optgroup>
+            <optgroup label="🛡️ Moderação & Alertas">
+              <option value="alertas">🚨 Moderação & Denúncias {contadoresAbas.moderacao_pendentes ? `(${contadoresAbas.moderacao_pendentes})` : ""}</option>
+              <option value="contestacoes">⚖️ Contestações de Questões {contadoresAbas.contestacoes_abertas ? `(${contadoresAbas.contestacoes_abertas})` : ""}</option>
+              <option value="moderacao">🛡️ Chat & Palavras Ofensivas</option>
+            </optgroup>
+            <optgroup label="📚 Conteúdo & Plataforma">
+              <option value="armazem">📥 Importar Questões</option>
+              <option value="resolucoes">✍️ Resoluções Comentadas</option>
+              <option value="teoria">📝 Lacunas de Teoria</option>
+              <option value="banners">🖼️ Banners de Concursos</option>
+              <option value="avisos">📢 Mural de Avisos</option>
+              <option value="auditoria">📝 Auditoria & Logs</option>
+            </optgroup>
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-bat-gold-400 font-bold">
+            ▾
+          </div>
+        </div>
+
+        {/* Atalhos Rápidos no Mobile */}
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          {[
+            { key: "visao_geral", label: "Geral" },
+            { key: "usuarios", label: "Contas" },
+            { key: "tickets", label: "Tickets", badge: tickets.filter((t) => t.status === "aberto").length },
+            { key: "alertas", label: "Moderação", badge: contadoresAbas.moderacao_pendentes },
+            { key: "saude", label: "Saúde", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0 },
+            { key: "sessoes", label: "Sessões" },
+          ].map((p) => (
+            <button
+              key={p.key}
+              onClick={() => trocarAba(p.key as AbaAdmin)}
+              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                aba === p.key
+                  ? "bg-bat-gold-400 text-black shadow-sm"
+                  : "bg-bat-bg-primary text-bat-text-secondary border border-bat-border hover:text-bat-text"
+              }`}
+            >
+              {p.label}
+              {p.badge && p.badge > 0 ? (
+                <span className="ml-1 rounded-full bg-bat-error px-1.5 py-0.2 text-[9px] text-white">
+                  {p.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop: Grid/Flex de Abas Clássicas com Badges */}
+      <div className="hidden sm:block w-full">
+        <div className="flex flex-wrap gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-xl w-full">
           {[
             { key: "visao_geral", label: "📊 Visão Geral", badge: 0 },
             { key: "online", label: "🟢 Online Agora", badge: metricas?.online_agora ?? 0 },
@@ -697,7 +774,114 @@ export default function AdminPage() {
             </p>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-bat-border">
+          {/* ═══ VISUALIZAÇÃO MOBILE (Cards verticais sem rolagem lateral) ═══ */}
+          <div className="sm:hidden space-y-3">
+            {usuariosFiltrados.length === 0 ? (
+              <p className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border">
+                Nenhum soldado encontrado com os filtros atuais.
+              </p>
+            ) : (
+              usuariosFiltrados.map((u) => {
+                const situacao = u.situacao ?? "ativa";
+                const ocupado = moderando === u.id;
+                return (
+                  <div
+                    key={u.id}
+                    className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-bat-text text-sm truncate">{u.nome}</p>
+                          {u.role === "admin" ? (
+                            <span className="badge-admin text-[10px]">ADMIN</span>
+                          ) : (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-bat-bg-secondary text-bat-text-muted">
+                              ALUNO
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-bat-text-muted truncate">{u.email}</p>
+                        <p className="text-xs text-bat-gold-400 font-mono font-bold mt-1">
+                          🦇 {u.apelido}
+                          {u.apelidos_antigos?.length > 0 && (
+                            <span className="font-normal text-[10px] text-bat-text-muted ml-1">
+                              (antes: {u.apelidos_antigos.join(", ")})
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-bold ${
+                          situacao === "ativa"
+                            ? "bg-bat-success/10 text-bat-success"
+                            : situacao === "suspensa"
+                            ? "bg-bat-warning/10 text-bat-warning"
+                            : "bg-bat-error/10 text-bat-error"
+                        }`}
+                      >
+                        {situacao.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-mono text-bat-text-muted pt-2 border-t border-bat-border/50">
+                      <span className="text-bat-text">Nv. {u.nivel_atual} · {u.xp_total.toLocaleString("pt-BR")} XP</span>
+                      <span>desde {new Date(u.criado_em).toLocaleDateString("pt-BR")}</span>
+                    </div>
+
+                    {u.motivo_suspensao && (
+                      <p className="text-[11px] text-bat-warning bg-bat-warning/10 p-2 rounded-lg">
+                        Motivo: {u.motivo_suspensao}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-bat-border/40">
+                      {u.role === "admin" ? (
+                        <AcaoConta
+                          rotulo="Rebaixar"
+                          onClick={() => moderarConta(u, "rebaixar")}
+                          ocupado={ocupado}
+                        />
+                      ) : (
+                        <AcaoConta
+                          rotulo="Promover"
+                          onClick={() => moderarConta(u, "promover")}
+                          ocupado={ocupado}
+                        />
+                      )}
+
+                      {situacao === "ativa" ? (
+                        <>
+                          <AcaoConta
+                            rotulo="Suspender 7d"
+                            tom="aviso"
+                            onClick={() => moderarConta(u, "suspender")}
+                            ocupado={ocupado}
+                          />
+                          <AcaoConta
+                            rotulo="Desativar"
+                            tom="erro"
+                            onClick={() => moderarConta(u, "desativar")}
+                            ocupado={ocupado}
+                          />
+                        </>
+                      ) : (
+                        <AcaoConta
+                          rotulo="Liberar"
+                          tom="ok"
+                          onClick={() => moderarConta(u, "liberar")}
+                          ocupado={ocupado}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* ═══ VISUALIZAÇÃO DESKTOP (Tabela original) ═══ */}
+          <div className="hidden sm:block overflow-x-auto rounded-xl border border-bat-border">
             <table className="w-full min-w-[800px] text-left text-xs">
               <thead>
                 <tr className="bg-bat-bg-primary border-b border-bat-border text-bat-text-muted uppercase font-mono">
