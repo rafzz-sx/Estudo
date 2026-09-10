@@ -36,7 +36,15 @@ export async function atualizarRevisao(
   supabase: SupabaseClient,
   userId: string,
   questaoId: string,
-  acertou: boolean
+  acertou: boolean,
+  dadosAtual?: {
+    id: string;
+    etapa: number | null;
+    agendada_para: string;
+    total_erros: number | null;
+    total_revisoes: number | null;
+    ativa: boolean;
+  } | null
 ): Promise<{
   agendada_para: string | null;
   etapa: number | null;
@@ -45,12 +53,16 @@ export async function atualizarRevisao(
 } | null> {
   const hoje = new Date().toISOString().slice(0, 10);
 
-  const { data: atual } = await supabase
-    .from('revisoes_agendadas')
-    .select('id, etapa, agendada_para, total_erros, total_revisoes, ativa')
-    .eq('user_id', userId)
-    .eq('questao_id', questaoId)
-    .maybeSingle();
+  let atual = dadosAtual;
+  if (atual === undefined) {
+    const { data } = await supabase
+      .from('revisoes_agendadas')
+      .select('id, etapa, agendada_para, total_erros, total_revisoes, ativa')
+      .eq('user_id', userId)
+      .eq('questao_id', questaoId)
+      .maybeSingle();
+    atual = data;
+  }
 
   // ─── Errou ───────────────────────────────────────────────
   if (!acertou) {

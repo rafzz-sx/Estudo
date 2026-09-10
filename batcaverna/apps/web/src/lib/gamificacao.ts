@@ -211,6 +211,17 @@ const CAMPO_POR_CRITERIO: Record<string, keyof EstadoUsuario> = {
   tempo: 'tempo_estudo_total_segundos',
 };
 
+interface BadgeCacheItem {
+  id: string;
+  nome: string;
+  icone: string;
+  cor_hex: string;
+  criterio_tipo: string;
+  criterio_valor: number;
+}
+const CACHE_BADGES_MS = 10 * 60 * 1000;
+let cacheBadges: { items: BadgeCacheItem[]; validoAte: number } | null = null;
+
 /**
  * Concede as badges cujo critério o usuário acabou de atingir.
  * Devolve as recém-conquistadas para a tela poder comemorar.
@@ -220,13 +231,35 @@ export async function conferirBadges(
   userId: string,
   estado: EstadoUsuario
 ): Promise<{ nome: string; icone: string; cor_hex: string }[]> {
-  const { data: badges } = await supabase
-    .from('badges')
-    .select('id, nome, icone, cor_hex, criterio_tipo, criterio_valor')
-    .not('criterio_tipo', 'is', null)
-    .neq('criterio_tipo', 'manual');
+  const agora = Date.now();
+  let badges: BadgeCacheItem[];
+
+  if (cacheBadges && cacheBadges.validoAte > agora) {
+    badges = cacheBadges.items;
+  } else {
+    const { data } = await supabase
+      .from('badges')
+      .select('id, nome, icone, cor_hex, criterio_tipo, criterio_valor')
+      .not('criterio_tipo', 'is', null)
+      .neq('criterio_tipo', 'manual');
+
+    badges = (data ?? []) as BadgeCacheItem[];
+    if (badges.length > 0) {
+      cacheBadges = { items: badges, validoAte: agora + CACHE_BADGES_MS };
+    }
+  }
 
   if (!badges?.length) return [];
+
+  // Checagem rápida em memória: se o usuário não atingiu a pontuação de NENHUM badge,
+  // nem precisa consultar user_badges no banco. Reduz 1 query a cada questão!
+  const atingiramCriterio = badges.filter((b) => {
+    const campo = CAMPO_POR_CRITERIO[b.criterio_tipo as string];
+    if (!campo || b.criterio_valor == null) return false;
+    return (estado[campo] ?? 0) >= b.criterio_valor;
+  });
+
+  if (!atingiramCriterio.length) return [];
 
   const { data: jaTem } = await supabase
     .from('user_badges')
@@ -235,12 +268,7 @@ export async function conferirBadges(
 
   const conquistadas = new Set((jaTem ?? []).map((b) => b.badge_id));
 
-  const novas = badges.filter((b) => {
-    if (conquistadas.has(b.id)) return false;
-    const campo = CAMPO_POR_CRITERIO[b.criterio_tipo as string];
-    if (!campo || b.criterio_valor == null) return false;
-    return (estado[campo] ?? 0) >= b.criterio_valor;
-  });
+  const novas = atingiramCriterio.filter((b) => !conquistadas.has(b.id));
 
   if (!novas.length) return [];
 
@@ -251,9 +279,6 @@ export async function conferirBadges(
   await supabase.from('notificacoes').insert(
     novas.map((b) => ({
       user_id: userId,
-      // O enum `notificacao_tipo` define 'badge_conquistado' no masculino.
-      // Com 'badge_conquistada' o Postgres rejeitava o INSERT inteiro e o
-      // aluno nunca era avisado da insígnia nova.
       tipo: 'badge_conquistado',
       titulo: `Nova insígnia: ${b.nome}`,
       mensagem: `Você desbloqueou "${b.nome}". Ela já pode ser exibida no seu mini-perfil.`,
@@ -321,22 +346,28 @@ interface QuestaoParaCorrecao {
   materia_id: string | null;
   concurso_id: string | null;
   bizu_relacionado_id?: string | null;
+  vezes_respondida?: number | null;
+  vezes_acertada?: number | null;
+}
+
+export interface DadosOtimizados {
+  dadosUsuario?: any;
+  dadosRevisao?: any;
 }
 
 /**
  * Corrige a resposta e persiste TODO o estado de gamificação.
  * Esta função é a única autorizada a mexer em XP, combo e contadores.
+ * Executa todas as operações de banco em paralelo para resposta instantânea.
  */
 export async function registrarResposta(
   supabase: SupabaseClient,
   userId: string,
   questao: QuestaoParaCorrecao,
   respostaDada: string,
-  tempoGastoSegundos: number
+  tempoGastoSegundos: number,
+  otimizados?: DadosOtimizados
 ): Promise<ResultadoResposta> {
-  // Questão anulada pela banca conta como acerto para todo mundo: foi a
-  // prova que falhou, não o aluno. Não pode quebrar combo nem sujar a
-  // estatística de quem "errou" uma questão que não valia.
   const anulada = questao.anulada === true;
 
   const correta =
@@ -344,29 +375,35 @@ export async function registrarResposta(
     questao.resposta_correta.trim().toUpperCase() ===
       respostaDada.trim().toUpperCase();
 
-  const { data: user } = await supabase
-    .from('users')
-    .select(
-      `xp_total, nivel_atual, combo_atual, maior_combo_pessoal, streak_dias,
-       maior_streak, ultimo_dia_estudado, total_questoes_respondidas,
-       total_acertos, tempo_estudo_total_segundos,
-       escudos_streak, escudo_recarregado_em, escudos_usados_total`
-    )
-    .eq('id', userId)
-    .single();
+  // Reutiliza perfil se fornecido pela rota otimizada, ou consulta
+  let user = otimizados?.dadosUsuario;
+  if (!user) {
+    const { data } = await supabase
+      .from('users')
+      .select(
+        `xp_total, nivel_atual, combo_atual, maior_combo_pessoal, streak_dias,
+         maior_streak, ultimo_dia_estudado, total_questoes_respondidas,
+         total_acertos, tempo_estudo_total_segundos,
+         escudos_streak, escudo_recarregado_em, escudos_usados_total`
+      )
+      .eq('id', userId)
+      .single();
+    user = data;
+  }
 
-  // A questão já estava na fila de revisão ANTES desta resposta?
-  // Precisa ser consultado agora, porque `atualizarRevisao` (lá embaixo)
-  // reescreve o agendamento e depois já não dá para saber.
-  const { data: filaAntes } = await supabase
-    .from('revisoes_agendadas')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('questao_id', questao.id)
-    .eq('ativa', true)
-    .maybeSingle();
+  // Reutiliza agendamento se fornecido pela rota otimizada, ou consulta
+  let filaAntes = otimizados?.dadosRevisao;
+  if (filaAntes === undefined) {
+    const { data } = await supabase
+      .from('revisoes_agendadas')
+      .select('id, etapa, agendada_para, total_erros, total_revisoes, ativa')
+      .eq('user_id', userId)
+      .eq('questao_id', questao.id)
+      .maybeSingle();
+    filaAntes = data;
+  }
 
-  const eraRevisao = !!filaAntes;
+  const eraRevisao = !!filaAntes && filaAntes.ativa === true;
 
   const comboAnterior = user?.combo_atual ?? 0;
   const novoCombo = correta ? comboAnterior + 1 : 0;
@@ -396,8 +433,12 @@ export async function registrarResposta(
   const totalRespondidas = (user?.total_questoes_respondidas ?? 0) + 1;
   const totalAcertos = (user?.total_acertos ?? 0) + (correta ? 1 : 0);
 
+  // ─── EXECUÇÃO EM PARALELO DE TODAS AS GRAVAÇÕES ─────────────────────────────
+  // Em vez de 10 chamadas sequenciais que travavam a tela por segundos,
+  // todas as gravações disparam simultaneamente via Promise.all!
+
   // 1. Histórico da resposta
-  await supabase.from('user_questao_respostas').insert({
+  const pHistorico = supabase.from('user_questao_respostas').insert({
     user_id: userId,
     questao_id: questao.id,
     resposta_dada: respostaDada.trim().toUpperCase().slice(0, 2),
@@ -406,8 +447,8 @@ export async function registrarResposta(
     combo_no_momento: novoCombo,
   });
 
-  // 2. Estado do usuário — aqui é onde o XP passa a existir de verdade
-  await supabase
+  // 2. Estado do usuário
+  const pUser = supabase
     .from('users')
     .update({
       xp_total: xpDepois,
@@ -416,10 +457,6 @@ export async function registrarResposta(
       combo_atualizado_em: new Date().toISOString(),
       maior_combo_pessoal: maiorCombo,
       streak_dias: streak,
-      // O recorde histórico se compara com ele mesmo, não com a sequência
-      // corrente. Comparando com `streak_dias` (que acabou de ser
-      // recalculado), quem tinha recorde de 40 dias e furou a corrente via o
-      // recorde ser reescrito para 1 na resposta seguinte.
       maior_streak: Math.max(user?.maior_streak ?? 0, streak),
       escudos_streak: resStreak.escudos,
       escudo_recarregado_em: resStreak.recarregado_em,
@@ -431,80 +468,97 @@ export async function registrarResposta(
     })
     .eq('id', userId);
 
-  // 3. Estatística por matéria (alimenta "o que mais estuda")
-  if (questao.materia_id) {
-    const { data: stat } = await supabase
-      .from('user_materia_stats')
-      .select('questoes_respondidas, acertos, tempo_segundos')
-      .eq('user_id', userId)
-      .eq('materia_id', questao.materia_id)
-      .eq('concurso_id', questao.concurso_id)
-      .maybeSingle();
+  // 3. Estatística por matéria (executa em paralelo sem travar o resto)
+  const pMateriaStats = (async () => {
+    if (!questao.materia_id) return;
+    try {
+      const { data: stat } = await supabase
+        .from('user_materia_stats')
+        .select('questoes_respondidas, acertos, tempo_segundos')
+        .eq('user_id', userId)
+        .eq('materia_id', questao.materia_id)
+        .eq('concurso_id', questao.concurso_id)
+        .maybeSingle();
 
-    await supabase.from('user_materia_stats').upsert(
-      {
-        user_id: userId,
-        materia_id: questao.materia_id,
-        concurso_id: questao.concurso_id,
-        questoes_respondidas: (stat?.questoes_respondidas ?? 0) + 1,
-        acertos: (stat?.acertos ?? 0) + (correta ? 1 : 0),
-        tempo_segundos: (stat?.tempo_segundos ?? 0) + tempoGastoSegundos,
-        atualizado_em: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,materia_id,concurso_id' }
-    );
-  }
+      await supabase.from('user_materia_stats').upsert(
+        {
+          user_id: userId,
+          materia_id: questao.materia_id,
+          concurso_id: questao.concurso_id,
+          questoes_respondidas: (stat?.questoes_respondidas ?? 0) + 1,
+          acertos: (stat?.acertos ?? 0) + (correta ? 1 : 0),
+          tempo_segundos: (stat?.tempo_segundos ?? 0) + tempoGastoSegundos,
+          atualizado_em: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,materia_id,concurso_id' }
+      );
+    } catch {
+      // Silencioso
+    }
+  })();
 
-  // 4. Índice de acerto da própria questão — serve para recalibrar a
-  //    dificuldade declarada pela banca com o desempenho real dos alunos.
-  //    É estatística agregada: se falhar, não invalida a resposta do aluno.
-  try {
-    const { data: q } = await supabase
-      .from('questoes')
-      .select('vezes_respondida, vezes_acertada')
-      .eq('id', questao.id)
-      .single();
+  // 4. Contador de acertos da questão
+  const pQuestao = (async () => {
+    try {
+      const vezesResp = (questao.vezes_respondida ?? 0) + 1;
+      const vezesAcert = (questao.vezes_acertada ?? 0) + (correta ? 1 : 0);
+      await supabase
+        .from('questoes')
+        .update({
+          vezes_respondida: vezesResp,
+          vezes_acertada: vezesAcert,
+        })
+        .eq('id', questao.id);
+    } catch {
+      // Silencioso
+    }
+  })();
 
-    await supabase
-      .from('questoes')
-      .update({
-        vezes_respondida: (q?.vezes_respondida ?? 0) + 1,
-        vezes_acertada: (q?.vezes_acertada ?? 0) + (correta ? 1 : 0),
-      })
-      .eq('id', questao.id);
-  } catch {
-    // silencioso de propósito
-  }
+  // 5. Repetição espaçada (reaproveitando dados da consulta inicial)
+  const pRevisao = atualizarRevisao(
+    supabase,
+    userId,
+    questao.id,
+    correta,
+    filaAntes ?? null
+  );
 
-  // 5. Repetição espaçada — agenda o retorno desta questão
-  let revisao = null;
-  try {
-    revisao = await atualizarRevisao(supabase, userId, questao.id, correta);
-  } catch (e) {
-    // A revisão é um complemento: se falhar, a resposta continua válida.
-    console.warn('Falha ao agendar revisão espaçada:', e);
-  }
-
-  // 6. Badges e frase
-  const badgesNovas = await conferirBadges(supabase, userId, {
+  // 6. Badges (com cache em memória e checagem rápida)
+  const pBadges = conferirBadges(supabase, userId, {
     xp_total: xpDepois,
     total_questoes_respondidas: totalRespondidas,
     maior_combo_pessoal: maiorCombo,
     streak_dias: streak,
     tempo_estudo_total_segundos: user?.tempo_estudo_total_segundos ?? 0,
+    usou_escudo: resStreak.usou_escudo,
+    escudos_restantes: resStreak.escudos,
+    era_revisao: eraRevisao,
   });
 
-  let frase: string | null = null;
-  if (!correta) {
-    // Quebrar um combo alto merece uma mensagem diferente de errar do zero.
-    frase = await sortearFrase(
-      supabase,
-      comboAnterior >= 5 ? 'combo_quebrado' : 'erro'
-    );
-    if (!frase) frase = await sortearFrase(supabase, 'erro');
-  } else if (novoCombo > 0 && novoCombo % 10 === 0) {
-    frase = await sortearFrase(supabase, 'acerto');
-  }
+  // 7. Frase motivacional
+  const pFrase = (async () => {
+    if (!correta) {
+      const f = await sortearFrase(
+        supabase,
+        comboAnterior >= 5 ? 'combo_quebrado' : 'erro'
+      );
+      return f || (await sortearFrase(supabase, 'erro'));
+    } else if (novoCombo > 0 && novoCombo % 10 === 0) {
+      return await sortearFrase(supabase, 'acerto');
+    }
+    return null;
+  })();
+
+  // Aguarda todos os updates em paralelo
+  const [, , , , revisao, badgesNovas, frase] = await Promise.all([
+    pHistorico,
+    pUser,
+    pMateriaStats,
+    pQuestao,
+    pRevisao,
+    pBadges,
+    pFrase,
+  ]);
 
   const patamarAtual = patamarDoCombo(novoCombo);
   const patamarAntigo = patamarDoCombo(comboAnterior);

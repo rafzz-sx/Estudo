@@ -287,9 +287,12 @@ export default function RevisoesPage() {
             <button
               onClick={responder}
               disabled={!escolhida || enviando}
-              className="btn-primary px-8 py-3 disabled:opacity-30"
+              className="btn-primary flex items-center justify-center gap-2 px-8 py-3 disabled:opacity-30 transition-all duration-150 active:scale-[0.98]"
             >
-              {enviando ? "Registrando..." : "Confirmar resposta"}
+              {enviando && (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-bat-bg border-r-transparent" />
+              )}
+              {enviando ? "Verificando..." : "Confirmar resposta"}
             </button>
             <button onClick={tirarDaFila} className="btn-secondary px-5 py-3 text-sm">
               Já sei essa, tirar da fila
