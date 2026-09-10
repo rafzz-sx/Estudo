@@ -195,15 +195,15 @@ export const REFERENCIA_APROVACAO: Record<
   string,
   { percentual: number; nota: string }
 > = {
-  EEAR: { percentual: 60, nota: 'varia muito por especialidade' },
-  ESA: { percentual: 55, nota: 'varia por área e ano' },
-  EPCAR: { percentual: 65, nota: 'concorrência alta' },
-  CN: { percentual: 60, nota: 'uma das provas mais difíceis' },
-  EFOMM: { percentual: 55, nota: 'varia por curso' },
-  EAM: { percentual: 50, nota: 'varia por região' },
-  ESPCEX: { percentual: 60, nota: 'varia por ano' },
-  IME: { percentual: 50, nota: 'prova discursiva, corte baixo' },
-  ENEM: { percentual: 60, nota: 'depende do curso e da universidade' },
+  ESA: { percentual: 80, nota: 'ampla concorrência geral (~78% a 84%, média ~8.0)' },
+  EEAR: { percentual: 78, nota: 'corte real (~74% não-BCT a 85% BCT)' },
+  ESPCEX: { percentual: 75, nota: 'ampla concorrência (~72% Masc / ~80% Fem)' },
+  EPCAR: { percentual: 78, nota: 'alta concorrência (~76% a 82%)' },
+  CN: { percentual: 68, nota: 'prova de alto nível técnico (~65% a 72%)' },
+  EFOMM: { percentual: 70, nota: 'CIAGA e CIABA (~68% a 75%)' },
+  EAM: { percentual: 65, nota: 'média de corte por Distrito Naval (~62% a 70%)' },
+  IME: { percentual: 62, nota: '1ª fase objetiva (~60% a 66% + mín. 50% por matéria)' },
+  ENEM: { percentual: 72, nota: 'ampla em cursos concorridos (~70% a 76%+ acertos)' },
 };
 
 /**

@@ -27,15 +27,15 @@ ON CONFLICT (nome) DO NOTHING;
 DELETE FROM user_badges
 WHERE badge_id IN (SELECT id FROM badges WHERE nome = 'Fundador')
   AND user_id NOT IN (
-    SELECT id FROM users WHERE LOWER(email) LIKE 'raf4biel.venafro%'
+    SELECT id FROM users WHERE LOWER(email) = 'raf4biel.venafro@gmail.com'
   );
 
--- 3. Conceder a insígnia Fundador exclusivamente para a conta raf4biel.venafro...
+-- 3. Conceder a insígnia Fundador exclusivamente para a conta raf4biel.venafro@gmail.com
 INSERT INTO user_badges (user_id, badge_id, conquistado_em, exibir_no_perfil, ordem_exibicao)
 SELECT u.id, b.id, NOW(), TRUE, 1
 FROM users u
 CROSS JOIN badges b
-WHERE LOWER(u.email) LIKE 'raf4biel.venafro%'
+WHERE LOWER(u.email) = 'raf4biel.venafro@gmail.com'
   AND b.nome = 'Fundador'
 ON CONFLICT (user_id, badge_id) DO UPDATE
 SET exibir_no_perfil = TRUE,

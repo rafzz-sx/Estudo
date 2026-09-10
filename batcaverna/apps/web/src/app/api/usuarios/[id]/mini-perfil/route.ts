@@ -116,7 +116,7 @@ export async function GET(
       .eq('exibir_no_perfil', true)
       .order('ordem_exibicao');
 
-    const ehFundadorConta = !!(user.email && user.email.toLowerCase().startsWith('raf4biel.venafro'));
+    const ehFundadorConta = !!(user.email && user.email.toLowerCase().trim() === 'raf4biel.venafro@gmail.com');
 
     let badgesExibidas = (badges ?? [])
       .map((b: any) => b.badges)

@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    const ehFundadorExclusivo = !!(usuarioAtual?.email && usuarioAtual.email.toLowerCase().startsWith('raf4biel.venafro'));
+    const ehFundadorExclusivo = !!(usuarioAtual?.email && usuarioAtual.email.toLowerCase().trim() === 'raf4biel.venafro@gmail.com');
     const badgeFundador = (catalogo ?? []).find((b) => b.nome === 'Fundador');
 
     const porId = new Map((minhas ?? []).map((b) => [b.badge_id, b]));
