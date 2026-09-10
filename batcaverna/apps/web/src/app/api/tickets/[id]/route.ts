@@ -54,13 +54,25 @@ export async function GET(
 
     const supabase = createServerSupabaseClient();
 
-    const { data: ticket, error } = await supabase
+    let ticket: any = null;
+    const { data: ticketData, error: ticketError } = await supabase
       .from('tickets')
       .select('*, users!tickets_user_id_fkey (apelido, avatar_url)')
       .eq('id', ticketId)
       .maybeSingle();
 
-    if (error) throw error;
+    if (ticketError) {
+      const { data: ticketSimples, error: errSimples } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('id', ticketId)
+        .maybeSingle();
+
+      if (errSimples || !ticketSimples) throw (errSimples || ticketError);
+      ticket = ticketSimples;
+    } else {
+      ticket = ticketData;
+    }
 
     // Mesma resposta para "não existe" e "não é seu": quem tenta adivinhar
     // UUID não descobre quais existem.
@@ -71,15 +83,27 @@ export async function GET(
       );
     }
 
-    const { data: mensagens } = await supabase
+    let mensagens: any[] = [];
+    const { data: msgsComUser, error: errMsgs } = await supabase
       .from('ticket_mensagens')
       .select('id, autor_id, autor_role, conteudo, enviado_em, users (apelido, avatar_url)')
       .eq('ticket_id', ticketId)
       .order('enviado_em', { ascending: true });
 
+    if (errMsgs || !msgsComUser) {
+      const { data: msgsSimples } = await supabase
+        .from('ticket_mensagens')
+        .select('id, autor_id, autor_role, conteudo, enviado_em')
+        .eq('ticket_id', ticketId)
+        .order('enviado_em', { ascending: true });
+      mensagens = msgsSimples || [];
+    } else {
+      mensagens = msgsComUser;
+    }
+
     return NextResponse.json({
       success: true,
-      data: { ...ticket, mensagens: mensagens ?? [] },
+      data: { ...ticket, mensagens },
     });
   } catch (error) {
     console.error('GET /api/tickets/[id] error:', error);

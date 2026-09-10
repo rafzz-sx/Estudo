@@ -66,8 +66,8 @@ export async function POST(req: NextRequest) {
     const { data: conversa, error: errConv } = await supabase
       .from('conversas')
       .insert({
-        user1_id: user.id,
-        user2_id: participante_ids[0], // obrigatório pelo schema existente
+        user_id_a: user.id,
+        user_id_b: participante_ids[0] || user.id, // satisfaz a foreign key/not null no schema original
         tipo: 'grupo',
         nome_grupo: nome.trim().slice(0, 100),
         criador_id: user.id,
@@ -107,8 +107,9 @@ export async function POST(req: NextRequest) {
     // 3. Mensagem do sistema no grupo
     await supabase.from('mensagem_chat').insert({
       conversa_id: conversa.id,
-      remetente_id: user.id,
-      conteudo: `📢 Grupo "${nome.trim()}" criado! Bora estudar juntos! ⚔️`,
+      autor_id: user.id,
+      tipo: 'texto',
+      conteudo_texto: `📢 Grupo "${nome.trim()}" criado! Bora estudar juntos! ⚔️`,
     });
 
     return NextResponse.json({

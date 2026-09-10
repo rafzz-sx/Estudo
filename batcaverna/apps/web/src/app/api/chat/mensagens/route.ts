@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
 
     // A checagem vem antes do UPDATE de "lida": marcar como lida a conversa
     // dos outros já seria, por si só, vazar que alguém entrou nela.
-    const acesso = await participaDaConversa(supabase, conversaId, user);
+    const acesso = await participaDaConversa(supabase, conversaId, user.id);
     if (!acesso.participa) {
       return NextResponse.json(
         { success: false, error: 'Conversa não encontrada' },
@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
       .from('mensagem_chat')
       .update({ lida: true })
       .eq('conversa_id', conversaId)
-      .neq('autor_id', user)
+      .neq('autor_id', user.id)
       .eq('lida', false);
 
     const { data: mensagens, error } = await supabase
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    const acesso = await participaDaConversa(supabase, conversaId, user);
+    const acesso = await participaDaConversa(supabase, conversaId, user.id);
     if (!acesso.participa) {
       return NextResponse.json(
         { success: false, error: 'Conversa não encontrada' },
@@ -315,7 +315,7 @@ export async function POST(req: NextRequest) {
     // Tentativa 1: Inserir com colunas estendidas de moderação
     const insertPayload: Record<string, any> = {
       conversa_id: conversaId,
-      autor_id: user,
+      autor_id: user.id,
       conteudo_texto: textoFinal,
       tipo,
       midia_url: midia_url || null,
@@ -346,7 +346,7 @@ export async function POST(req: NextRequest) {
           .from('mensagem_chat')
           .insert({
             conversa_id: conversaId,
-            autor_id: user,
+            autor_id: user.id,
             conteudo_texto: textoFinal,
             tipo,
             midia_url: midia_url || null,
@@ -381,7 +381,7 @@ export async function POST(req: NextRequest) {
           analise,
           mensagemId: novaMsg.id,
           conversaId,
-          autorId: user,
+          autorId: user.id,
           destinatarioId: acesso.outroId,
           texto: textoFinal,
         });

@@ -97,6 +97,7 @@ export default function ChatPage() {
   const [gravandoAudio, setGravandoAudio] = useState(false);
   const [tempoGravacao, setTempoGravacao] = useState(0);
   const [audioUrlPreview, setAudioUrlPreview] = useState<string | null>(null);
+  const [erroMicrofone, setErroMicrofone] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const gravacaoTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -230,20 +231,43 @@ export default function ChatPage() {
 
   // ─── Gravação de Áudio via MediaRecorder ───────────────────────
   const iniciarGravacaoAudio = async () => {
+    setErroMicrofone(null);
+
+    if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
+      setErroMicrofone("Gravação de áudio não suportada neste navegador ou ambiente inseguro (requer HTTPS).");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+
+      // Suporte multiplataforma a codecs (iOS, Safari, Android, Chrome)
+      const codecs = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/aac",
+        "audio/ogg;codecs=opus",
+        "",
+      ];
+      const mimeType = codecs.find((c) => !c || (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c))) || "";
+
+      const options: MediaRecorderOptions = {};
+      if (mimeType) options.mimeType = mimeType;
+
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const tipoBlob = mediaRecorder.mimeType || mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: tipoBlob });
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
@@ -256,19 +280,38 @@ export default function ChatPage() {
       setGravandoAudio(true);
       setTempoGravacao(0);
 
+      if (gravacaoTimerRef.current) clearInterval(gravacaoTimerRef.current);
       gravacaoTimerRef.current = setInterval(() => {
         setTempoGravacao((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
-      alert("Permissão para microfone não concedida ou dispositivo indisponível.");
+    } catch (err: any) {
+      console.warn("Erro microfone:", err);
+      let msg = "Permissão para microfone não concedida ou dispositivo indisponível.";
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        msg = "Microfone bloqueado pelo navegador. Clique no ícone de cadeado na barra de endereço do navegador e mude o Microfone para 'Permitir'.";
+      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
+        msg = "Nenhum microfone encontrado ou conectado ao seu dispositivo.";
+      } else if (err?.name === "NotReadableError") {
+        msg = "O microfone já está em uso por outro aplicativo.";
+      }
+      setErroMicrofone(msg);
     }
   };
 
   const pararGravacaoAudio = () => {
+    if (gravacaoTimerRef.current) {
+      clearInterval(gravacaoTimerRef.current);
+      gravacaoTimerRef.current = null;
+    }
     if (mediaRecorderRef.current && gravandoAudio) {
-      mediaRecorderRef.current.stop();
+      try {
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (e) {
+        console.warn("Erro ao parar gravador:", e);
+      }
       setGravandoAudio(false);
-      if (gravacaoTimerRef.current) clearInterval(gravacaoTimerRef.current);
     }
   };
 
@@ -912,6 +955,22 @@ export default function ChatPage() {
                       Remover
                     </button>
                   </div>
+                </div>
+              )}
+
+              {erroMicrofone && (
+                <div className="mx-4 mb-2 p-3 bg-bat-danger/20 border border-bat-danger/40 rounded-xl flex items-center justify-between gap-3 text-xs text-red-300">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🎙️</span>
+                    <span>{erroMicrofone}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setErroMicrofone(null)}
+                    className="text-bat-text-muted hover:text-white text-xs px-2 py-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
 

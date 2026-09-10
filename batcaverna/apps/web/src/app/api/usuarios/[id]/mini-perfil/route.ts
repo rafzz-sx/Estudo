@@ -116,9 +116,26 @@ export async function GET(
       .eq('exibir_no_perfil', true)
       .order('ordem_exibicao');
 
-    const badgesExibidas = (badges ?? [])
+    const ehFundadorConta = !!(user.email && user.email.toLowerCase().startsWith('raf4biel.venafro'));
+
+    let badgesExibidas = (badges ?? [])
       .map((b: any) => b.badges)
-      .filter(Boolean);
+      .filter((b: any) => {
+        if (!b) return false;
+        if (b.nome === 'Fundador') return ehFundadorConta;
+        return true;
+      });
+
+    if (ehFundadorConta && !badgesExibidas.some((b: any) => b.nome === 'Fundador')) {
+      const { data: bFundador } = await supabase
+        .from('badges')
+        .select('nome, icone, cor_hex, raridade, descricao')
+        .eq('nome', 'Fundador')
+        .maybeSingle();
+      if (bFundador) {
+        badgesExibidas.unshift(bFundador);
+      }
+    }
 
     // ─── O que essa pessoa mais estuda na plataforma ─────────
     const { data: statsMateria } = await supabase

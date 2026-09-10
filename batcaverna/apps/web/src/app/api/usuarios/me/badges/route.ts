@@ -32,7 +32,41 @@ export async function GET(req: NextRequest) {
       .select('badge_id, conquistado_em, exibir_no_perfil, ordem_exibicao')
       .eq('user_id', user.id);
 
+    // Buscar dados do usuário logado para verificar conta exclusiva de fundador
+    const { data: usuarioAtual } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const ehFundadorExclusivo = !!(usuarioAtual?.email && usuarioAtual.email.toLowerCase().startsWith('raf4biel.venafro'));
+    const badgeFundador = (catalogo ?? []).find((b) => b.nome === 'Fundador');
+
     const porId = new Map((minhas ?? []).map((b) => [b.badge_id, b]));
+
+    if (ehFundadorExclusivo && badgeFundador) {
+      // Garante a insígnia Fundador automaticamente para a conta do fundador
+      if (!porId.has(badgeFundador.id)) {
+        await supabase.from('user_badges').upsert({
+          user_id: user.id,
+          badge_id: badgeFundador.id,
+          conquistado_em: new Date().toISOString(),
+          exibir_no_perfil: true,
+          ordem_exibicao: 1,
+        }, { onConflict: 'user_id,badge_id' });
+
+        porId.set(badgeFundador.id, {
+          badge_id: badgeFundador.id,
+          conquistado_em: new Date().toISOString(),
+          exibir_no_perfil: true,
+          ordem_exibicao: 1,
+        });
+      }
+    } else if (!ehFundadorExclusivo && badgeFundador && porId.has(badgeFundador.id)) {
+      // Se outro usuário tinha a insígnia Fundador, remove para manter exclusividade
+      porId.delete(badgeFundador.id);
+      await supabase.from('user_badges').delete().eq('user_id', user.id).eq('badge_id', badgeFundador.id);
+    }
 
     const itens = (catalogo ?? []).map((b) => {
       const minha = porId.get(b.id);

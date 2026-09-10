@@ -78,9 +78,11 @@ export default function TicketsPage() {
     }
   };
 
-  // 2. Carregar detalhes e mensagens do ticket selecionado
-  const carregarDetalhesTicket = async (id: string, silencioso = false) => {
-    if (!silencioso) setLoadingDetalhe(true);
+  // 2. Carregar detalhes e mensagens do ticket selecionado (silencioso por padrão para evitar piscar tela)
+  const carregarDetalhesTicket = async (id: string, silencioso = true) => {
+    if (!silencioso && (!ticketDetalhe || ticketDetalhe.id !== id)) {
+      setLoadingDetalhe(true);
+    }
     try {
       const res = await fetchWithAuth(`/api/tickets/${id}`);
       if (res.ok) {
@@ -92,7 +94,7 @@ export default function TicketsPage() {
     } catch (e) {
       console.warn("Erro ao carregar mensagens do ticket:", e);
     } finally {
-      if (!silencioso) setLoadingDetalhe(false);
+      setLoadingDetalhe(false);
     }
   };
 
@@ -103,7 +105,17 @@ export default function TicketsPage() {
 
   useEffect(() => {
     if (ticketAbertoId) {
-      carregarDetalhesTicket(ticketAbertoId);
+      // Se ainda não temos dados desse ticket, faz carregamento inicial suave
+      const precisaCarregar = !ticketDetalhe || ticketDetalhe.id !== ticketAbertoId;
+      if (precisaCarregar) {
+        const tNaLista = tickets.find((t) => t.id === ticketAbertoId);
+        if (tNaLista) {
+          setTicketDetalhe({ ...tNaLista, mensagens: [] });
+        }
+        carregarDetalhesTicket(ticketAbertoId, false);
+      } else {
+        carregarDetalhesTicket(ticketAbertoId, true);
+      }
     }
   }, [ticketAbertoId]);
 
@@ -169,27 +181,47 @@ export default function TicketsPage() {
     e.preventDefault();
     if (!novaMensagem.trim() || !ticketAbertoId) return;
 
+    const texto = novaMensagem.trim();
+    setNovaMensagem("");
     setEnviandoMensagem(true);
+
+    // Otimista: exibe imediatamente no chat local para não travar
+    const msgOtimista: TicketMensagem = {
+      id: "temp-" + Date.now(),
+      ticket_id: ticketAbertoId,
+      autor_id: user?.id || "",
+      autor_role: user?.role === "admin" ? "admin" : "usuario",
+      conteudo: texto,
+      enviado_em: new Date().toISOString(),
+    };
+
+    if (ticketDetalhe) {
+      setTicketDetalhe((prev) =>
+        prev
+          ? { ...prev, mensagens: [...(prev.mensagens || []), msgOtimista] }
+          : prev
+      );
+    }
+
     try {
       const res = await fetchWithAuth(`/api/tickets/${ticketAbertoId}/mensagens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conteudo: novaMensagem.trim(),
-        }),
+        body: JSON.stringify({ conteudo: texto }),
       });
 
       const json = await res.json().catch(() => ({}));
 
       if (res.ok && json.success) {
-        setNovaMensagem("");
-        carregarDetalhesTicket(ticketAbertoId);
-        carregarTickets();
+        carregarDetalhesTicket(ticketAbertoId, true);
+        carregarTickets(true);
       } else {
         alert(json.error || "Não foi possível enviar a mensagem.");
+        carregarDetalhesTicket(ticketAbertoId, true);
       }
     } catch (e) {
       alert("Erro ao enviar mensagem.");
+      carregarDetalhesTicket(ticketAbertoId, true);
     } finally {
       setEnviandoMensagem(false);
     }
@@ -236,7 +268,14 @@ export default function TicketsPage() {
               return (
                 <button
                   key={t.id}
-                  onClick={() => { setTicketAbertoId(t.id); setCriandoTicket(false); }}
+                  onClick={() => {
+                    setTicketAbertoId(t.id);
+                    setCriandoTicket(false);
+                    if (!ticketDetalhe || ticketDetalhe.id !== t.id) {
+                      setTicketDetalhe({ ...t, mensagens: [] });
+                      carregarDetalhesTicket(t.id, false);
+                    }
+                  }}
                   className={`w-full text-left bg-bat-bg-card border rounded-2xl p-4 transition-all cursor-pointer ${
                     ativo
                       ? "border-bat-gold-400/60 shadow-[0_0_15px_rgba(245,197,24,0.15)] bg-bat-gold-400/5"
@@ -349,34 +388,45 @@ export default function TicketsPage() {
 
               {/* Mensagens da thread */}
               <div className="flex-1 px-6 py-4 space-y-4 overflow-y-auto max-h-[400px]">
-                {loadingDetalhe ? (
-                  <div className="p-8 text-center text-bat-text-muted text-xs">
-                    Carregando mensagens...
-                  </div>
-                ) : (ticketDetalhe.mensagens || []).map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.autor_role === "usuario" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
-                        msg.autor_role === "usuario"
-                          ? "bg-bat-gold-400 text-black font-medium"
-                          : "bg-bat-bg-elevated border border-bat-purple-500/40 text-bat-text"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-1">
-                        <span className={`font-bold text-[11px] ${msg.autor_role === "admin" ? "text-bat-gold-400" : "text-black"}`}>
-                          {msg.autor_role === "admin" ? "🛡️ Suporte BatCaverna" : (user?.apelido || "Você")}
-                        </span>
-                        <span className="opacity-70 text-[10px]">
-                          {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      <p>{msg.conteudo}</p>
+                {loadingDetalhe && (!ticketDetalhe.mensagens || ticketDetalhe.mensagens.length === 0) ? (
+                  <div className="space-y-3 py-4 animate-pulse">
+                    <div className="flex justify-end">
+                      <div className="h-10 w-2/3 bg-bat-bg-elevated/80 rounded-2xl" />
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="h-14 w-3/4 bg-bat-bg-elevated/80 rounded-2xl" />
                     </div>
                   </div>
-                ))}
+                ) : !ticketDetalhe.mensagens || ticketDetalhe.mensagens.length === 0 ? (
+                  <div className="p-8 text-center text-bat-text-muted text-xs">
+                    Nenhuma mensagem registrada neste chamado ainda.
+                  </div>
+                ) : (
+                  ticketDetalhe.mensagens.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.autor_role === "usuario" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                          msg.autor_role === "usuario"
+                            ? "bg-bat-gold-400 text-black font-medium"
+                            : "bg-bat-bg-elevated border border-bat-purple-500/40 text-bat-text"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <span className={`font-bold text-[11px] ${msg.autor_role === "admin" ? "text-bat-gold-400" : "text-black"}`}>
+                            {msg.autor_role === "admin" ? "🛡️ Suporte BatCaverna" : (user?.apelido || "Você")}
+                          </span>
+                          <span className="opacity-70 text-[10px]">
+                            {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p>{msg.conteudo}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Input de resposta */}
