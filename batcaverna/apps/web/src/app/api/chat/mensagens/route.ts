@@ -111,23 +111,31 @@ async function participaDaConversa(
   supabase: SupabaseClient,
   conversaId: string,
   userId: string
-): Promise<{ participa: boolean; outroId: string | null }> {
+): Promise<{ participa: boolean; outroId: string | null; ehGrupo?: boolean }> {
   const { data } = await supabase
     .from('conversas')
-    .select('user_id_a, user_id_b')
+    .select('user_id_a, user_id_b, tipo')
     .eq('id', conversaId)
     .maybeSingle();
 
   if (!data) return { participa: false, outroId: null };
 
+  if (data.tipo === 'grupo') {
+    const { data: part } = await supabase
+      .from('conversa_participantes')
+      .select('id')
+      .eq('conversa_id', conversaId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { participa: !!part, outroId: null, ehGrupo: true };
+  }
+
   if (data.user_id_a === userId) {
-    return { participa: true, outroId: data.user_id_b };
+    return { participa: true, outroId: data.user_id_b, ehGrupo: false };
   }
   if (data.user_id_b === userId) {
-    return { participa: true, outroId: data.user_id_a };
+    return { participa: true, outroId: data.user_id_a, ehGrupo: false };
   }
-  // O chat é sempre 1 para 1: o "outro lado" é o destinatário, e é ele que o
-  // alerta de moderação precisa nomear.
   return { participa: false, outroId: null };
 }
 
@@ -236,11 +244,11 @@ export async function POST(req: NextRequest) {
     // com uma mensagem que entrega o nome do enum.
     const tipo = TIPOS_VALIDOS.has(body?.tipo) ? body.tipo : 'texto';
 
-    // A mídia chega como data URL e é gravada na própria linha. Sem conferir,
-    // o campo aceitava `data:text/html,<script>` e qualquer tamanho.
+    // A mídia chega como data URL e é gravada na própria linha.
     if (midia_url) {
       const midia = validarDataUrlMidia(midia_url, {
         permitirVideo: true,
+        permitirAudio: true,
         maxBytes: MAX_MIDIA_CHAT,
       });
       if (!midia.ok) {
@@ -264,37 +272,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Conferir se a amizade ainda está ativa (preserva histórico sem permitir novos envios)
-    const { data: convInfo } = await supabase
-      .from('conversas')
-      .select('amizade_id')
-      .eq('id', conversaId)
-      .maybeSingle();
+    // Para conversas diretas, conferir se a amizade ainda está ativa. Grupos não têm amizade_id.
+    if (!acesso.ehGrupo) {
+      const { data: convInfo } = await supabase
+        .from('conversas')
+        .select('amizade_id')
+        .eq('id', conversaId)
+        .maybeSingle();
 
-    if (!convInfo?.amizade_id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Esta amizade foi desfeita. O chat está disponível apenas para leitura do histórico.',
-        },
-        { status: 403 }
-      );
-    }
+      if (!convInfo?.amizade_id) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Esta amizade foi desfeita. O chat está disponível apenas para leitura do histórico.',
+          },
+          { status: 403 }
+        );
+      }
 
-    const { data: amizadeInfo } = await supabase
-      .from('amizades')
-      .select('status')
-      .eq('id', convInfo.amizade_id)
-      .maybeSingle();
+      const { data: amizadeInfo } = await supabase
+        .from('amizades')
+        .select('status')
+        .eq('id', convInfo.amizade_id)
+        .maybeSingle();
 
-    if (!amizadeInfo || amizadeInfo.status !== 'aceita') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Não é possível enviar mensagens: esta amizade não está ativa.',
-        },
-        { status: 403 }
-      );
+      if (!amizadeInfo || amizadeInfo.status !== 'aceita') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Não é possível enviar mensagens: esta amizade não está ativa.',
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const analise = analisarMensagem(textoFinal);

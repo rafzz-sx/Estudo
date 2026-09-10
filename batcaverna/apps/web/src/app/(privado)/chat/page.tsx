@@ -109,7 +109,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 1. Carregar conversas do backend real e verificar parâmetro ?amigo=
-  const carregarConversas = async () => {
+  const carregarConversas = async (silencioso = false) => {
+    if (!silencioso) setLoadingConversas(true);
     try {
       const res = await fetchWithAuth("/api/chat/conversas");
       if (res.ok) {
@@ -156,7 +157,7 @@ export default function ChatPage() {
     } catch (e) {
       console.warn("Erro ao carregar conversas:", e);
     } finally {
-      setLoadingConversas(false);
+      if (!silencioso) setLoadingConversas(false);
     }
   };
 
@@ -216,7 +217,7 @@ export default function ChatPage() {
   // mensagem numa conversa que não está aberta).
   useEffect(() => {
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") carregarConversas();
+      if (document.visibilityState === "visible") carregarConversas(true);
     }, 20000);
     return () => clearInterval(timer);
   }, []);
@@ -377,16 +378,21 @@ export default function ChatPage() {
     setNomeGrupo("");
     setCriandoGrupo(false);
     try {
-      const res = await fetchWithAuth("/api/amizades");
+      const res = await fetchWithAuth("/api/usuarios/me/amigos");
       const json = await res.json();
       if (json.success && json.data) {
-        const amigos = json.data
-          .filter((a: any) => a.status === 'aceita')
-          .map((a: any) => ({
-            id: a.amigo.id,
-            apelido: a.amigo.apelido,
-            selecionado: false,
-          }));
+        const rawList = Array.isArray(json.data) ? json.data : (json.data.amigos || []);
+        const amigos = rawList
+          .map((a: any) => {
+            const u = a.usuario || a.amigo || a;
+            const usuarioObj = Array.isArray(u) ? u[0] : u;
+            return {
+              id: usuarioObj?.id,
+              apelido: usuarioObj?.apelido || usuarioObj?.nome || 'Soldado',
+              selecionado: false,
+            };
+          })
+          .filter((a: any) => Boolean(a.id));
         setAmigosParaGrupo(amigos);
       }
     } catch {}

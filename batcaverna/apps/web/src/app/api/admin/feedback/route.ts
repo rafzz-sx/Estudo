@@ -29,7 +29,11 @@ export async function GET(req: NextRequest) {
       .order('criado_em', { ascending: false })
       .limit(200);
 
-    if (tipo && tipo !== 'todos') query = query.eq('tipo', tipo);
+    if (tipo === 'vitrine') {
+      query = query.eq('aprovado_para_vitrine', true);
+    } else if (tipo && tipo !== 'todos') {
+      query = query.eq('tipo', tipo);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -46,8 +50,10 @@ export async function GET(req: NextRequest) {
         resumo: {
           total: (data ?? []).length,
           nao_lidos: (data ?? []).filter((f) => !f.lido_por_admin).length,
+          vitrine: (data ?? []).filter((f) => f.aprovado_para_vitrine).length,
           nota_media: media,
           por_tipo: {
+            depoimento: (data ?? []).filter((f) => f.tipo === 'depoimento').length,
             opiniao: (data ?? []).filter((f) => f.tipo === 'opiniao').length,
             bug: (data ?? []).filter((f) => f.tipo === 'bug').length,
             ideia: (data ?? []).filter((f) => f.tipo === 'ideia').length,
@@ -64,7 +70,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** PATCH /api/admin/feedback — marca feedbacks como lidos. */
+/** PATCH /api/admin/feedback — marca feedbacks como lidos e altera status da vitrine. */
 export async function PATCH(req: NextRequest) {
   try {
     const admin = await getAdminFromRequest(req);
@@ -84,11 +90,18 @@ export async function PATCH(req: NextRequest) {
         .update({ lido_por_admin: true })
         .eq('lido_por_admin', false);
     } else if (body?.id) {
-      const patch: Record<string, unknown> = { lido_por_admin: true };
+      const patch: Record<string, unknown> = {};
 
-      // Suporte a aprovar/remover da vitrine
+      if (typeof body.lido_por_admin === 'boolean') {
+        patch.lido_por_admin = body.lido_por_admin;
+      } else {
+        patch.lido_por_admin = true;
+      }
+
+      // Suporte a aprovar/remover da vitrine pública
       if (typeof body.aprovado_para_vitrine === 'boolean') {
         patch.aprovado_para_vitrine = body.aprovado_para_vitrine;
+        patch.destaque_landing = body.aprovado_para_vitrine;
       }
 
       await supabase
@@ -101,7 +114,41 @@ export async function PATCH(req: NextRequest) {
   } catch (error) {
     console.error('PATCH /api/admin/feedback error:', error);
     return NextResponse.json(
-      { success: false, error: 'Erro ao marcar feedback' },
+      { success: false, error: 'Erro ao atualizar feedback' },
+      { status: 500 }
+    );
+  }
+}
+
+/** DELETE /api/admin/feedback?id=xyz — Exclui feedback do banco. */
+export async function DELETE(req: NextRequest) {
+  try {
+    const admin = await getAdminFromRequest(req);
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: 'Acesso restrito a administradores' },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'ID obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { error } = await supabase.from('feedback_plataforma').delete().eq('id', id);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/admin/feedback error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Erro ao excluir feedback' },
       { status: 500 }
     );
   }

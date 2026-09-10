@@ -197,6 +197,18 @@ const TIPOS_IMAGEM = new Set([
 
 const TIPOS_VIDEO = new Set(['video/mp4', 'video/webm']);
 
+const TIPOS_AUDIO = new Set([
+  'audio/webm',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/aac',
+  'audio/m4a',
+  'audio/x-m4a',
+]);
+
 /** ~4 MB de base64 ≈ 3 MB de arquivo. */
 export const MAX_AVATAR_BYTES = 4 * 1024 * 1024;
 /** Banner aceita vídeo curto, então tem folga maior. */
@@ -205,22 +217,17 @@ export const MAX_BANNER_BYTES = 16 * 1024 * 1024;
 export interface ResultadoMidia {
   ok: boolean;
   erro?: string;
-  tipo?: 'imagem' | 'gif' | 'video';
+  tipo?: 'imagem' | 'gif' | 'video' | 'audio';
 }
 
 /**
- * Confere que o valor é mesmo uma imagem ou vídeo, e não outra coisa.
- *
- * Sem isto, o campo aceitava qualquer string: `javascript:...`,
- * `data:text/html,<script>` ou 200 MB de lixo. A validação de 15 MB que
- * existia rodava só no navegador — quem chamasse a API direto passava por
- * cima dela sem esforço.
+ * Confere que o valor é mesmo uma imagem, áudio ou vídeo, e não outra coisa.
  */
 export function validarDataUrlMidia(
   valor: unknown,
-  opcoes: { permitirVideo?: boolean; maxBytes?: number } = {}
+  opcoes: { permitirVideo?: boolean; permitirAudio?: boolean; maxBytes?: number } = {}
 ): ResultadoMidia {
-  const { permitirVideo = false, maxBytes = MAX_AVATAR_BYTES } = opcoes;
+  const { permitirVideo = false, permitirAudio = false, maxBytes = MAX_AVATAR_BYTES } = opcoes;
 
   if (valor === null || valor === '') return { ok: true }; // remover é válido
 
@@ -240,7 +247,7 @@ export function validarDataUrlMidia(
   if (!cabecalho.startsWith('data:')) {
     return {
       ok: false,
-      erro: 'Envie um arquivo de imagem ou vídeo, ou um endereço https.',
+      erro: 'Envie um arquivo de imagem, áudio ou vídeo, ou um endereço https.',
     };
   }
 
@@ -252,13 +259,12 @@ export function validarDataUrlMidia(
   const mime = m[1].toLowerCase();
   const ehImagem = TIPOS_IMAGEM.has(mime);
   const ehVideo = TIPOS_VIDEO.has(mime);
+  const ehAudio = TIPOS_AUDIO.has(mime);
 
-  if (!ehImagem && !(permitirVideo && ehVideo)) {
+  if (!ehImagem && !(permitirVideo && ehVideo) && !(permitirAudio && ehAudio)) {
     return {
       ok: false,
-      erro: permitirVideo
-        ? 'Use PNG, JPG, WebP, GIF, MP4 ou WebM.'
-        : 'Use PNG, JPG, WebP ou GIF.',
+      erro: 'Formato de mídia não suportado. Use PNG, JPG, WebP, GIF, MP4, WebM ou áudio.',
     };
   }
 
@@ -267,8 +273,7 @@ export function validarDataUrlMidia(
     return { ok: false, erro: `Arquivo maior que o limite de ${mb} MB.` };
   }
 
-  // O corpo tem que ser base64 de verdade. Um payload com caractere fora
-  // do alfabeto é sinal de que alguém montou a requisição na mão.
+  // O corpo tem que ser base64 de verdade.
   const corpo = valor.slice(m[0].length);
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(corpo.slice(0, 512))) {
     return { ok: false, erro: 'Conteúdo do arquivo inválido.' };
@@ -276,7 +281,7 @@ export function validarDataUrlMidia(
 
   return {
     ok: true,
-    tipo: ehVideo ? 'video' : mime === 'image/gif' ? 'gif' : 'imagem',
+    tipo: ehAudio ? 'audio' : ehVideo ? 'video' : mime === 'image/gif' ? 'gif' : 'imagem',
   };
 }
 

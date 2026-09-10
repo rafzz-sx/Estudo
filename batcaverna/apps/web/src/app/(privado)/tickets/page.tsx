@@ -58,8 +58,8 @@ export default function TicketsPage() {
   const [enviandoMensagem, setEnviandoMensagem] = useState(false);
 
   // 1. Carregar lista de tickets do usuário
-  const carregarTickets = async () => {
-    setLoadingTickets(true);
+  const carregarTickets = async (silencioso = false) => {
+    if (!silencioso) setLoadingTickets(true);
     try {
       const res = await fetchWithAuth("/api/tickets");
       if (res.ok) {
@@ -74,13 +74,13 @@ export default function TicketsPage() {
     } catch (e) {
       console.warn("Erro ao carregar tickets:", e);
     } finally {
-      setLoadingTickets(false);
+      if (!silencioso) setLoadingTickets(false);
     }
   };
 
   // 2. Carregar detalhes e mensagens do ticket selecionado
-  const carregarDetalhesTicket = async (id: string) => {
-    setLoadingDetalhe(true);
+  const carregarDetalhesTicket = async (id: string, silencioso = false) => {
+    if (!silencioso) setLoadingDetalhe(true);
     try {
       const res = await fetchWithAuth(`/api/tickets/${id}`);
       if (res.ok) {
@@ -92,7 +92,7 @@ export default function TicketsPage() {
     } catch (e) {
       console.warn("Erro ao carregar mensagens do ticket:", e);
     } finally {
-      setLoadingDetalhe(false);
+      if (!silencioso) setLoadingDetalhe(false);
     }
   };
 
@@ -107,22 +107,22 @@ export default function TicketsPage() {
     }
   }, [ticketAbertoId]);
 
-  // ─── Polling ao vivo: mensagens do ticket aberto (3.5s) ────────
+  // ─── Polling silencioso ao vivo: mensagens do ticket aberto (3.5s) ────────
   useEffect(() => {
     if (!ticketAbertoId) return;
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") {
-        carregarDetalhesTicket(ticketAbertoId);
+        carregarDetalhesTicket(ticketAbertoId, true);
       }
     }, 3500);
     return () => clearInterval(timer);
   }, [ticketAbertoId]);
 
-  // ─── Polling ao vivo: lista de tickets (15s) ──────────────────
+  // ─── Polling silencioso ao vivo: lista de tickets (15s) ──────────────────
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") {
-        carregarTickets();
+        carregarTickets(true);
       }
     }, 15000);
     return () => clearInterval(timer);
