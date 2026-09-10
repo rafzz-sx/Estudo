@@ -106,6 +106,7 @@ export default function ChatPage() {
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioFileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -333,6 +334,39 @@ export default function ChatPage() {
         setImagemPreview(ev.target?.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // ─── Seleção de Arquivo de Áudio ──────────────────────────────
+  const handleSelecionarAudioArquivo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 20 * 1024 * 1024) {
+        alert("O arquivo de áudio deve ter no máximo 20MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target?.result as string;
+        setAudioUrlPreview(base64);
+        setErroMicrofone(null);
+
+        // Tentar obter duração do áudio automaticamente
+        try {
+          const tempAudio = new Audio(base64);
+          tempAudio.onloadedmetadata = () => {
+            if (tempAudio.duration && !isNaN(tempAudio.duration)) {
+              setTempoGravacao(Math.round(tempAudio.duration));
+            } else {
+              setTempoGravacao(1);
+            }
+          };
+        } catch {
+          setTempoGravacao(1);
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
     }
   };
 
@@ -959,35 +993,67 @@ export default function ChatPage() {
               )}
 
               {erroMicrofone && (
-                <div className="mx-4 mb-2 p-3.5 bg-bat-bg-secondary border border-bat-gold-400/40 rounded-xl flex items-start justify-between gap-3 text-xs text-bat-text shadow-lg">
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-xl">🎙️</span>
-                    <div>
-                      <p className="font-bold text-bat-gold-400 text-xs">Permissão de Microfone</p>
-                      <p className="text-bat-text-secondary text-[11px] mt-1 leading-relaxed">
-                        {erroMicrofone}
-                      </p>
-                      <div className="mt-2.5 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setErroMicrofone(null);
-                            iniciarGravacaoAudio();
-                          }}
-                          className="btn-primary py-1 px-3 text-[11px] font-bold cursor-pointer"
-                        >
-                          🔔 Tentar acionar notificação do navegador
-                        </button>
+                <div className="mx-4 mb-3 p-4 bg-bat-bg-secondary border-2 border-bat-gold-400/60 rounded-2xl shadow-2xl animate-fade-in text-xs text-bat-text">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2.5 rounded-xl bg-bat-gold-400/10 text-bat-gold-400 text-2xl flex-shrink-0">
+                        🎙️
+                      </div>
+                      <div className="space-y-2.5">
+                        <div>
+                          <h4 className="font-bold text-bat-gold-400 text-sm flex items-center gap-2">
+                            Acesso ao Microfone Bloqueado pelo Navegador
+                          </h4>
+                          <p className="text-bat-text-secondary text-xs mt-1 leading-relaxed">
+                            O navegador (Chrome/Edge) bloqueou o microfone. <strong>Por segurança, navegadores nunca exibem a notificação de permissão novamente de forma automática</strong> se ela foi bloqueada antes.
+                          </p>
+                        </div>
+
+                        {/* Passo a passo rápido */}
+                        <div className="bg-bat-bg-primary/90 border border-bat-border rounded-xl p-3 space-y-1.5 text-[11px]">
+                          <p className="font-bold text-white">Como desbloquear agora no Chrome / Edge:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-bat-text-muted">
+                            <li>Na barra de endereço do topo (onde está <span className="text-bat-gold-400 font-mono">estudo-tan.vercel.app</span>), clique no ícone de <strong>Cadeado 🔒</strong> ou <strong>Ajustes do site 🎛️</strong>.</li>
+                            <li>Na opção <strong>Microfone</strong>, mude de <em>Bloqueado</em> para <strong>Permitir</strong> (ou clique em <em>Redefinir permissões</em>).</li>
+                            <li>Aperte <strong>F5</strong> para recarregar a página e gravar!</li>
+                          </ol>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {/* Botão de Anexar Áudio (sem precisar de permissão) */}
+                          <button
+                            type="button"
+                            onClick={() => audioFileInputRef.current?.click()}
+                            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
+                          >
+                            <span>📁</span>
+                            <span>Enviar Arquivo de Áudio (.mp3, .m4a, gravação)</span>
+                          </button>
+
+                          {/* Botão de tentar gravar */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setErroMicrofone(null);
+                              iniciarGravacaoAudio();
+                            }}
+                            className="py-2 px-3 rounded-xl bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/40 text-bat-text text-xs font-medium cursor-pointer transition-colors"
+                          >
+                            🔄 Já alterei no cadeado, tentar gravar
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setErroMicrofone(null)}
+                      className="text-bat-text-muted hover:text-white text-sm p-1 rounded-lg hover:bg-bat-bg-card cursor-pointer transition-colors"
+                      title="Fechar aviso"
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setErroMicrofone(null)}
-                    className="text-bat-text-muted hover:text-white text-xs px-1.5 py-0.5 cursor-pointer"
-                  >
-                    ✕
-                  </button>
                 </div>
               )}
 
@@ -1002,6 +1068,15 @@ export default function ChatPage() {
                   onChange={handleSelecionarFoto}
                 />
 
+                {/* Input oculto de áudio */}
+                <input
+                  ref={audioFileInputRef}
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.ogg,.opus,.aac,.webm"
+                  className="hidden"
+                  onChange={handleSelecionarAudioArquivo}
+                />
+
                 {/* Botão de anexar foto */}
                 <button
                   type="button"
@@ -1010,6 +1085,16 @@ export default function ChatPage() {
                   title="Enviar Foto"
                 >
                   📷
+                </button>
+
+                {/* Botão de anexar arquivo de áudio */}
+                <button
+                  type="button"
+                  onClick={() => audioFileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
+                  title="Enviar Arquivo de Áudio (.mp3, .m4a)"
+                >
+                  🎵
                 </button>
 
                 {/* Botão de gravação de áudio */}
@@ -1027,7 +1112,7 @@ export default function ChatPage() {
                     type="button"
                     onClick={iniciarGravacaoAudio}
                     className="p-2.5 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
-                    title="Gravar Áudio de Voz"
+                    title="Gravar Áudio com Microfone"
                   >
                     🎤
                   </button>
