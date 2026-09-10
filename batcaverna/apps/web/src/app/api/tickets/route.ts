@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
     const supabase = createServerSupabaseClient();
-    let query = supabase.from('tickets').select('*, users (apelido)');
+    let query = supabase.from('tickets').select('*, users!tickets_user_id_fkey (apelido)');
 
     if (user.role !== 'admin') {
       query = query.eq('user_id', user.id);

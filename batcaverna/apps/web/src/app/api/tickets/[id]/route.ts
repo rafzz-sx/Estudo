@@ -56,7 +56,7 @@ export async function GET(
 
     const { data: ticket, error } = await supabase
       .from('tickets')
-      .select('*, users (apelido, avatar_url)')
+      .select('*, users!tickets_user_id_fkey (apelido, avatar_url)')
       .eq('id', ticketId)
       .maybeSingle();
 
