@@ -45,10 +45,18 @@ export async function POST(req: NextRequest) {
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
-    const body = await req.json();
-    const { motivo, titulo, descricao } = body;
+    const body = await req.json().catch(() => ({}));
+    const motivo = body?.motivo;
+    const titulo = typeof body?.titulo === 'string' ? body.titulo.trim() : '';
+    const descricao = (
+      typeof body?.descricao === 'string'
+        ? body.descricao
+        : typeof body?.mensagem_inicial === 'string'
+        ? body.mensagem_inicial
+        : ''
+    ).trim();
 
-    if (!motivo || !titulo?.trim() || !descricao?.trim()) {
+    if (!motivo || !titulo || !descricao) {
       return NextResponse.json({ success: false, error: 'Motivo, título e descrição são obrigatórios' }, { status: 400 });
     }
 

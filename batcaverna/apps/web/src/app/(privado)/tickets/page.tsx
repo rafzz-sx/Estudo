@@ -120,22 +120,24 @@ export default function TicketsPage() {
         body: JSON.stringify({
           motivo: novoMotivo,
           titulo: novoTitulo.trim(),
+          descricao: novaDesc.trim(),
           mensagem_inicial: novaDesc.trim(),
         }),
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          setNovoTitulo("");
-          setNovaDesc("");
-          setCriandoTicket(false);
-          await carregarTickets();
-          setTicketAbertoId(json.data.id);
-        }
+      const json = await res.json().catch(() => ({}));
+
+      if (res.ok && json.success && json.data) {
+        setNovoTitulo("");
+        setNovaDesc("");
+        setCriandoTicket(false);
+        await carregarTickets();
+        setTicketAbertoId(json.data.id);
+      } else {
+        alert(json.error || "Não foi possível enviar o chamado. Verifique os campos.");
       }
     } catch (e) {
-      alert("Erro ao enviar ticket.");
+      alert("Erro de conexão ao enviar ticket.");
     } finally {
       setEnviandoTicket(false);
     }
@@ -156,10 +158,14 @@ export default function TicketsPage() {
         }),
       });
 
-      if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+
+      if (res.ok && json.success) {
         setNovaMensagem("");
         carregarDetalhesTicket(ticketAbertoId);
         carregarTickets();
+      } else {
+        alert(json.error || "Não foi possível enviar a mensagem.");
       }
     } catch (e) {
       alert("Erro ao enviar mensagem.");
