@@ -288,7 +288,7 @@ export default function ChatPage() {
       console.warn("Erro microfone:", err);
       let msg = "Permissão para microfone não concedida ou dispositivo indisponível.";
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        msg = "Microfone bloqueado pelo navegador. Clique no ícone de cadeado na barra de endereço do navegador e mude o Microfone para 'Permitir'.";
+        msg = "O navegador bloqueou o acesso ao microfone. Para o navegador voltar a perguntar ou permitir: clique no ícone de cadeado/ajustes 🔒 ao lado de 'estudo-tan.vercel.app' na barra de endereço do navegador, mude 'Microfone' para 'Permitir' (ou 'Perguntar') e recarregue a página.";
       } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
         msg = "Nenhum microfone encontrado ou conectado ao seu dispositivo.";
       } else if (err?.name === "NotReadableError") {
@@ -959,15 +959,32 @@ export default function ChatPage() {
               )}
 
               {erroMicrofone && (
-                <div className="mx-4 mb-2 p-3 bg-bat-danger/20 border border-bat-danger/40 rounded-xl flex items-center justify-between gap-3 text-xs text-red-300">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🎙️</span>
-                    <span>{erroMicrofone}</span>
+                <div className="mx-4 mb-2 p-3.5 bg-bat-bg-secondary border border-bat-gold-400/40 rounded-xl flex items-start justify-between gap-3 text-xs text-bat-text shadow-lg">
+                  <div className="flex items-start gap-2.5">
+                    <span className="text-xl">🎙️</span>
+                    <div>
+                      <p className="font-bold text-bat-gold-400 text-xs">Permissão de Microfone</p>
+                      <p className="text-bat-text-secondary text-[11px] mt-1 leading-relaxed">
+                        {erroMicrofone}
+                      </p>
+                      <div className="mt-2.5 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErroMicrofone(null);
+                            iniciarGravacaoAudio();
+                          }}
+                          className="btn-primary py-1 px-3 text-[11px] font-bold cursor-pointer"
+                        >
+                          🔔 Tentar acionar notificação do navegador
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setErroMicrofone(null)}
-                    className="text-bat-text-muted hover:text-white text-xs px-2 py-1 cursor-pointer"
+                    className="text-bat-text-muted hover:text-white text-xs px-1.5 py-0.5 cursor-pointer"
                   >
                     ✕
                   </button>

@@ -114,28 +114,40 @@ async function participaDaConversa(
 ): Promise<{ participa: boolean; outroId: string | null; ehGrupo?: boolean }> {
   const { data } = await supabase
     .from('conversas')
-    .select('user_id_a, user_id_b, tipo')
+    .select('user_id_a, user_id_b, tipo, criador_id, amizade_id')
     .eq('id', conversaId)
     .maybeSingle();
 
   if (!data) return { participa: false, outroId: null };
 
-  if (data.tipo === 'grupo') {
+  const ehGrupo = data.tipo === 'grupo' || !data.amizade_id;
+
+  // 1. Se o usuário está diretamente na tabela conversas (criador ou pontas da conversa)
+  if (data.user_id_a === userId || data.user_id_b === userId || data.criador_id === userId) {
+    const outroId = ehGrupo ? null : (data.user_id_a === userId ? data.user_id_b : data.user_id_a);
+    // Se for grupo e o criador ainda não tem linha em conversa_participantes, insere em segundo plano
+    if (ehGrupo) {
+      supabase.from('conversa_participantes').upsert(
+        { conversa_id: conversaId, user_id: userId },
+        { onConflict: 'conversa_id,user_id' }
+      ).then();
+    }
+    return { participa: true, outroId, ehGrupo };
+  }
+
+  // 2. Se for grupo, verificar na tabela de participantes
+  if (ehGrupo) {
     const { data: part } = await supabase
       .from('conversa_participantes')
       .select('id')
       .eq('conversa_id', conversaId)
       .eq('user_id', userId)
       .maybeSingle();
-    return { participa: !!part, outroId: null, ehGrupo: true };
+    if (part) {
+      return { participa: true, outroId: null, ehGrupo: true };
+    }
   }
 
-  if (data.user_id_a === userId) {
-    return { participa: true, outroId: data.user_id_b, ehGrupo: false };
-  }
-  if (data.user_id_b === userId) {
-    return { participa: true, outroId: data.user_id_a, ehGrupo: false };
-  }
   return { participa: false, outroId: null };
 }
 
