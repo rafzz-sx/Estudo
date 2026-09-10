@@ -107,6 +107,27 @@ export default function TicketsPage() {
     }
   }, [ticketAbertoId]);
 
+  // ─── Polling ao vivo: mensagens do ticket aberto (3.5s) ────────
+  useEffect(() => {
+    if (!ticketAbertoId) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        carregarDetalhesTicket(ticketAbertoId);
+      }
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [ticketAbertoId]);
+
+  // ─── Polling ao vivo: lista de tickets (15s) ──────────────────
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        carregarTickets();
+      }
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Criar novo ticket
   const handleCriarTicket = async (e: React.FormEvent) => {
     e.preventDefault();

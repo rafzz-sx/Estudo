@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { BatBrand } from "@/components/BatLogo";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
@@ -58,6 +58,8 @@ const concursosOpcoes = [
 
 function AuthForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState<"login" | "cadastro">("login");
   const [mounted, setMounted] = useState(false);
 
@@ -105,6 +107,13 @@ function AuthForm() {
       setTab("cadastro");
     }
   }, [searchParams]);
+
+  // Login persistente: se já está autenticado, vai direto para o dashboard.
+  useEffect(() => {
+    if (user) {
+      router.replace("/dashboard");
+    }
+  }, [user, router]);
 
   // ─── Validador de Nome Completo em Tempo Real (Blindado) ─────
   useEffect(() => {

@@ -336,6 +336,21 @@ export default function AdminPage() {
     }
   }, [ticketSelecionadoId]);
 
+  // ─── Polling ao vivo: ticket selecionado no admin (4s) ─────────
+  useEffect(() => {
+    if (!ticketSelecionadoId) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchWithAuth(`/api/tickets/${ticketSelecionadoId}`)
+          .then((r) => r.json())
+          .then((j) => {
+            if (j.success) setTicketDetalhe(j.data);
+          });
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [ticketSelecionadoId]);
+
   /** Promove, rebaixa, suspende, desativa ou libera uma conta. */
   const moderarConta = async (
     u: UsuarioAdmin,

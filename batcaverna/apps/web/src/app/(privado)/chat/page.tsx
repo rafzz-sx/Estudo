@@ -24,9 +24,11 @@ interface Mensagem {
 
 interface Conversa {
   id: string;
-  amizade_id: string;
-  user_1_id: string;
-  user_2_id: string;
+  tipo?: 'direta' | 'grupo';
+  amizade_id?: string;
+  user_1_id?: string;
+  user_2_id?: string;
+  nome_grupo?: string;
   atualizado_em: string;
   outro_usuario: {
     id: string;
@@ -36,7 +38,7 @@ interface Conversa {
     nivel_atual: number;
     ultimo_login_em: string | null;
     concurso: string | null;
-  };
+  } | null;
   ultima_mensagem?: string;
   nao_lidas: number;
 }
@@ -86,6 +88,10 @@ export default function ChatPage() {
   const [loadingConversas, setLoadingConversas] = useState(true);
   const [loadingMensagens, setLoadingMensagens] = useState(false);
   const [modalAmigoAberto, setModalAmigoAberto] = useState(false);
+  const [modalGrupoAberto, setModalGrupoAberto] = useState(false);
+  const [nomeGrupo, setNomeGrupo] = useState("");
+  const [amigosParaGrupo, setAmigosParaGrupo] = useState<{id: string; apelido: string; selecionado: boolean}[]>([]);
+  const [criandoGrupo, setCriandoGrupo] = useState(false);
 
   // Áudio: gravação
   const [gravandoAudio, setGravandoAudio] = useState(false);
@@ -195,13 +201,13 @@ export default function ChatPage() {
     carregarMensagens(conversaAtivaId);
 
     // Não há WebSocket na plataforma: o chat se mantém atualizado com uma
-    // consulta a cada 5 segundos. A aba em segundo plano não consulta, para
+    // consulta a cada 3 segundos. A aba em segundo plano não consulta, para
     // não gastar requisição de quem deixou a página aberta.
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") {
         carregarMensagens(conversaAtivaId, true);
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(timer);
   }, [conversaAtivaId]);
@@ -354,11 +360,69 @@ export default function ChatPage() {
     }
   };
 
-  const conversasFiltradas = conversas.filter(
-    (c) =>
-      c.outro_usuario.apelido.toLowerCase().includes(buscaUsuario.toLowerCase()) ||
-      c.outro_usuario.nome?.toLowerCase().includes(buscaUsuario.toLowerCase())
-  );
+  const conversasFiltradas = conversas.filter((c) => {
+    const termo = buscaUsuario.toLowerCase();
+    if (!termo) return true;
+    if (c.tipo === 'grupo') {
+      return (c.nome_grupo || '').toLowerCase().includes(termo);
+    }
+    return (
+      (c.outro_usuario?.apelido || '').toLowerCase().includes(termo) ||
+      (c.outro_usuario?.nome || '').toLowerCase().includes(termo)
+    );
+  });
+
+  // ─── Abrir modal de criação de grupo ────────────────────────
+  const abrirModalGrupo = async () => {
+    setNomeGrupo("");
+    setCriandoGrupo(false);
+    try {
+      const res = await fetchWithAuth("/api/amizades");
+      const json = await res.json();
+      if (json.success && json.data) {
+        const amigos = json.data
+          .filter((a: any) => a.status === 'aceita')
+          .map((a: any) => ({
+            id: a.amigo.id,
+            apelido: a.amigo.apelido,
+            selecionado: false,
+          }));
+        setAmigosParaGrupo(amigos);
+      }
+    } catch {}
+    setModalGrupoAberto(true);
+  };
+
+  const criarGrupo = async () => {
+    if (!nomeGrupo.trim() || criandoGrupo) return;
+    const selecionados = amigosParaGrupo.filter((a) => a.selecionado).map((a) => a.id);
+    if (selecionados.length === 0) {
+      alert('Selecione pelo menos 1 amigo para o grupo!');
+      return;
+    }
+    setCriandoGrupo(true);
+    try {
+      const res = await fetchWithAuth('/api/chat/grupos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nomeGrupo.trim(), participante_ids: selecionados }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setModalGrupoAberto(false);
+        await carregarConversas();
+        if (json.data?.conversa_id) {
+          setConversaAtivaId(json.data.conversa_id);
+        }
+      } else {
+        alert(json.error || 'Erro ao criar grupo');
+      }
+    } catch {
+      alert('Erro de conexão ao criar grupo');
+    } finally {
+      setCriandoGrupo(false);
+    }
+  };
 
   return (
     <div className={`space-y-6 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -369,6 +433,82 @@ export default function ChatPage() {
         onSuccess={() => carregarConversas()}
       />
 
+      {/* ═══ MODAL DE CRIAR GRUPO DE ESTUDO ═══ */}
+      {modalGrupoAberto && (
+        <>
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            onClick={() => setModalGrupoAberto(false)}
+          />
+          <div className="fixed inset-x-4 top-[10%] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto bg-bat-bg-card border border-bat-border rounded-2xl shadow-2xl z-50 p-6 animate-in fade-in-50 zoom-in-95">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="heading text-lg text-bat-text font-bold">⚔️ Criar Grupo de Estudo</h3>
+              <button
+                onClick={() => setModalGrupoAberto(false)}
+                className="w-7 h-7 rounded-lg bg-bat-bg-secondary text-bat-text-muted hover:text-bat-text flex items-center justify-center text-xs cursor-pointer"
+              >✕</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-bat-text-secondary font-semibold mb-1.5">Nome do Grupo</label>
+                <input
+                  type="text"
+                  value={nomeGrupo}
+                  onChange={(e) => setNomeGrupo(e.target.value)}
+                  placeholder="Ex: Squad EEAR 2026"
+                  maxLength={100}
+                  className="w-full bg-bat-bg-primary border border-bat-border rounded-xl px-4 py-2.5 text-sm text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-bat-text-secondary font-semibold mb-1.5">
+                  Selecionar Amigos ({amigosParaGrupo.filter(a => a.selecionado).length} selecionados)
+                </label>
+                {amigosParaGrupo.length === 0 ? (
+                  <p className="text-xs text-bat-text-muted py-4 text-center">
+                    Você ainda não tem amigos aceitos. Adicione amigos primeiro!
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {amigosParaGrupo.map((amigo) => (
+                      <label
+                        key={amigo.id}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border ${
+                          amigo.selecionado
+                            ? 'bg-bat-gold-400/10 border-bat-gold-400/30'
+                            : 'bg-bat-bg-secondary border-transparent hover:border-bat-border'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={amigo.selecionado}
+                          onChange={() => {
+                            setAmigosParaGrupo(prev =>
+                              prev.map(a => a.id === amigo.id ? { ...a, selecionado: !a.selecionado } : a)
+                            );
+                          }}
+                          className="accent-[#F5C518] w-4 h-4"
+                        />
+                        <span className="text-sm text-bat-text font-medium">{amigo.apelido}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={criarGrupo}
+                disabled={criandoGrupo || !nomeGrupo.trim() || amigosParaGrupo.filter(a => a.selecionado).length === 0}
+                className="w-full btn-primary py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {criandoGrupo ? 'Criando...' : `⚔️ Criar Grupo (${amigosParaGrupo.filter(a => a.selecionado).length + 1} membros)`}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       {/* ═══ LIGHTBOX FULLSCREEN PARA FOTOS ═══ */}
       {lightboxUrl && (
         <div
@@ -404,13 +544,22 @@ export default function ChatPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setModalAmigoAberto(true)}
-          className="btn-primary py-2.5 px-5 text-xs font-bold self-start sm:self-auto flex items-center gap-2 cursor-pointer shadow-lg"
-        >
-          <span>👥</span>
-          <span>+ Adicionar Amigo por Apelido</span>
-        </button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <button
+            onClick={abrirModalGrupo}
+            className="py-2.5 px-4 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg rounded-xl bg-bat-bg-secondary border border-bat-border hover:border-bat-gold-400/40 text-bat-text transition-all"
+          >
+            <span>⚔️</span>
+            <span>+ Novo Grupo</span>
+          </button>
+          <button
+            onClick={() => setModalAmigoAberto(true)}
+            className="btn-primary py-2.5 px-4 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg"
+          >
+            <span>👥</span>
+            <span>+ Adicionar Amigo</span>
+          </button>
+        </div>
       </div>
 
       {/* ═══ PAINEL DO CHAT (SIDEBAR + MENSAGENS) ═══ */}
@@ -475,22 +624,22 @@ export default function ChatPage() {
                         : "hover:bg-bat-bg-tertiary/40"
                     }`}
                   >
-                    {/* Avatar. A bolinha verde só aparece para quem entrou
-                        de verdade nos últimos 10 minutos — antes era pintada
-                        em todo mundo, o tempo todo. */}
+                    {/* Avatar */}
                     <div className="relative flex-shrink-0">
                       <div className="w-12 h-12 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 text-base overflow-hidden">
-                        {conv.outro_usuario.avatar_url ? (
+                        {conv.tipo === 'grupo' ? (
+                          <span className="text-xl">⚔️</span>
+                        ) : conv.outro_usuario?.avatar_url ? (
                           <img
                             src={conv.outro_usuario.avatar_url}
                             alt=""
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          conv.outro_usuario.apelido[0]?.toUpperCase()
+                          (conv.outro_usuario?.apelido || '?')[0]?.toUpperCase()
                         )}
                       </div>
-                      {recemVisto(conv.outro_usuario.ultimo_login_em) && (
+                      {conv.tipo !== 'grupo' && conv.outro_usuario && recemVisto(conv.outro_usuario.ultimo_login_em) && (
                         <span
                           className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-bat-bg-card"
                           title="Por perto agora"
@@ -498,15 +647,21 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Dados do usuário */}
+                    {/* Dados do usuário / grupo */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-1">
                         <span className="text-sm font-semibold text-bat-text truncate">
-                          {conv.outro_usuario.apelido}
+                          {conv.tipo === 'grupo' ? conv.nome_grupo : conv.outro_usuario?.apelido || '...'}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-bat-bg-primary text-bat-gold-400 border border-bat-gold-400/20 font-mono">
-                          Nv. {conv.outro_usuario.nivel_atual}
-                        </span>
+                        {conv.tipo === 'grupo' ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bat-bg-primary text-emerald-400 border border-emerald-400/20 font-bold">
+                            GRUPO
+                          </span>
+                        ) : conv.outro_usuario ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-bat-bg-primary text-bat-gold-400 border border-bat-gold-400/20 font-mono">
+                            Nv. {conv.outro_usuario.nivel_atual}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="text-xs text-bat-text-muted truncate">
                         {conv.ultima_mensagem || "Inicie a conversa..."}
@@ -545,41 +700,47 @@ export default function ChatPage() {
                     ←
                   </button>
                   <div className="w-10 h-10 shrink-0 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
-                    {conversaAtiva.outro_usuario.avatar_url ? (
+                    {conversaAtiva.tipo === 'grupo' ? (
+                      <span className="text-lg">⚔️</span>
+                    ) : conversaAtiva.outro_usuario?.avatar_url ? (
                       <img
                         src={conversaAtiva.outro_usuario.avatar_url}
                         alt=""
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      conversaAtiva.outro_usuario.apelido[0]?.toUpperCase()
+                      (conversaAtiva.outro_usuario?.apelido || '?')[0]?.toUpperCase()
                     )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-bat-text">
-                        {conversaAtiva.outro_usuario.apelido}
+                        {conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || '...'}
                       </h3>
-                      {conversaAtiva.outro_usuario.nome && (
+                      {conversaAtiva.tipo !== 'grupo' && conversaAtiva.outro_usuario?.nome && (
                         <span className="text-[10px] text-bat-text-muted">
                           ({conversaAtiva.outro_usuario.nome})
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-bat-text-secondary flex items-center gap-1.5">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          recemVisto(conversaAtiva.outro_usuario.ultimo_login_em)
-                            ? "bg-emerald-400"
-                            : "bg-bat-text-muted"
-                        }`}
-                      />
-                      {textoPresenca(conversaAtiva.outro_usuario.ultimo_login_em)} ·
-                      Nível {conversaAtiva.outro_usuario.nivel_atual}
-                      {conversaAtiva.outro_usuario.concurso
-                        ? ` · ${conversaAtiva.outro_usuario.concurso}`
-                        : ""}
-                    </p>
+                    {conversaAtiva.tipo === 'grupo' ? (
+                      <p className="text-[11px] text-emerald-400 font-semibold">⚔️ Grupo de Estudo</p>
+                    ) : conversaAtiva.outro_usuario ? (
+                      <p className="text-[11px] text-bat-text-secondary flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            recemVisto(conversaAtiva.outro_usuario.ultimo_login_em)
+                              ? "bg-emerald-400"
+                              : "bg-bat-text-muted"
+                          }`}
+                        />
+                        {textoPresenca(conversaAtiva.outro_usuario.ultimo_login_em)} ·
+                        Nível {conversaAtiva.outro_usuario.nivel_atual}
+                        {conversaAtiva.outro_usuario.concurso
+                          ? ` · ${conversaAtiva.outro_usuario.concurso}`
+                          : ""}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -608,7 +769,7 @@ export default function ChatPage() {
                 ) : mensagens.length === 0 ? (
                   <div className="p-12 text-center text-bat-text-muted text-xs">
                     <span className="text-3xl block mb-2">💬</span>
-                    Envie a primeira mensagem, foto ou áudio para {conversaAtiva.outro_usuario.apelido}!
+                    Envie a primeira mensagem, foto ou áudio para {conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || '...'}!
                   </div>
                 ) : (
                   mensagens.map((msg) => {
@@ -793,7 +954,7 @@ export default function ChatPage() {
                 {/* Campo de texto */}
                 <input
                   type="text"
-                  placeholder={`Mensagem para ${conversaAtiva.outro_usuario.apelido}...`}
+                  placeholder={`Mensagem para ${conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || '...'}...`}
                   value={textoMensagem}
                   onChange={(e) => setTextoMensagem(e.target.value)}
                   className="flex-1 bg-bat-bg-primary border border-bat-border rounded-xl px-4 py-3 text-xs text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none transition-all"

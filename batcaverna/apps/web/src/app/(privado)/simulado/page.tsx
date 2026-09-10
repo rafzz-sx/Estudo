@@ -246,6 +246,8 @@ function Simulado() {
         duracaoMinutos: json.data.duracao_minutos,
       });
       setFase("prova");
+      // Sinaliza estudo real: o simulado está em andamento.
+      window.dispatchEvent(new Event("batcaverna_study_activity"));
     } catch {
       setErro("Falha de conexão ao iniciar o simulado.");
     } finally {
@@ -290,6 +292,8 @@ function Simulado() {
     // respondido. Não devolve o tempo perdido — a prova real também não.
     setSegundosRestantes(Math.max(1, restante));
     setFase("prova");
+    // Sinaliza estudo real: retomada de prova em andamento.
+    window.dispatchEvent(new Event("batcaverna_study_activity"));
   }, [userId]);
 
   // Cada resposta marcada — e cada troca de questão — vai para o aparelho na

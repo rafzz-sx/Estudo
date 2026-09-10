@@ -178,6 +178,10 @@ function BancoDeQuestoes() {
         setResultado(null);
         setMostrarGabarito(false);
         inicioQuestao.current = Date.now();
+        // Sinaliza estudo real: o aluno carregou questões para resolver.
+        if (json.data.items.length > 0) {
+          window.dispatchEvent(new Event("batcaverna_study_activity"));
+        }
       } catch (e) {
         setErro(
           "Não consegui carregar as questões. Verifique sua conexão e tente de novo."

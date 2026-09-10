@@ -108,7 +108,11 @@ function Trilha() {
     try {
       const res = await fetchWithAuth(`/api/teoria/${id}`);
       const json = await res.json();
-      if (json.success) setTeoriaAberta(json.data);
+      if (json.success) {
+        setTeoriaAberta(json.data);
+        // Sinaliza estudo real: o aluno abriu um conteúdo de teoria.
+        window.dispatchEvent(new Event("batcaverna_study_activity"));
+      }
     } catch {
       /* silencioso: o modal simplesmente não abre */
     } finally {

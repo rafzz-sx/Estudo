@@ -141,6 +141,7 @@ export function NotificationCenter({ align = "auto" }: Props) {
       // quem precisa se destacar é a linha, dentro da lista.
       case "moderacao": return "🛡️";
       case "sistema": return "📢";
+      case "amigo_estudando": return "⚔️";
       default: return "🔔";
     }
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -27,6 +27,12 @@ export function isRotaDeEstudo(pathname: string | null): boolean {
   );
 }
 
+/**
+ * TEMPO OCIOSO MÁXIMO (ms) antes de pausar automaticamente o cronômetro.
+ * 2 minutos sem interação = o aluno provavelmente não está estudando.
+ */
+const IDLE_TIMEOUT_MS = 2 * 60 * 1000;
+
 export function StudySessionTracker() {
   const user = useAuthStore((state) => state.user);
   const pathname = usePathname();
@@ -43,26 +49,92 @@ export function StudySessionTracker() {
 
   const emRota = isRotaDeEstudo(pathname);
 
-  // 1. Iniciar ou Retomar sessão SOMENTE quando o aluno estiver em uma trilha de estudo
+  // ─── Sinal de atividade real de estudo ───────────────────────
+  // As páginas de trilha, questões e simulado disparam o evento
+  // `batcaverna_study_activity` quando o aluno está efetivamente
+  // estudando (abrindo teoria, respondendo questão, simulado ativo).
+  // Sem esse sinal, o cronômetro NÃO inicia.
+  const [estudoAtivo, setEstudoAtivo] = useState(false);
+  const estudoAtivoRef = useRef(false);
+
+  useEffect(() => {
+    const handler = () => {
+      setEstudoAtivo(true);
+      estudoAtivoRef.current = true;
+    };
+    window.addEventListener("batcaverna_study_activity", handler);
+    return () => window.removeEventListener("batcaverna_study_activity", handler);
+  }, []);
+
+  // Quando o aluno sai da rota de estudo, desativa o sinal.
+  useEffect(() => {
+    if (!emRota) {
+      setEstudoAtivo(false);
+      estudoAtivoRef.current = false;
+    }
+  }, [emRota]);
+
+  // ─── Detecção de ociosidade (idle 2 min) ────────────────────
+  const [ocioso, setOcioso] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!emRota || !estudoAtivo) return;
+
+    const resetIdle = () => {
+      if (ocioso) {
+        setOcioso(false);
+      }
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        setOcioso(true);
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    // Qualquer interação reseta o contador de ociosidade
+    const eventos = ["mousemove", "keydown", "touchstart", "scroll", "click"];
+    eventos.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
+
+    // Iniciar o timer de idle imediatamente
+    resetIdle();
+
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, resetIdle));
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [emRota, estudoAtivo, ocioso]);
+
+  // ─── Pausar/despausar por ociosidade ────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    if (ocioso && isActive && !isPaused) {
+      pauseSession(false); // pausa automática por idle
+    } else if (!ocioso && isActive && isPaused && !isManuallyPaused) {
+      resumeSession();
+    }
+  }, [ocioso, isActive, isPaused, isManuallyPaused, user?.id, pauseSession, resumeSession]);
+
+  // 1. Iniciar ou Retomar sessão SOMENTE quando o aluno estiver
+  //    numa rota de estudo E com atividade real confirmada.
   useEffect(() => {
     if (!user?.id) return;
 
-    if (emRota) {
+    if (emRota && estudoAtivo && !ocioso) {
       if (!isActive && !isPaused && !isManuallyPaused) {
         initSession();
       } else if (isActive && isPaused && !isManuallyPaused) {
         // Só despausa automaticamente se não tiver sido pausado manualmente pelo aluno!
         resumeSession();
       }
-    } else if (isActive && !isPaused) {
+    } else if (!emRota && isActive && !isPaused) {
       // Saiu da trilha para dashboard, chat, ranking, perfil: pausa automaticamente para evitar fraudes!
       pauseSession(false);
     }
-  }, [user?.id, emRota, isActive, isPaused, isManuallyPaused, initSession, resumeSession, pauseSession]);
+  }, [user?.id, emRota, estudoAtivo, ocioso, isActive, isPaused, isManuallyPaused, initSession, resumeSession, pauseSession]);
 
   // 2. Cronômetro de 1 segundo: SÓ avança se estiver na trilha, ativo e com aba visível
   useEffect(() => {
-    if (!emRota || isPaused || !isActive) return;
+    if (!emRota || isPaused || !isActive || ocioso) return;
 
     const timerInterval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -71,11 +143,11 @@ export function StudySessionTracker() {
     }, 1000);
 
     return () => clearInterval(timerInterval);
-  }, [emRota, isPaused, isActive, tick]);
+  }, [emRota, isPaused, isActive, ocioso, tick]);
 
   // 3. Heartbeat a cada 30 segundos: SÓ envia se estiver em rota de estudo ativa
   useEffect(() => {
-    if (!emRota || isPaused || !isActive) return;
+    if (!emRota || isPaused || !isActive || ocioso) return;
 
     const heartbeatInterval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -84,7 +156,7 @@ export function StudySessionTracker() {
     }, 30000);
 
     return () => clearInterval(heartbeatInterval);
-  }, [emRota, isPaused, isActive, sendHeartbeat]);
+  }, [emRota, isPaused, isActive, ocioso, sendHeartbeat]);
 
   // 4. Ao sair da página/fechar a aba enquanto estuda, grava o intervalo pendente
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BatLogo, BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -248,6 +249,17 @@ export default function LandingPage() {
   );
   const [depoimentos, setDepoimentos] = useState<any[]>([]);
   const [depoimentoAtual, setDepoimentoAtual] = useState(0);
+
+  const router = useRouter();
+
+  // Login persistente: se o aluno já está autenticado, vai direto para
+  // a plataforma — não precisa ver a landing de marketing.
+  useEffect(() => {
+    if (user) {
+      router.replace("/dashboard");
+      return;
+    }
+  }, [user, router]);
 
   useEffect(() => {
     setMontado(true);

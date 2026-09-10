@@ -63,6 +63,12 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
+    // ─── Notificação "amigo estudando" — 1ª sessão do dia ─────
+    // Fire-and-forget: não bloqueia o início da sessão do aluno.
+    notificarAmigosEstudando(supabase, userId).catch((e) =>
+      console.warn('Erro ao notificar amigos estudando:', e)
+    );
+
     return NextResponse.json({
       success: true,
       data: {
@@ -79,4 +85,66 @@ export async function POST(req: NextRequest) {
     console.error('POST /api/study-sessions/start error:', error);
     return NextResponse.json({ success: false, error: 'Erro ao iniciar sessão' }, { status: 500 });
   }
+}
+
+/**
+ * Notifica todos os amigos aceitos que o aluno começou a estudar hoje.
+ * Só dispara se ainda NÃO enviou essa notificação HOJE (fuso BRT -03:00).
+ */
+async function notificarAmigosEstudando(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  userId: string
+) {
+  // Início do dia em BRT (UTC-3)
+  const agora = new Date();
+  const hojeInicioBRT = new Date(agora);
+  hojeInicioBRT.setHours(hojeInicioBRT.getHours() - 3); // ajusta para BRT
+  hojeInicioBRT.setHours(0, 0, 0, 0);
+  hojeInicioBRT.setHours(hojeInicioBRT.getHours() + 3); // volta para UTC
+  const hojeInicioISO = hojeInicioBRT.toISOString();
+
+  // Já notificou hoje?
+  const { data: jaNotificou } = await supabase
+    .from('notificacoes')
+    .select('id')
+    .eq('tipo', 'amigo_estudando')
+    .eq('referencia_id', userId)
+    .gte('criada_em', hojeInicioISO)
+    .limit(1);
+
+  if (jaNotificou && jaNotificou.length > 0) return; // já enviou hoje
+
+  // Buscar o apelido do aluno
+  const { data: perfil } = await supabase
+    .from('users')
+    .select('apelido')
+    .eq('id', userId)
+    .single();
+
+  const apelido = perfil?.apelido ?? 'Um amigo';
+
+  // Buscar amigos aceitos
+  const { data: amizades } = await supabase
+    .from('amizades')
+    .select('user_id_solicitante, user_id_destinatario')
+    .or(`user_id_solicitante.eq.${userId},user_id_destinatario.eq.${userId}`)
+    .eq('status', 'aceita');
+
+  if (!amizades || amizades.length === 0) return;
+
+  const amigoIds = amizades.map((a) =>
+    a.user_id_solicitante === userId ? a.user_id_destinatario : a.user_id_solicitante
+  );
+
+  // Inserir notificação para cada amigo
+  const notificacoes = amigoIds.map((amigoId) => ({
+    user_id: amigoId,
+    tipo: 'amigo_estudando',
+    titulo: '⚔️ Amigo em Ação!',
+    mensagem: `${apelido} começou a estudar hoje! Que tal entrar no combate também?`,
+    referencia_id: userId,
+    lida: false,
+  }));
+
+  await supabase.from('notificacoes').insert(notificacoes);
 }
