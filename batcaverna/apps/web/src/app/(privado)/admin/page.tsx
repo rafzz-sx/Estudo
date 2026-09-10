@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { formatarDataHoraVersao } from "@batcaverna/utils";
@@ -15,6 +15,40 @@ import { PainelContestacoes } from "@/components/admin/PainelContestacoes";
 import { PainelContatos } from "@/components/admin/PainelContatos";
 import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
 import { PainelResetSenha } from "@/components/admin/PainelResetSenha";
+
+/** Métricas da plataforma vindas de /api/admin/painel */
+interface MetricasPlataforma {
+  total_usuarios: number;
+  online_agora: number;
+  novos_24h: number;
+  total_questoes: number;
+  total_respostas: number;
+  tickets_abertos: number;
+  feedbacks_novos: number;
+}
+
+/** Checagem de saúde vinda de /api/admin/saude */
+interface ChecagemSaude {
+  nome: string;
+  ok: boolean;
+  detalhe: string;
+  critico: boolean;
+}
+
+interface ResumoSaude {
+  saudavel: boolean;
+  problemas_criticos: number;
+  checagens: ChecagemSaude[];
+  verificado_em: string;
+}
+
+/** Contadores para as abas de notificação */
+interface ContadoresAbas {
+  moderacao_pendentes: number;
+  contatos_nao_lidos: number;
+  reset_pendentes: number;
+  contestacoes_abertas: number;
+}
 
 interface UsuarioAdmin {
   id: string;
@@ -110,18 +144,41 @@ export default function AdminPage() {
 
   // Versão do Sistema
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
-    versao_atual: "1.1.0",
+    versao_atual: "2.9.0",
     atualizado_em: new Date().toISOString(),
   });
+
+  // Métricas reais da plataforma (vindas da API)
+  const [metricas, setMetricas] = useState<MetricasPlataforma | null>(null);
+
+  // Saúde real da instalação (vindas de /api/admin/saude)
+  const [resumoSaude, setResumoSaude] = useState<ResumoSaude | null>(null);
+
+  // Contadores para badges nas abas
+  const [contadoresAbas, setContadoresAbas] = useState<ContadoresAbas>({
+    moderacao_pendentes: 0,
+    contatos_nao_lidos: 0,
+    reset_pendentes: 0,
+    contestacoes_abertas: 0,
+  });
+
+  // Hora em tempo real no cabeçalho
+  const [horaAtual, setHoraAtual] = useState(new Date());
+
+  // Transição de aba
+  const [abaVisivel, setAbaVisivel] = useState(true);
+  const abaAnteriorRef = useRef<AbaAdmin>("visao_geral");
 
   // 1. Carregar dados iniciais
   const carregarDadosIniciais = async () => {
     try {
-      const [resUsers, resTickets, resInfo, resLogs] = await Promise.all([
+      const [resUsers, resTickets, resInfo, resLogs, resPainel, resSaude] = await Promise.all([
         fetchWithAuth("/api/admin/usuarios"),
         fetchWithAuth("/api/tickets"),
         fetchWithAuth("/api/app-info"),
         fetchWithAuth("/api/admin/armazem/logs"),
+        fetchWithAuth("/api/admin/painel"),
+        fetchWithAuth("/api/admin/saude"),
       ]);
 
       if (resUsers.ok) {
@@ -140,9 +197,55 @@ export default function AdminPage() {
         const json = await resLogs.json();
         if (json.data) setLogsArmazem(json.data);
       }
+      if (resPainel.ok) {
+        const json = await resPainel.json();
+        if (json.data?.metricas) setMetricas(json.data.metricas);
+      }
+      if (resSaude.ok) {
+        const json = await resSaude.json();
+        if (json.success) setResumoSaude(json.data);
+      }
     } catch (e) {
       console.warn("Erro ao carregar dados do admin:", e);
     }
+  };
+
+  // Carregar contadores para badges das abas
+  const carregarContadoresAbas = async () => {
+    try {
+      const [resMod, resCont, resReset, resContest] = await Promise.all([
+        fetchWithAuth("/api/admin/moderacao?estado=pendentes").catch(() => null),
+        fetchWithAuth("/api/admin/contatos?filtro=nao_lidos").catch(() => null),
+        fetchWithAuth("/api/admin/reset-senha").catch(() => null),
+        fetchWithAuth("/api/admin/contestacoes?status=aberta").catch(() => null),
+      ]);
+
+      const contadores: ContadoresAbas = {
+        moderacao_pendentes: 0,
+        contatos_nao_lidos: 0,
+        reset_pendentes: 0,
+        contestacoes_abertas: 0,
+      };
+
+      if (resMod?.ok) {
+        const j = await resMod.json();
+        contadores.moderacao_pendentes = j.data?.resumo?.pendentes ?? 0;
+      }
+      if (resCont?.ok) {
+        const j = await resCont.json();
+        contadores.contatos_nao_lidos = j.data?.resumo?.nao_lidos ?? 0;
+      }
+      if (resReset?.ok) {
+        const j = await resReset.json();
+        contadores.reset_pendentes = (j.data ?? []).filter((s: any) => s.status === "pendente").length;
+      }
+      if (resContest?.ok) {
+        const j = await resContest.json();
+        contadores.contestacoes_abertas = j.data?.resumo?.abertas ?? 0;
+      }
+
+      setContadoresAbas(contadores);
+    } catch {}
   };
 
   // 2. Carregar Usuários Online
@@ -187,7 +290,23 @@ export default function AdminPage() {
 
   useEffect(() => {
     carregarDadosIniciais();
+    carregarContadoresAbas();
+
+    // Relógio do cabeçalho atualiza a cada minuto
+    const clockTimer = setInterval(() => setHoraAtual(new Date()), 60_000);
+    return () => clearInterval(clockTimer);
   }, []);
+
+  // Transição suave ao trocar de aba
+  const trocarAba = (novaAba: AbaAdmin) => {
+    if (novaAba === aba) return;
+    setAbaVisivel(false);
+    abaAnteriorRef.current = aba;
+    setTimeout(() => {
+      setAba(novaAba);
+      setAbaVisivel(true);
+    }, 120);
+  };
 
   useEffect(() => {
     if (aba === "online") carregarOnline();
@@ -316,19 +435,24 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       {/* ═══ CABEÇALHO ADMIN ═══ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bat-bg-card border border-bat-border p-6 rounded-2xl shadow-xl">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="heading text-3xl text-bat-text">Painel de Controle</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bat-bg-card border border-bat-border p-6 rounded-2xl shadow-xl relative overflow-hidden">
+        {/* Glow sutil de fundo */}
+        <div className="absolute inset-0 bg-gradient-to-r from-bat-gold-400/[0.03] via-transparent to-bat-gold-400/[0.03] pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="heading text-2xl sm:text-3xl text-bat-text">Painel de Controle</h1>
             <span className="badge-admin">ADMINISTRADOR MASTER</span>
           </div>
           <p className="text-bat-text-secondary text-sm mt-1">
-            Central de comando: usuários, monitoramento em tempo real, tickets, armazém e moderação.
+            {user?.apelido ? (
+              <>Olá, <strong className="text-bat-gold-400">{user.apelido}</strong> — </>
+            ) : ("")}
+            {horaAtual.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} · {horaAtual.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
 
         {/* Badge de Versão */}
-        <div className="flex flex-col sm:items-end bg-bat-bg-primary border border-bat-gold-400/30 px-4 py-2.5 rounded-xl text-right">
+        <div className="relative flex flex-col sm:items-end bg-bat-bg-primary border border-bat-gold-400/30 px-4 py-2.5 rounded-xl text-right">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-mono font-bold text-bat-gold-400">Versão {appInfo.versao_atual}</span>
@@ -340,90 +464,149 @@ export default function AdminPage() {
       </div>
 
       {/* ═══ ABAS DE NAVEGAÇÃO ═══ */}
-      <div className="flex gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-xl w-fit flex-wrap">
-        {[
-          { key: "visao_geral", label: "📊 Visão Geral" },
-          { key: "online", label: "🟢 Usuários Online Agora" },
-          { key: "usuarios", label: "👥 Contas & Apelidos" },
-          { key: "tickets", label: `🎫 Tickets (${tickets.filter((t) => t.status === "aberto").length} novos)` },
-          { key: "alertas", label: "🚨 Alertas de Moderação" },
-          { key: "saude", label: "🩺 Diagnóstico" },
-          { key: "moderacao", label: "🛡️ Conversas do Chat" },
-          { key: "armazem", label: "📥 Importar Questões" },
-          { key: "resolucoes", label: "✍️ Resolução & Figura" },
-          { key: "contestacoes", label: "⚖️ Contestações" },
-          { key: "teoria", label: "📝 Fila de Teoria" },
-          { key: "sessoes", label: "⏳ Sessões & Logins" },
-          { key: "avisos", label: "📢 Aviso Global" },
-          {
-            key: "feedback",
-            label: `💬 Feedback${
-              resumoFeedback?.nao_lidos ? ` (${resumoFeedback.nao_lidos})` : ""
-            }`,
-          },
-          { key: "contatos", label: "📨 Mensagens de Contato" },
-          { key: "reset_senha", label: "🔑 Redefinir Senhas" },
-          { key: "auditoria", label: "📝 Log de Auditoria" },
-          { key: "banners", label: "🖼️ Banners & Temas" },
-        ].map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setAba(item.key as AbaAdmin)}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              aba === item.key
-                ? "bg-bat-gold-400 text-black shadow-[0_0_12px_rgba(245,197,24,0.3)]"
-                : "text-bat-text-muted hover:text-bat-text"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 sm:pb-0">
+        <div className="flex gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-xl w-max sm:w-fit sm:flex-wrap">
+          {[
+            { key: "visao_geral", label: "📊 Visão Geral", badge: 0 },
+            { key: "online", label: "🟢 Online Agora", badge: metricas?.online_agora ?? 0 },
+            { key: "usuarios", label: "👥 Contas", badge: 0 },
+            { key: "tickets", label: "🎫 Tickets", badge: tickets.filter((t) => t.status === "aberto").length },
+            { key: "alertas", label: "🚨 Moderação", badge: contadoresAbas.moderacao_pendentes },
+            { key: "saude", label: "🩺 Diagnóstico", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0 },
+            { key: "moderacao", label: "🛡️ Chat", badge: 0 },
+            { key: "armazem", label: "📥 Importar", badge: 0 },
+            { key: "resolucoes", label: "✍️ Resolução", badge: 0 },
+            { key: "contestacoes", label: "⚖️ Contestações", badge: contadoresAbas.contestacoes_abertas },
+            { key: "teoria", label: "📝 Teoria", badge: 0 },
+            { key: "sessoes", label: "⏳ Sessões", badge: 0 },
+            { key: "avisos", label: "📢 Aviso", badge: 0 },
+            { key: "feedback", label: "💬 Feedback", badge: resumoFeedback?.nao_lidos ?? 0 },
+            { key: "contatos", label: "📨 Contato", badge: contadoresAbas.contatos_nao_lidos },
+            { key: "reset_senha", label: "🔑 Senhas", badge: contadoresAbas.reset_pendentes },
+            { key: "auditoria", label: "📝 Auditoria", badge: 0 },
+            { key: "banners", label: "🖼️ Banners", badge: 0 },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => trocarAba(item.key as AbaAdmin)}
+              className={`relative px-3.5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                aba === item.key
+                  ? "bg-bat-gold-400 text-black shadow-[0_0_12px_rgba(245,197,24,0.3)]"
+                  : "text-bat-text-muted hover:text-bat-text hover:bg-bat-bg-elevated/50"
+              }`}
+            >
+              {item.label}
+              {item.badge > 0 && (
+                <span className={`absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-extrabold ${
+                  aba === item.key
+                    ? "bg-black text-bat-gold-400"
+                    : "bg-bat-error text-white"
+                }`}>
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* ═══ CONTEÚDO COM TRANSIÇÃO ═══ */}
+      <div
+        className="transition-all duration-150"
+        style={{
+          opacity: abaVisivel ? 1 : 0,
+          transform: abaVisivel ? "translateY(0)" : "translateY(6px)",
+        }}
+      >
 
       {/* ═══ TAB 1: VISÃO GERAL ═══ */}
       {aba === "visao_geral" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
               <p className="text-bat-text-muted text-xs mb-1">Total de Soldados</p>
-              <p className="heading text-3xl font-bold text-bat-text">{usuarios.length || 5}</p>
-              <p className="text-bat-success text-xs mt-1">↑ 100% Contas Ativas</p>
+              <p className="heading text-3xl font-bold text-bat-text">
+                {metricas ? metricas.total_usuarios.toLocaleString("pt-BR") : usuarios.length}
+              </p>
+              <p className="text-bat-text-secondary text-xs mt-1">
+                {metricas && metricas.online_agora > 0
+                  ? <><span className="text-bat-success">●</span> {metricas.online_agora} online agora</>
+                  : "Plataforma ativa"
+                }
+              </p>
             </div>
-            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
+            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
               <p className="text-bat-text-muted text-xs mb-1">Questões no Banco</p>
-              <p className="heading text-3xl font-bold text-bat-gold-400">8.940+</p>
-              <p className="text-bat-text-secondary text-xs mt-1">9 Concursos + ENEM</p>
+              <p className="heading text-3xl font-bold text-bat-gold-400">
+                {metricas ? metricas.total_questoes.toLocaleString("pt-BR") : "—"}
+              </p>
+              <p className="text-bat-text-secondary text-xs mt-1">
+                {metricas ? `${metricas.total_respostas.toLocaleString("pt-BR")} respostas` : "Carregando..."}
+              </p>
             </div>
-            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <p className="text-bat-text-muted text-xs mb-1">Bizus Cadastrados</p>
-              <p className="heading text-3xl font-bold text-bat-purple-400">420</p>
-              <p className="text-bat-text-secondary text-xs mt-1">15 Matérias Oficiais</p>
+            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
+              <p className="text-bat-text-muted text-xs mb-1">Novos em 24h</p>
+              <p className="heading text-3xl font-bold text-bat-info">
+                {metricas ? metricas.novos_24h : "—"}
+              </p>
+              <p className="text-bat-text-secondary text-xs mt-1">
+                {metricas?.feedbacks_novos
+                  ? `${metricas.feedbacks_novos} feedback${metricas.feedbacks_novos !== 1 ? "s" : ""} não lido${metricas.feedbacks_novos !== 1 ? "s" : ""}`
+                  : "Nenhum feedback pendente"
+                }
+              </p>
             </div>
-            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5">
+            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
               <p className="text-bat-text-muted text-xs mb-1">Chamados Abertos</p>
               <p className="heading text-3xl font-bold text-bat-error">
-                {tickets.filter((t) => t.status === "aberto").length}
+                {metricas ? metricas.tickets_abertos : tickets.filter((t) => t.status === "aberto").length}
               </p>
               <p className="text-bat-text-muted text-xs mt-1">Aguardando atendimento</p>
             </div>
           </div>
 
           <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
-            <h2 className="heading text-lg text-bat-text mb-4">Auditoria e Status Operacional</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
-              <div className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
-                <span className="text-bat-text-muted">Servidor Edge:</span>
-                <p className="text-emerald-400 font-bold">🟢 Operacional (Vercel)</p>
-              </div>
-              <div className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
-                <span className="text-bat-text-muted">Banco PostgreSQL:</span>
-                <p className="text-emerald-400 font-bold">🟢 Conectado (Supabase)</p>
-              </div>
-              <div className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
-                <span className="text-bat-text-muted">Armazém com SHA-256:</span>
-                <p className="text-emerald-400 font-bold">🟢 Deduplicação Ativa</p>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="heading text-lg text-bat-text">Status da Instalação</h2>
+              {resumoSaude && (
+                <span className={`rounded-lg px-3 py-1 text-xs font-bold ${
+                  resumoSaude.saudavel
+                    ? "bg-bat-success/10 text-bat-success"
+                    : "bg-bat-error/10 text-bat-error"
+                }`}>
+                  {resumoSaude.saudavel
+                    ? "✅ Instalação íntegra"
+                    : `🚨 ${resumoSaude.problemas_criticos} problema${resumoSaude.problemas_criticos !== 1 ? "s" : ""}`
+                  }
+                </span>
+              )}
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+              {resumoSaude ? (
+                resumoSaude.checagens.filter((c) => c.critico).slice(0, 3).map((c) => (
+                  <div key={c.nome} className={`p-4 rounded-xl border space-y-1 ${
+                    c.ok
+                      ? "bg-bat-bg-primary border-bat-border"
+                      : "bg-bat-error/5 border-bat-error/40"
+                  }`}>
+                    <span className="text-bat-text-muted">{c.nome}:</span>
+                    <p className={`font-bold ${c.ok ? "text-emerald-400" : "text-bat-error"}`}>
+                      {c.ok ? "🟢" : "🔴"} {c.detalhe}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                // Skeleton enquanto carrega
+                [0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton h-16 rounded-xl" />
+                ))
+              )}
+            </div>
+            {resumoSaude?.verificado_em && (
+              <p className="text-center text-[10px] text-bat-text-muted mt-3">
+                Verificado em {new Date(resumoSaude.verificado_em).toLocaleString("pt-BR")}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -515,7 +698,7 @@ export default function AdminPage() {
           )}
 
           <div className="overflow-x-auto rounded-xl border border-bat-border">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[800px] text-left text-xs">
               <thead>
                 <tr className="bg-bat-bg-primary border-b border-bat-border text-bat-text-muted uppercase font-mono">
                   <th className="py-3 px-4">Soldado</th>
@@ -907,6 +1090,7 @@ export default function AdminPage() {
 
       {/* ═══ TAB: REDEFINIÇÕES DE SENHA ═══ */}
       {aba === "reset_senha" && <PainelResetSenha />}
+    </div>{/* fim do wrapper de transição */}
     </div>
   );
 }
