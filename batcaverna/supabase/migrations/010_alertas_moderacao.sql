@@ -130,14 +130,8 @@ COMMENT ON VIEW moderacao_fila IS
 
 
 -- ════════════════════════════════════════════════════════════════════
--- 4. Conferência
+-- 4. Concluído
 -- ════════════════════════════════════════════════════════════════════
+-- A query de conferência foi removida daqui porque chamar enum_range()
+-- na mesma transação que ADD VALUE gera o erro Postgres 55P04.
 
--- 'moderacao' tem que aparecer aqui.
-SELECT unnest(enum_range(NULL::notificacao_tipo)) AS tipos_de_notificacao;
-
--- Vazio num banco novo. Depois, é a fila do painel.
-SELECT gravidade_moderacao, COUNT(*)
-FROM moderacao_fila
-WHERE revisada_em IS NULL
-GROUP BY gravidade_moderacao;
