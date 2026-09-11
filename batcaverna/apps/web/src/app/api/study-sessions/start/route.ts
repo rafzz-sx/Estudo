@@ -63,11 +63,9 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
-    // ─── Notificação "amigo estudando" — 1ª sessão do dia ─────
-    // Fire-and-forget: não bloqueia o início da sessão do aluno.
-    notificarAmigosEstudando(supabase, userId, newSession.id).catch((e) =>
-      console.warn('Erro ao notificar amigos estudando:', e)
-    );
+    // A notificação de amigo estudando agora é disparada em /heartbeat
+    // após o aluno acumular pelo menos 2 minutos (120s) de estudo real,
+    // garantindo o filtro anti-falso disparo solicitado.
 
     return NextResponse.json({
       success: true,
@@ -84,99 +82,5 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('POST /api/study-sessions/start error:', error);
     return NextResponse.json({ success: false, error: 'Erro ao iniciar sessão' }, { status: 500 });
-  }
-}
-
-/**
- * Notifica todos os amigos aceitos que o aluno começou a estudar hoje.
- * Só dispara se for a PRIMEIRA sessão de estudo ativada no DIA (fuso BRT -03:00).
- */
-async function notificarAmigosEstudando(
-  supabase: ReturnType<typeof createServerSupabaseClient>,
-  userId: string,
-  newSessionId?: string
-) {
-  // Início do dia em BRT (UTC-3)
-  const agora = new Date();
-  const hojeInicioBRT = new Date(agora);
-  hojeInicioBRT.setHours(hojeInicioBRT.getHours() - 3); // ajusta para BRT
-  hojeInicioBRT.setHours(0, 0, 0, 0);
-  hojeInicioBRT.setHours(hojeInicioBRT.getHours() + 3); // volta para UTC
-  const hojeInicioISO = hojeInicioBRT.toISOString();
-
-  // 1. Verificar se o aluno já teve qualquer outra sessão iniciada hoje
-  // Só notifica na PRIMEIRA vez que ativa o cronômetro no dia!
-  let query = supabase
-    .from('study_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('iniciada_em', hojeInicioISO);
-
-  if (newSessionId) {
-    query = query.neq('id', newSessionId);
-  }
-
-  const { count: sessoesAnterioresHoje } = await query;
-  if (sessoesAnterioresHoje && sessoesAnterioresHoje > 0) {
-    return; // Já estudou hoje antes desta sessão, silenciar!
-  }
-
-  // 2. Buscar o apelido do aluno
-  const { data: perfil } = await supabase
-    .from('users')
-    .select('apelido')
-    .eq('id', userId)
-    .single();
-
-  const apelido = perfil?.apelido ?? 'Um soldado amigo';
-
-  // 3. Buscar amigos aceitos
-  const { data: amizades } = await supabase
-    .from('amizades')
-    .select('user_id_solicitante, user_id_destinatario')
-    .or(`user_id_solicitante.eq.${userId},user_id_destinatario.eq.${userId}`)
-    .eq('status', 'aceita');
-
-  if (!amizades || amizades.length === 0) return;
-
-  const amigoIds = amizades.map((a) =>
-    a.user_id_solicitante === userId ? a.user_id_destinatario : a.user_id_solicitante
-  );
-
-  // 4. Conferir se já foi gerada notificação hoje para esses amigos referente a este aluno
-  const { data: notificacoesHoje } = await supabase
-    .from('notificacoes')
-    .select('id, user_id, dados_extra')
-    .gte('criada_em', hojeInicioISO)
-    .in('user_id', amigoIds);
-
-  const amigosJaAvisados = new Set(
-    (notificacoesHoje || [])
-      .filter((n: any) => n.dados_extra && n.dados_extra.amigo_id === userId)
-      .map((n: any) => n.user_id)
-  );
-
-  const destinatarios = amigoIds.filter((id) => !amigosJaAvisados.has(id));
-  if (destinatarios.length === 0) return;
-
-  // 5. Inserir notificação para cada amigo que ainda não foi avisado hoje
-  const payloadNotificacoes = destinatarios.map((amigoId) => ({
-    user_id: amigoId,
-    tipo: 'amigo_estudando' as any,
-    titulo: '⚔️ Amigo em Ação!',
-    mensagem: `${apelido} começou a estudar hoje! Que tal entrar no combate também?`,
-    dados_extra: {
-      sub_tipo: 'amigo_estudando',
-      amigo_id: userId,
-      amigo_apelido: apelido,
-    },
-    lida: false,
-  }));
-
-  // Tenta inserir como 'amigo_estudando'; se enum ainda não aceitar, fallback para 'sistema'
-  const { error: insErr } = await supabase.from('notificacoes').insert(payloadNotificacoes);
-  if (insErr) {
-    const fallback = payloadNotificacoes.map((n) => ({ ...n, tipo: 'sistema' as any }));
-    await supabase.from('notificacoes').insert(fallback);
   }
 }

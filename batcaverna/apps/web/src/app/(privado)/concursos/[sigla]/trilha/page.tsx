@@ -86,6 +86,9 @@ function Trilha() {
 
   useEffect(() => {
     carregar();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("batcaverna_ultima_trilha", window.location.pathname);
+    }
   }, [carregar]);
 
   // O radar de fraqueza manda o aluno para cá com ?teoria=<id>: abrir o texto

@@ -181,6 +181,8 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
     duracaoSegundos,
     xpGanhoNaSessao,
     multiplicador,
+    sincroniaEsquadrao,
+    amigosSincronia,
     pauseSession,
     resumeSession,
   } = useStudySessionStore();
@@ -210,6 +212,8 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
         className={`flex items-center gap-2.5 rounded-xl border transition-all cursor-pointer px-3 py-1.5 ${
           isPaused || pausadoPorEstarForaDaTrilha
             ? "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:border-amber-500/50"
+            : sincroniaEsquadrao
+            ? "bg-bat-gold-400/15 border-bat-gold-400/40 text-bat-gold-400 hover:border-bat-gold-400/60 shadow-[0_0_15px_rgba(245,197,24,0.25)]"
             : "bg-bat-success/10 border-bat-success/30 text-bat-success hover:border-bat-success/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]"
         }`}
         title={
@@ -217,6 +221,8 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
             ? "Cronômetro pausado: você está fora de uma trilha de estudos"
             : isPaused
             ? "Sessão pausada"
+            : sincroniaEsquadrao
+            ? "⚔️ Sincronia de Esquadrão Ativa (+10% XP) estudando junto com amigos!"
             : "Sessão de estudo ativa na trilha"
         }
       >
@@ -224,6 +230,8 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
           className={`w-2.5 h-2.5 rounded-full ${
             isPaused || pausadoPorEstarForaDaTrilha
               ? "bg-amber-400"
+              : sincroniaEsquadrao
+              ? "bg-bat-gold-400 animate-pulse shadow-[0_0_8px_rgba(245,197,24,0.8)]"
               : "bg-bat-success animate-pulse"
           }`}
         />
@@ -234,6 +242,11 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
           {pausadoPorEstarForaDaTrilha ? (
             <span className="text-[10px] text-amber-300/80 border-l border-current/30 pl-1.5 hidden sm:inline">
               fora da trilha
+            </span>
+          ) : sincroniaEsquadrao ? (
+            <span className="text-[10px] font-extrabold bg-bat-gold-400 text-black px-1.5 py-0.2 rounded shadow-[0_0_8px_rgba(245,197,24,0.6)] flex items-center gap-1">
+              <span>⚔️</span>
+              <span className="hidden sm:inline">Sincronia</span> {multiplicador}x
             </span>
           ) : multiplicador > 1 ? (
             <span className="text-[10px] font-bold bg-bat-gold-400 text-black px-1.5 py-0.2 rounded shadow-sm">
@@ -283,6 +296,18 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
             {pausadoPorEstarForaDaTrilha && (
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 mb-3 leading-relaxed">
                 🛡️ O cronômetro pausa automaticamente fora das trilhas, questões e simulados para registrar com precisão apenas o seu tempo real de estudo.
+              </div>
+            )}
+
+            {sincroniaEsquadrao && (
+              <div className="p-2.5 rounded-xl bg-bat-gold-400/10 border border-bat-gold-400/30 text-[11px] text-bat-gold-300 mb-3 leading-relaxed flex items-start gap-2 shadow-[0_0_15px_rgba(245,197,24,0.1)]">
+                <span className="text-base shrink-0">⚔️</span>
+                <div>
+                  <span className="font-bold text-bat-gold-400">Sincronia de Esquadrão Ativa (+10% XP)!</span>
+                  <p className="text-[10px] text-bat-text-secondary mt-0.5">
+                    Você e {amigosSincronia.length > 0 ? amigosSincronia.map((a) => a.apelido).join(", ") : "seu amigo"} estão combatendo juntos e ganhando bônus simultâneo de XP.
+                  </p>
+                </div>
               </div>
             )}
 

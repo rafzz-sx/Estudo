@@ -71,6 +71,7 @@ function PerfilConteudo() {
   const [concursosFavoritos, setConcursosFavoritos] = useState<string[]>([]);
   const [categoriaEscrita, setCategoriaEscrita] = useState<string>("");
   const [ocultarRanking, setOcultarRanking] = useState(false);
+  const [autoMsgParceria, setAutoMsgParceria] = useState(true);
 
   // Redefinição de Senha
   const [modalResetAberto, setModalResetAberto] = useState(false);
@@ -434,6 +435,20 @@ function PerfilConteudo() {
     setConcursosFavoritos((prev) =>
       prev.includes(sigla) ? prev.filter((s) => s !== sigla) : [...prev, sigla]
     );
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setAutoMsgParceria(localStorage.getItem("batcaverna_auto_msg_parceria") !== "false");
+    }
+  }, []);
+
+  const toggleAutoMsgParceria = () => {
+    const novo = !autoMsgParceria;
+    setAutoMsgParceria(novo);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("batcaverna_auto_msg_parceria", novo ? "true" : "false");
+    }
   };
 
   const nivelInfo = calcularNivel(user?.xp_total ?? 0);
@@ -899,6 +914,33 @@ function PerfilConteudo() {
               <span
                 className={`w-4 h-4 rounded-full bg-black absolute top-1 transition-transform ${
                   ocultarRanking ? "right-1" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Sincronia de Esquadrão & Notificações de Parceria */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚔️</span>
+                <h3 className="heading text-sm text-bat-text font-bold">Mensagem Automática ao Entrar no Combate</h3>
+              </div>
+              <p className="text-xs text-bat-text-muted mt-1 leading-relaxed">
+                Ao clicar no botão rápido &quot;Entrar no Combate Também&quot; na notificação de um amigo estudando, envia automaticamente uma mensagem de apoio e parceria na DM dele (&quot;Vamos juntos buscar a aprovação! ⚔️&quot;).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleAutoMsgParceria}
+              className={`w-12 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                autoMsgParceria ? "bg-bat-gold-400" : "bg-bat-border"
+              }`}
+              title={autoMsgParceria ? "Desativar mensagem automática" : "Ativar mensagem automática"}
+            >
+              <span
+                className={`w-4 h-4 rounded-full bg-black absolute top-1 transition-transform ${
+                  autoMsgParceria ? "right-1" : "left-1"
                 }`}
               />
             </button>

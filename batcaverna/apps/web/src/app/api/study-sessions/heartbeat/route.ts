@@ -4,6 +4,7 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 import { avaliarStreak } from '@/lib/gamificacao';
 import { buscarSessaoAtiva, duracaoAceita } from '@/lib/sessao-estudo';
+import { notificarAmigosEstudandoComFiltro } from '@/lib/notificacao-amigo';
 
 async function getUserFromRequest(req: NextRequest): Promise<string | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -44,8 +45,50 @@ export async function POST(req: NextRequest) {
     const blocos15Min = Math.floor(novaDuracao / 900);
     const novosBlocos = Math.max(0, blocos15Min - (session.blocos_continuos_completados || 0));
 
-    // Multiplicador de continuidade: +10% a cada 15min, até +50% (1.5x)
-    const multiplicador = Math.min(1 + blocos15Min * 0.1, 1.5);
+    // ─── Sincronia de Esquadrão (+10% XP) ──────────────────────
+    // Se algum amigo aceito estiver estudando simultaneamente (sessão ativa nos últimos 3 min),
+    // ambos ganham +10% (+0.10) de bônus no multiplicador de XP!
+    let sincroniaEsquadrao = false;
+    let amigosEmSincronia: { id: string; apelido: string }[] = [];
+
+    try {
+      const { data: amizades } = await supabase
+        .from('amizades')
+        .select('user_id_solicitante, user_id_destinatario')
+        .or(`user_id_solicitante.eq.${userId},user_id_destinatario.eq.${userId}`)
+        .eq('status', 'aceita');
+
+      if (amizades && amizades.length > 0) {
+        const amigoIds = amizades.map((a) =>
+          a.user_id_solicitante === userId ? a.user_id_destinatario : a.user_id_solicitante
+        );
+
+        const tresMinAtrasISO = new Date(agora.getTime() - 3 * 60 * 1000).toISOString();
+
+        const { data: sessoesAmigos } = await supabase
+          .from('study_sessions')
+          .select('user_id, users:users!user_id (id, apelido)')
+          .in('user_id', amigoIds)
+          .is('finalizada_em', null)
+          .gte('ultima_atividade_em', tresMinAtrasISO);
+
+        if (sessoesAmigos && sessoesAmigos.length > 0) {
+          sincroniaEsquadrao = true;
+          amigosEmSincronia = sessoesAmigos.map((s: any) => ({
+            id: s.user_id,
+            apelido: s.users?.apelido || 'Soldado',
+          }));
+        }
+      }
+    } catch (errSync) {
+      console.warn('Aviso ao checar sincronia de esquadrão:', errSync);
+    }
+
+    // Multiplicador de continuidade: +10% a cada 15min (máx 1.5x)
+    // + Bônus de Sincronia de Esquadrão: +10% (+0.10) enquanto estuda junto com amigos
+    const multiplicadorBase = Math.min(1 + blocos15Min * 0.1, 1.5);
+    const bonusSincronia = sincroniaEsquadrao ? 0.1 : 0;
+    const multiplicador = Math.min(Math.round((multiplicadorBase + bonusSincronia) * 100) / 100, 1.6);
 
     // XP: 1 XP por minuto de estudo x multiplicador
     const xpGanhoNesteIntervalo = Math.max(0, Math.round((diffSegundos / 60) * multiplicador));
@@ -64,6 +107,14 @@ export async function POST(req: NextRequest) {
       .from('study_sessions')
       .update(updatePayload)
       .eq('id', session.id);
+
+    // Filtro Anti-Falso Disparo: Notificar amigos apenas após 2 minutos (120s) de estudo real
+    // e apenas na 1ª sessão do dia (gerenciado internamente por notificarAmigosEstudandoComFiltro)
+    if (novaDuracao >= 120) {
+      notificarAmigosEstudandoComFiltro(supabase, userId, session.id, novaDuracao).catch((errNotif) => {
+        console.warn('Aviso ao notificar amigos estudando:', errNotif);
+      });
+    }
 
     // Atualizar XP total, NÍVEL e streak do usuário.
     //
@@ -133,6 +184,8 @@ export async function POST(req: NextRequest) {
         xp_ganho_intervalo: xpGanhoNesteIntervalo,
         xp_ganho_total_sessao: novoXpSessao,
         multiplicador,
+        sincronia_esquadrao: sincroniaEsquadrao,
+        amigos_sincronia: amigosEmSincronia,
         blocos_completados: blocos15Min,
         novos_blocos: novosBlocos,
         // O store precisa disso para atualizar a patente na topbar e

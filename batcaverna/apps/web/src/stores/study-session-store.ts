@@ -12,6 +12,8 @@ interface StudySessionState {
   tempoEstudoTotal: number;
   xpGanhoNaSessao: number;
   multiplicador: number;
+  sincroniaEsquadrao: boolean;
+  amigosSincronia: { id: string; apelido: string }[];
   isInitializing: boolean;
 
   // Actions
@@ -69,6 +71,8 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   tempoEstudoTotal: 0,
   xpGanhoNaSessao: 0,
   multiplicador: 1.0,
+  sincroniaEsquadrao: false,
+  amigosSincronia: [],
   isInitializing: false,
 
   initSession: async () => {
@@ -161,17 +165,35 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             xp_ganho_total_sessao,
             multiplicador,
             xp_ganho_intervalo,
+            sincronia_esquadrao,
+            amigos_sincronia,
             // Vindos do servidor a partir da 2.1.0: são a verdade.
             xp_total: xpTotalServidor,
             nivel: nivelServidor,
             subiu_nivel: subiuNivelServidor,
           } = data.data;
 
-          // Atualizar apenas métricas de gamificação sem alterar os segundos da tela
+          const estavaEmSincronia = get().sincroniaEsquadrao;
+          const agoraEmSincronia = !!sincronia_esquadrao;
+
+          // Atualizar métricas de gamificação e sincronia de esquadrão
           set({
             xpGanhoNaSessao: xp_ganho_total_sessao,
             multiplicador,
+            sincroniaEsquadrao: agoraEmSincronia,
+            amigosSincronia: amigos_sincronia || [],
           });
+
+          // Se acabou de ativar sincronia de esquadrão (+10% XP), avisar no sistema
+          if (!estavaEmSincronia && agoraEmSincronia && typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("batcaverna_sincronia_ativada", {
+                detail: {
+                  amigos: amigos_sincronia || [],
+                },
+              })
+            );
+          }
 
           // Se ganhou XP na sessão, atualizar auth store imediatamente e disparar toast
           if (xp_ganho_intervalo > 0) {
@@ -267,6 +289,14 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       console.warn('Erro ao finalizar sessão:', e);
     }
     ultimaDuracaoEnviada = -1;
-    set({ isActive: false, isPaused: false, isManuallyPaused: false, sessionId: null, duracaoSegundos: 0 });
+    set({
+      isActive: false,
+      isPaused: false,
+      isManuallyPaused: false,
+      sessionId: null,
+      duracaoSegundos: 0,
+      sincroniaEsquadrao: false,
+      amigosSincronia: [],
+    });
   },
 }));

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/stores/auth-store";
 
 interface NotificacaoItem {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function NotificationCenter({ align = "auto" }: Props) {
+  const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
@@ -154,6 +156,78 @@ export function NotificationCenter({ align = "auto" }: Props) {
     } catch {}
   };
 
+  const handleEntrarNoCombate = async (n: NotificacaoItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!n.lida) {
+      handleMarcarLida(n.id);
+    }
+
+    const amigoId = n.dados_extra?.amigo_id;
+    const amigoApelido = n.dados_extra?.amigo_apelido || "seu amigo";
+
+    // 1. Mensagem de parceria na DM se configurada (padrão ativada)
+    const autoMsgAtiva =
+      typeof window !== "undefined" &&
+      localStorage.getItem("batcaverna_auto_msg_parceria") !== "false";
+
+    if (autoMsgAtiva && amigoId) {
+      try {
+        const resConv = await fetchWithAuth("/api/chat/conversas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_user_id: amigoId }),
+        });
+        if (resConv.ok) {
+          const jsonConv = await resConv.json();
+          const convId = jsonConv.data?.id;
+          if (convId) {
+            await fetchWithAuth("/api/chat/mensagens", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                conversa_id: convId,
+                conteudo: "Vamos juntos buscar a aprovação! ⚔️ Acabei de entrar no combate.",
+                tipo: "texto",
+              }),
+            });
+          }
+        }
+      } catch (errDM) {
+        console.warn("Aviso ao enviar DM de incentivo:", errDM);
+      }
+    }
+
+    // 2. Disparar Toast discreto (na 1ª vez avisa que pode mudar no Perfil)
+    if (typeof window !== "undefined") {
+      const jaAvisou = localStorage.getItem("batcaverna_avisou_config_parceria");
+      const primeiraVez = !jaAvisou;
+      if (primeiraVez) {
+        localStorage.setItem("batcaverna_avisou_config_parceria", "true");
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("batcaverna_sincronia_ativada", {
+          detail: {
+            amigo: amigoApelido,
+            avisoConfig: primeiraVez && autoMsgAtiva,
+          },
+        })
+      );
+    }
+
+    // 3. Abrir direto na última trilha de estudo do usuário e ligar cronômetro
+    const ultimaTrilha =
+      typeof window !== "undefined" ? localStorage.getItem("batcaverna_ultima_trilha") : null;
+    const destino = ultimaTrilha || "/concursos";
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("batcaverna_study_activity"));
+    }
+
+    setAberto(false);
+    router.push(destino);
+  };
+
   const getIcone = (tipo: string) => {
     switch (tipo) {
       case "xp_ganho": return "⚡";
@@ -284,6 +358,19 @@ export function NotificationCenter({ align = "auto" }: Props) {
                       </div>
                     </div>
                     <p className="text-[11px] text-bat-text-secondary mt-0.5 leading-relaxed">{n.mensagem}</p>
+
+                    {/* Ação rápida de 1 toque: Entrar no combate */}
+                    {(n.tipo === "amigo_estudando" || n.dados_extra?.acao_rapida === "entrar_combate") && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleEntrarNoCombate(n, e)}
+                        className="mt-2.5 w-full sm:w-auto px-3 py-1.5 rounded-xl bg-gradient-to-r from-bat-gold-400 to-amber-500 hover:from-bat-gold-300 hover:to-amber-400 text-black text-[11px] font-extrabold shadow-[0_0_12px_rgba(245,197,24,0.35)] flex items-center justify-center gap-1.5 transition-all transform active:scale-95 cursor-pointer"
+                      >
+                        <span>⚡</span>
+                        <span>Entrar no Combate Também (+10% XP)</span>
+                      </button>
+                    )}
+
                     <span className="text-[10px] text-bat-text-muted mt-1 block">
                       {new Date(n.criada_em).toLocaleDateString("pt-BR", {
                         day: "2-digit",

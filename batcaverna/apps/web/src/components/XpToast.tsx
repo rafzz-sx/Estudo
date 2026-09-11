@@ -7,7 +7,7 @@ import { calcularNivel } from "@batcaverna/utils";
 interface ToastData {
   titulo: string;
   mensagem: string;
-  tipo: "xp" | "level_up";
+  tipo: "xp" | "level_up" | "sincronia";
   xpGanho?: number;
   xpTotal?: number;
 }
@@ -49,13 +49,29 @@ export function XpToast() {
       timer = setTimeout(() => setToastAtivo(null), 6000);
     };
 
+    const handleSincronia = (e: CustomEvent<{ amigo?: string; amigos?: any[]; total?: number; avisoConfig?: boolean }>) => {
+      const amigoNome = e.detail?.amigo || e.detail?.amigos?.[0]?.apelido || "seu parceiro";
+      clearTimeout(timer);
+      setToastAtivo({
+        tipo: "sincronia",
+        titulo: "⚔️ Sincronia de Esquadrão (+10% XP)!",
+        mensagem: e.detail?.avisoConfig
+          ? `Combate conjunto com ${amigoNome}! Mensagem enviada na DM. (Você pode gerenciar o envio automático no seu Perfil).`
+          : `Você e ${amigoNome} estão combatendo juntos e ganhando +10% de XP!`,
+      });
+
+      timer = setTimeout(() => setToastAtivo(null), 5500);
+    };
+
     window.addEventListener("batcaverna_xp_ganho" as any, handleXpGanho);
     window.addEventListener("batcaverna_level_up" as any, handleLevelUp);
+    window.addEventListener("batcaverna_sincronia_ativada" as any, handleSincronia);
 
     return () => {
       clearTimeout(timer);
       window.removeEventListener("batcaverna_xp_ganho" as any, handleXpGanho);
       window.removeEventListener("batcaverna_level_up" as any, handleLevelUp);
+      window.removeEventListener("batcaverna_sincronia_ativada" as any, handleSincronia);
     };
   }, []);
 
@@ -69,7 +85,7 @@ export function XpToast() {
     >
       <div className="flex items-start gap-3">
         <span className="text-2xl select-none" aria-hidden="true">
-          {toastAtivo.tipo === "level_up" ? "🏆" : "⚡"}
+          {toastAtivo.tipo === "level_up" ? "🏆" : toastAtivo.tipo === "sincronia" ? "⚔️" : "⚡"}
         </span>
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-bold text-bat-gold-400 truncate">

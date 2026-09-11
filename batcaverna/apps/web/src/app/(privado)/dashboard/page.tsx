@@ -15,6 +15,7 @@ import {
   useStudySessionStore,
   formatarTempoLegivel,
 } from "@/stores/study-session-store";
+import { RadarSoldadosAoVivo } from "@/components/RadarSoldadosAoVivo";
 
 // ═══════════════════════════════════════════════════════════════
 // PLANO DO DIA — Central de Operações da BatCaverna
@@ -202,6 +203,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7 pb-12">
+      {/* 📡 Radar de Soldados ao Vivo (Sincronia de Esquadrão) */}
+      <RadarSoldadosAoVivo />
+
       {/* ═══════════ CABEÇALHO OFICIAL BATCAVERNA ═══════════ */}
       <header className="relative overflow-hidden rounded-3xl border border-bat-border bg-bat-bg-card p-6 sm:p-8">
         <div
