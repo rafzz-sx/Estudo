@@ -110,6 +110,7 @@ interface ResumoFeedback {
 export default function AdminPage() {
   const { user } = useAuthStore();
   const [aba, setAba] = useState<AbaAdmin>("visao_geral");
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const [resumoFeedback, setResumoFeedback] = useState<ResumoFeedback | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [tickets, setTickets] = useState<TicketAdmin[]>([]);
@@ -479,74 +480,100 @@ export default function AdminPage() {
       </div>
 
       {/* ═══ ABAS DE NAVEGAÇÃO ═══ */}
-      {/* Mobile: Seletor Inteligente Categorizado + Atalhos */}
-      <div className="sm:hidden bg-bat-bg-card border border-bat-border p-3.5 rounded-2xl space-y-2.5">
+      {/* Mobile: Centro de Comando Moderno (Sem select feio nativo do Android) */}
+      <div className="sm:hidden bg-bat-bg-card border border-bat-border p-3.5 rounded-2xl space-y-3 shadow-xl">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-bold uppercase tracking-wider text-[11px] text-bat-gold-400">
-            Módulo Administrativo
+          <span className="font-bold uppercase tracking-wider text-[11px] text-bat-gold-400 flex items-center gap-1.5">
+            <span>🦇</span> Centro de Comando
           </span>
-          <span className="text-[10px] text-bat-text-muted">18 painéis disponíveis</span>
-        </div>
-        <div className="relative">
-          <select
-            value={aba}
-            onChange={(e) => trocarAba(e.target.value as AbaAdmin)}
-            className="w-full bg-bat-bg-primary border border-bat-gold-400/40 text-bat-text font-bold text-xs rounded-xl px-3.5 py-3 appearance-none focus:outline-none focus:border-bat-gold-400 pr-8"
-          >
-            <optgroup label="📊 Monitoramento Geral">
-              <option value="visao_geral">📊 Visão Geral</option>
-              <option value="online">🟢 Online Agora {metricas?.online_agora ? `(${metricas.online_agora})` : ""}</option>
-              <option value="saude">🩺 Diagnóstico da Instalação {resumoSaude && !resumoSaude.saudavel ? `(🚨 ${resumoSaude.problemas_criticos})` : ""}</option>
-              <option value="sessoes">⏳ Sessões de Estudo</option>
-            </optgroup>
-            <optgroup label="👥 Soldados & Suporte">
-              <option value="usuarios">👥 Contas & Moderação de Soldados</option>
-              <option value="tickets">🎫 Tickets de Atendimento {tickets.filter((t) => t.status === "aberto").length ? `(${tickets.filter((t) => t.status === "aberto").length})` : ""}</option>
-              <option value="feedback">💬 Feedback dos Alunos {resumoFeedback?.nao_lidos ? `(${resumoFeedback.nao_lidos})` : ""}</option>
-              <option value="contatos">📨 Contatos do Fale Conosco {contadoresAbas.contatos_nao_lidos ? `(${contadoresAbas.contatos_nao_lidos})` : ""}</option>
-              <option value="reset_senha">🔑 Redefinições de Senha {contadoresAbas.reset_pendentes ? `(${contadoresAbas.reset_pendentes})` : ""}</option>
-            </optgroup>
-            <optgroup label="🛡️ Moderação & Alertas">
-              <option value="alertas">🚨 Moderação & Denúncias {contadoresAbas.moderacao_pendentes ? `(${contadoresAbas.moderacao_pendentes})` : ""}</option>
-              <option value="contestacoes">⚖️ Contestações de Questões {contadoresAbas.contestacoes_abertas ? `(${contadoresAbas.contestacoes_abertas})` : ""}</option>
-              <option value="moderacao">🛡️ Chat & Palavras Ofensivas</option>
-            </optgroup>
-            <optgroup label="📚 Conteúdo & Plataforma">
-              <option value="armazem">📥 Importar Questões</option>
-              <option value="resolucoes">✍️ Resoluções Comentadas</option>
-              <option value="teoria">📝 Lacunas de Teoria</option>
-              <option value="banners">🖼️ Banners de Concursos</option>
-              <option value="avisos">📢 Mural de Avisos</option>
-              <option value="auditoria">📝 Auditoria & Logs</option>
-            </optgroup>
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-bat-gold-400 font-bold">
-            ▾
-          </div>
+          <span className="text-[10px] text-bat-text-muted">18 módulos disponíveis</span>
         </div>
 
-        {/* Atalhos Rápidos no Mobile */}
+        {/* Botão de seleção ativo com visual moderno de launcher */}
+        <button
+          type="button"
+          onClick={() => setMenuMobileAberto(true)}
+          className="w-full p-3.5 rounded-xl bg-bat-bg-primary border border-bat-gold-400/40 hover:border-bat-gold-400 flex items-center justify-between gap-3 text-left transition-all cursor-pointer shadow-inner active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-bat-gold-400/10 border border-bat-gold-400/30 flex items-center justify-center text-xl shrink-0 text-bat-gold-400">
+              {aba === "visao_geral" ? "📊" :
+               aba === "online" ? "🟢" :
+               aba === "saude" ? "🩺" :
+               aba === "sessoes" ? "⏳" :
+               aba === "usuarios" ? "👥" :
+               aba === "tickets" ? "🎫" :
+               aba === "feedback" ? "💬" :
+               aba === "contatos" ? "📨" :
+               aba === "reset_senha" ? "🔑" :
+               aba === "alertas" ? "🚨" :
+               aba === "contestacoes" ? "⚖️" :
+               aba === "moderacao" ? "🛡️" :
+               aba === "armazem" ? "📥" :
+               aba === "resolucoes" ? "✍️" :
+               aba === "teoria" ? "📝" :
+               aba === "banners" ? "🖼️" :
+               aba === "avisos" ? "📢" :
+               aba === "auditoria" ? "📝" : "📊"}
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] text-bat-text-muted uppercase font-bold tracking-wider block">
+                Módulo Selecionado
+              </span>
+              <span className="text-xs font-bold text-bat-text block truncate">
+                {aba === "visao_geral" ? "Visão Geral" :
+                 aba === "online" ? "Soldados Online Agora" :
+                 aba === "saude" ? "Diagnóstico da Instalação" :
+                 aba === "sessoes" ? "Sessões de Estudo" :
+                 aba === "usuarios" ? "Contas & Moderação" :
+                 aba === "tickets" ? "Tickets de Atendimento" :
+                 aba === "feedback" ? "Feedback dos Alunos" :
+                 aba === "contatos" ? "Fale Conosco" :
+                 aba === "reset_senha" ? "Redefinições de Senha" :
+                 aba === "alertas" ? "Moderação & Denúncias" :
+                 aba === "contestacoes" ? "Contestações de Questões" :
+                 aba === "moderacao" ? "Chat & Palavras Ofensivas" :
+                 aba === "armazem" ? "Importar Questões" :
+                 aba === "resolucoes" ? "Resoluções Comentadas" :
+                 aba === "teoria" ? "Lacunas de Teoria" :
+                 aba === "banners" ? "Banners de Concursos" :
+                 aba === "avisos" ? "Mural de Avisos" :
+                 aba === "auditoria" ? "Auditoria & Logs" : "Visão Geral"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/25 px-2.5 py-1.5 rounded-lg shrink-0">
+            <span>Explorar</span>
+            <span className="text-xs">▾</span>
+          </div>
+        </button>
+
+        {/* Atalhos Rápidos no Mobile com Scroll Suave */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
           {[
-            { key: "visao_geral", label: "Geral" },
-            { key: "usuarios", label: "Contas" },
-            { key: "tickets", label: "Tickets", badge: tickets.filter((t) => t.status === "aberto").length },
-            { key: "alertas", label: "Moderação", badge: contadoresAbas.moderacao_pendentes },
-            { key: "saude", label: "Saúde", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0 },
-            { key: "sessoes", label: "Sessões" },
+            { key: "visao_geral", label: "📊 Geral" },
+            { key: "usuarios", label: "👥 Contas" },
+            { key: "tickets", label: "🎫 Tickets", badge: tickets.filter((t) => t.status === "aberto").length },
+            { key: "alertas", label: "🚨 Moderação", badge: contadoresAbas.moderacao_pendentes },
+            { key: "saude", label: "🩺 Saúde", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0 },
+            { key: "sessoes", label: "⏳ Sessões" },
+            { key: "online", label: "🟢 Online", badge: metricas?.online_agora },
           ].map((p) => (
             <button
               key={p.key}
+              type="button"
               onClick={() => trocarAba(p.key as AbaAdmin)}
-              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 aba === p.key
-                  ? "bg-bat-gold-400 text-black shadow-sm"
+                  ? "bg-bat-gold-400 text-black shadow-md"
                   : "bg-bat-bg-primary text-bat-text-secondary border border-bat-border hover:text-bat-text"
               }`}
             >
-              {p.label}
+              <span>{p.label}</span>
               {p.badge && p.badge > 0 ? (
-                <span className="ml-1 rounded-full bg-bat-error px-1.5 py-0.2 text-[9px] text-white">
+                <span className={`px-1.5 py-0.2 text-[9px] rounded-full font-bold ${
+                  aba === p.key ? "bg-black text-bat-gold-400" : "bg-bat-error text-white"
+                }`}>
                   {p.badge}
                 </span>
               ) : null}
@@ -554,6 +581,258 @@ export default function AdminPage() {
           ))}
         </div>
       </div>
+
+      {/* Drawer Bottom Sheet para Mobile */}
+      {menuMobileAberto && (
+        <div className="sm:hidden fixed inset-0 z-50 flex items-end justify-center">
+          {/* Fundo escurecido com blur */}
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setMenuMobileAberto(false)}
+          />
+
+          {/* Drawer Moderno */}
+          <div className="relative w-full max-h-[85vh] bg-bat-bg-card border-t-2 border-bat-gold-400/40 rounded-t-3xl shadow-2xl z-10 flex flex-col overflow-hidden animate-slide-up">
+            {/* Indicador de toque */}
+            <div className="pt-3 pb-1 flex justify-center">
+              <div className="w-12 h-1.5 bg-bat-border rounded-full" />
+            </div>
+
+            {/* Cabeçalho */}
+            <div className="px-5 py-3 border-b border-bat-border flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-bat-text flex items-center gap-2">
+                  <span className="text-bat-gold-400">🦇</span> Centro de Comando Master
+                </h3>
+                <p className="text-[11px] text-bat-text-muted">Selecione o painel administrativo</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMenuMobileAberto(false)}
+                className="w-8 h-8 rounded-full bg-bat-bg-secondary border border-bat-border flex items-center justify-center text-xs text-bat-text-muted hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Seções Categorizadas de Módulos */}
+            <div className="p-4 overflow-y-auto space-y-4 divide-y divide-bat-border/30">
+              {/* Categoria 1 */}
+              <div>
+                <p className="text-[11px] font-extrabold text-bat-gold-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span>📊</span> Monitoramento Geral
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { key: "visao_geral", label: "Visão Geral", icone: "📊", desc: "Métricas globais e faturamento" },
+                    { key: "online", label: "Online Agora", icone: "🟢", desc: "Soldados ativos em tempo real", badge: metricas?.online_agora },
+                    { key: "saude", label: "Diagnóstico da Instalação", icone: "🩺", desc: "Verificação de tabelas e Supabase", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0, badgeCor: "bg-bat-error" },
+                    { key: "sessoes", label: "Sessões de Estudo", icone: "⏳", desc: "Cronômetros e blocos contínuos" },
+                  ].map((m) => {
+                    const ativo = aba === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => {
+                          trocarAba(m.key as AbaAdmin);
+                          setMenuMobileAberto(false);
+                        }}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                          ativo
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 text-bat-text shadow-sm"
+                            : "bg-bat-bg-primary/70 border-bat-border/70 hover:border-bat-gold-400/40 text-bat-text-secondary hover:text-bat-text"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xl shrink-0">{m.icone}</span>
+                          <div className="min-w-0">
+                            <span className={`text-xs font-bold block truncate ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                              {m.label}
+                            </span>
+                            <span className="text-[10px] text-bat-text-muted block truncate">
+                              {m.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {m.badge && m.badge > 0 ? (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white ${m.badgeCor || "bg-bat-gold-400/90 text-black font-extrabold"}`}>
+                              {m.badge}
+                            </span>
+                          ) : null}
+                          {ativo && (
+                            <span className="text-bat-gold-400 font-bold text-sm">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Categoria 2 */}
+              <div className="pt-4">
+                <p className="text-[11px] font-extrabold text-bat-gold-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span>👥</span> Soldados & Suporte
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { key: "usuarios", label: "Contas & Moderação de Soldados", icone: "👥", desc: "Usuários, cargos e suspensões" },
+                    { key: "tickets", label: "Tickets de Atendimento", icone: "🎫", desc: "Dúvidas e suporte direto", badge: tickets.filter((t) => t.status === "aberto").length },
+                    { key: "feedback", label: "Feedback dos Alunos", icone: "💬", desc: "Avaliações e sugestões", badge: resumoFeedback?.nao_lidos },
+                    { key: "contatos", label: "Contatos do Fale Conosco", icone: "📨", desc: "Mensagens da landing page", badge: contadoresAbas.contatos_nao_lidos },
+                    { key: "reset_senha", label: "Redefinições de Senha", icone: "🔑", desc: "Solicitações pendentes", badge: contadoresAbas.reset_pendentes },
+                  ].map((m) => {
+                    const ativo = aba === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => {
+                          trocarAba(m.key as AbaAdmin);
+                          setMenuMobileAberto(false);
+                        }}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                          ativo
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 text-bat-text shadow-sm"
+                            : "bg-bat-bg-primary/70 border-bat-border/70 hover:border-bat-gold-400/40 text-bat-text-secondary hover:text-bat-text"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xl shrink-0">{m.icone}</span>
+                          <div className="min-w-0">
+                            <span className={`text-xs font-bold block truncate ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                              {m.label}
+                            </span>
+                            <span className="text-[10px] text-bat-text-muted block truncate">
+                              {m.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {m.badge && m.badge > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-bat-error">
+                              {m.badge}
+                            </span>
+                          ) : null}
+                          {ativo && (
+                            <span className="text-bat-gold-400 font-bold text-sm">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Categoria 3 */}
+              <div className="pt-4">
+                <p className="text-[11px] font-extrabold text-bat-gold-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span>🛡️</span> Moderação & Alertas
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { key: "alertas", label: "Moderação & Denúncias", icone: "🚨", desc: "Alertas críticos e violações", badge: contadoresAbas.moderacao_pendentes, badgeCor: "bg-bat-error" },
+                    { key: "contestacoes", label: "Contestações de Questões", icone: "⚖️", desc: "Recursos de gabarito abertos", badge: contadoresAbas.contestacoes_abertas },
+                    { key: "moderacao", label: "Chat & Palavras Ofensivas", icone: "🛡️", desc: "Histórico e mensagens sinalizadas" },
+                  ].map((m) => {
+                    const ativo = aba === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => {
+                          trocarAba(m.key as AbaAdmin);
+                          setMenuMobileAberto(false);
+                        }}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                          ativo
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 text-bat-text shadow-sm"
+                            : "bg-bat-bg-primary/70 border-bat-border/70 hover:border-bat-gold-400/40 text-bat-text-secondary hover:text-bat-text"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xl shrink-0">{m.icone}</span>
+                          <div className="min-w-0">
+                            <span className={`text-xs font-bold block truncate ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                              {m.label}
+                            </span>
+                            <span className="text-[10px] text-bat-text-muted block truncate">
+                              {m.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {m.badge && m.badge > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-bat-error">
+                              {m.badge}
+                            </span>
+                          ) : null}
+                          {ativo && (
+                            <span className="text-bat-gold-400 font-bold text-sm">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Categoria 4 */}
+              <div className="pt-4">
+                <p className="text-[11px] font-extrabold text-bat-gold-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span>📚</span> Conteúdo & Plataforma
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { key: "armazem", label: "Importar Questões", icone: "📥", desc: "Carga em lote e IA de questões" },
+                    { key: "resolucoes", label: "Resoluções Comentadas", icone: "✍️", desc: "Gabaritos e comentários" },
+                    { key: "teoria", label: "Lacunas de Teoria", icone: "📝", desc: "Resumos e tópicos de aula" },
+                    { key: "banners", label: "Banners de Concursos", icone: "🖼️", desc: "Carrossel e destaques da home" },
+                    { key: "avisos", label: "Mural de Avisos", icone: "📢", desc: "Comunicados no feed do aluno" },
+                    { key: "auditoria", label: "Auditoria & Logs", icone: "📝", desc: "Histórico de ações administrativas" },
+                  ].map((m) => {
+                    const ativo = aba === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => {
+                          trocarAba(m.key as AbaAdmin);
+                          setMenuMobileAberto(false);
+                        }}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                          ativo
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 text-bat-text shadow-sm"
+                            : "bg-bat-bg-primary/70 border-bat-border/70 hover:border-bat-gold-400/40 text-bat-text-secondary hover:text-bat-text"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xl shrink-0">{m.icone}</span>
+                          <div className="min-w-0">
+                            <span className={`text-xs font-bold block truncate ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                              {m.label}
+                            </span>
+                            <span className="text-[10px] text-bat-text-muted block truncate">
+                              {m.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {ativo && (
+                            <span className="text-bat-gold-400 font-bold text-sm">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Desktop: Grid/Flex de Abas Clássicas com Badges */}
       <div className="hidden sm:block w-full">

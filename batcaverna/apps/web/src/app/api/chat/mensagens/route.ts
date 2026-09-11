@@ -16,10 +16,11 @@ import {
   type ResultadoModeracao,
 } from '@/lib/moderacao';
 
-async function getUserFromRequest(req: NextRequest): Promise<string | null> {
+async function getUserFromRequest(
+  req: NextRequest
+): Promise<{ id: string; role: string } | null> {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
-  const user = await getAuthUserFromRequest(req);
-  return user?.id ?? null;
+  return getAuthUserFromRequest(req);
 }
 
 /**
@@ -286,33 +287,47 @@ export async function POST(req: NextRequest) {
 
     // Para conversas diretas, conferir se a amizade ainda está ativa. Grupos não têm amizade_id.
     if (!acesso.ehGrupo) {
+      let amizadeValida = false;
       const { data: convInfo } = await supabase
         .from('conversas')
-        .select('amizade_id')
+        .select('amizade_id, user_id_a, user_id_b')
         .eq('id', conversaId)
         .maybeSingle();
 
-      if (!convInfo?.amizade_id) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Esta amizade foi desfeita. O chat está disponível apenas para leitura do histórico.',
-          },
-          { status: 403 }
-        );
+      if (convInfo?.amizade_id) {
+        const { data: amizadeInfo } = await supabase
+          .from('amizades')
+          .select('status')
+          .eq('id', convInfo.amizade_id)
+          .maybeSingle();
+
+        if (amizadeInfo && amizadeInfo.status === 'aceita') {
+          amizadeValida = true;
+        }
+      } else if (convInfo?.user_id_a && convInfo?.user_id_b) {
+        // Fallback robusto: verifica se há amizade aceita entre os dois usuários
+        const { data: amizadeInfo } = await supabase
+          .from('amizades')
+          .select('id, status')
+          .or(
+            `and(user_id_solicitante.eq.${convInfo.user_id_a},user_id_destinatario.eq.${convInfo.user_id_b}),` +
+            `and(user_id_solicitante.eq.${convInfo.user_id_b},user_id_destinatario.eq.${convInfo.user_id_a})`
+          )
+          .eq('status', 'aceita')
+          .maybeSingle();
+
+        if (amizadeInfo) {
+          amizadeValida = true;
+          // Associa a amizade encontrada na conversa para requisições futuras
+          supabase.from('conversas').update({ amizade_id: amizadeInfo.id }).eq('id', conversaId).then();
+        }
       }
 
-      const { data: amizadeInfo } = await supabase
-        .from('amizades')
-        .select('status')
-        .eq('id', convInfo.amizade_id)
-        .maybeSingle();
-
-      if (!amizadeInfo || amizadeInfo.status !== 'aceita') {
+      if (!amizadeValida) {
         return NextResponse.json(
           {
             success: false,
-            error: 'Não é possível enviar mensagens: esta amizade não está ativa.',
+            error: 'Esta amizade não está ativa. O chat está disponível apenas entre amigos confirmados.',
           },
           { status: 403 }
         );

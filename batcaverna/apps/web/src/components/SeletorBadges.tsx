@@ -17,11 +17,13 @@ interface Badge {
   ordem_exibicao: number;
 }
 
-const ROTULO_RARIDADE: Record<string, { texto: string; cor: string }> = {
-  comum: { texto: "Comum", cor: "#94A3B8" },
-  rara: { texto: "Rara", cor: "#3B82F6" },
-  epica: { texto: "Épica", cor: "#A855F7" },
-  lendaria: { texto: "Lendária", cor: "#F5C518" },
+const ROTULO_RARIDADE: Record<string, { texto: string; cor: string; ordem: number; badgeIcon?: string }> = {
+  comum: { texto: "Comum", cor: "#94A3B8", ordem: 1 },
+  rara: { texto: "Rara", cor: "#22C55E", ordem: 2 },
+  epica: { texto: "Épica", cor: "#A855F7", ordem: 3 },
+  lendaria: { texto: "Lendária", cor: "#F5C518", ordem: 4, badgeIcon: "👑" },
+  mitica: { texto: "Mítica", cor: "#EF4444", ordem: 5, badgeIcon: "🔥" },
+  fundador: { texto: "Fundador", cor: "#06B6D4", ordem: 6, badgeIcon: "⭐" },
 };
 
 /**
@@ -204,9 +206,14 @@ export function SeletorBadges() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {conquistadas.map((b) => {
+            {[...conquistadas].sort((a, b) => {
+              const rarA = a.nome === "Fundador" ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[a.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
+              const rarB = b.nome === "Fundador" ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[b.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
+              return rarB.ordem - rarA.ordem;
+            }).map((b) => {
               const ativa = selecionadas.includes(b.id);
-              const rar = ROTULO_RARIDADE[b.raridade ?? "comum"];
+              const ehFundador = b.nome === "Fundador" || b.raridade === "fundador";
+              const rar = ehFundador ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[b.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
               return (
                 <button
                   key={b.id}
@@ -214,6 +221,8 @@ export function SeletorBadges() {
                   className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-all ${
                     ativa
                       ? "border-bat-gold-400/50 bg-bat-gold-400/10"
+                      : ehFundador
+                      ? "border-[#06B6D4]/30 bg-bat-bg-secondary/60 hover:border-[#06B6D4]/60"
                       : "border-bat-border bg-bat-bg-secondary/50 hover:border-bat-gold-400/30"
                   }`}
                 >
@@ -231,7 +240,7 @@ export function SeletorBadges() {
                       className="text-[9px] font-bold uppercase tracking-wider"
                       style={{ color: rar?.cor }}
                     >
-                      {rar?.texto}
+                      {rar?.badgeIcon ? `${rar.badgeIcon} ` : ""}{rar?.texto}
                     </span>
                     <span
                       className={`flex h-5 w-5 items-center justify-center rounded-md text-[11px] ${

@@ -30,11 +30,16 @@ interface Badge {
   conquistado_em: string | null;
 }
 
-const ROTULO_RARIDADE: Record<string, { texto: string; cor: string }> = {
-  comum: { texto: "Comum", cor: "#94A3B8" },
-  rara: { texto: "Rara", cor: "#3B82F6" },
-  epica: { texto: "Épica", cor: "#A855F7" },
-  lendaria: { texto: "Lendária", cor: "#F5C518" },
+export const ROTULO_RARIDADE: Record<
+  string,
+  { texto: string; cor: string; ordem: number; badgeIcon?: string }
+> = {
+  comum: { texto: "Comum", cor: "#94A3B8", ordem: 1 },
+  rara: { texto: "Rara", cor: "#22C55E", ordem: 2 },
+  epica: { texto: "Épica", cor: "#A855F7", ordem: 3 },
+  lendaria: { texto: "Lendária", cor: "#F5C518", ordem: 4, badgeIcon: "👑" },
+  mitica: { texto: "Mítica", cor: "#EF4444", ordem: 5, badgeIcon: "🔥" },
+  fundador: { texto: "Fundador", cor: "#06B6D4", ordem: 6, badgeIcon: "⭐" },
 };
 
 export function GaleriaBadges() {
@@ -95,6 +100,15 @@ export function GaleriaBadges() {
 
   const conquistadas = badges.filter((b) => b.conquistada);
 
+  const badgesOrdenadas = [...badges].sort((a, b) => {
+    if (a.conquistada !== b.conquistada) {
+      return a.conquistada ? -1 : 1;
+    }
+    const rarA = a.nome === "Fundador" ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[a.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
+    const rarB = b.nome === "Fundador" ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[b.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
+    return rarB.ordem - rarA.ordem;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -110,24 +124,35 @@ export function GaleriaBadges() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {badges.map((b) => {
-          const raridade = ROTULO_RARIDADE[b.raridade ?? "comum"];
-          const cor = b.cor_hex ?? raridade?.cor ?? "#94A3B8";
+        {badgesOrdenadas.map((b) => {
+          const ehFundador = b.nome === "Fundador" || b.raridade === "fundador";
+          const raridade = ehFundador ? ROTULO_RARIDADE.fundador : (ROTULO_RARIDADE[b.raridade ?? "comum"] ?? ROTULO_RARIDADE.comum);
+          const cor = ehFundador ? "#06B6D4" : (raridade.cor ?? "#94A3B8");
 
           return (
             <div
               key={b.id}
-              className={`rounded-2xl border p-4 text-center transition-all ${
-                b.conquistada
+              className={`rounded-2xl border p-4 text-center transition-all relative overflow-hidden ${
+                ehFundador && b.conquistada
+                  ? "border-[#06B6D4]/60 bg-gradient-to-b from-[#06B6D4]/15 via-bat-bg-card to-bat-bg-card shadow-[0_0_20px_rgba(6,182,212,0.25)]"
+                  : b.raridade === "lendaria" && b.conquistada
+                  ? "border-bat-gold-400/50 bg-gradient-to-b from-bat-gold-400/10 via-bat-bg-card to-bat-bg-card shadow-[0_0_15px_rgba(245,197,24,0.15)]"
+                  : b.conquistada
                   ? "border-bat-border bg-bat-bg-card"
                   : "border-bat-border/50 bg-bat-bg-card/40"
               }`}
               style={
-                b.conquistada
+                b.conquistada && !ehFundador && b.raridade !== "lendaria"
                   ? { borderColor: `${cor}55`, background: `${cor}0F` }
                   : undefined
               }
             >
+              {ehFundador && (
+                <div className="absolute top-2 right-2 text-[9px] font-extrabold text-[#06B6D4] bg-[#06B6D4]/20 border border-[#06B6D4]/50 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Pioneiro
+                </div>
+              )}
+
               <span
                 className={`mb-2 block text-4xl ${
                   b.conquistada ? "" : "opacity-25 grayscale"
@@ -145,19 +170,16 @@ export function GaleriaBadges() {
                 {b.nome}
               </p>
 
-              {/* O critério aparece MESMO na insígnia bloqueada: saber o que
-                  falta fazer é o que transforma o cadeado em objetivo. Antes
-                  eram oito "???" idênticos. */}
               <p className="mt-1 text-xs leading-snug text-bat-text-muted">
                 {b.conquistada ? b.descricao ?? "" : b.criterio ?? b.descricao ?? ""}
               </p>
 
               {raridade && (
                 <span
-                  className="mt-2 inline-block rounded-md px-2 py-0.5 text-[10px] font-bold"
-                  style={{ color: cor, background: `${cor}1A` }}
+                  className="mt-2 inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: cor, background: `${cor}1A`, border: `1px solid ${cor}33` }}
                 >
-                  {raridade.texto}
+                  {raridade.badgeIcon ? `${raridade.badgeIcon} ` : ""}{raridade.texto}
                 </span>
               )}
 

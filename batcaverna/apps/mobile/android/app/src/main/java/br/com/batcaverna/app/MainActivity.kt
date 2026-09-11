@@ -1,5 +1,7 @@
 package br.com.batcaverna.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -9,8 +11,10 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.CookieManager
+import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -27,6 +31,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import kotlin.math.abs
 
 class MainActivity : AppCompatActivity() {
 
@@ -68,6 +73,23 @@ class MainActivity : AppCompatActivity() {
         filePathCallback = null
     }
 
+    // Permissão em tempo de execução para gravação de áudio no WebView
+    private var pendingAudioPermissionRequest: PermissionRequest? = null
+    private val requestAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            runOnUiThread {
+                pendingAudioPermissionRequest?.grant(pendingAudioPermissionRequest?.resources)
+            }
+        } else {
+            runOnUiThread {
+                pendingAudioPermissionRequest?.deny()
+            }
+        }
+        pendingAudioPermissionRequest = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -102,7 +124,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun setupWebView() {
         val settings = webView.settings
         settings.javaScriptEnabled = true
@@ -111,15 +133,44 @@ class MainActivity : AppCompatActivity() {
         settings.allowFileAccess = true
         settings.allowContentAccess = true
 
-        // Viewport padrão moderno do Android Chrome
+        // ─── Viewport: ajustar ao tamanho da tela, sem scroll horizontal ───
         settings.loadWithOverviewMode = true
-        settings.useWideViewPort = true
+        settings.useWideViewPort = false          // NÃO usar viewport largo
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
         settings.mediaPlaybackRequiresUserGesture = false
         settings.javaScriptCanOpenWindowsAutomatically = true
+
+        // Desabilitar scroll horizontal no WebView nativo
+        webView.isHorizontalScrollBarEnabled = false
+        webView.isVerticalScrollBarEnabled = true
+        webView.overScrollMode = View.OVER_SCROLL_NEVER
+
+        // ─── Bloquear arraste horizontal via Touch ─────────────────────────
+        var startX = 0f
+        var startY = 0f
+        webView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = abs(event.x - startX)
+                    val dy = abs(event.y - startY)
+                    // Se o arraste é mais horizontal que vertical, bloqueia
+                    if (dx > dy && dx > 10) {
+                        true // Consumir o evento horizontal
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
 
         // Garante compatibilidade total de User-Agent com Chrome Mobile
         val defaultUA = settings.userAgentString
@@ -131,9 +182,6 @@ class MainActivity : AppCompatActivity() {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
-
-        webView.isHorizontalScrollBarEnabled = false
-        webView.isVerticalScrollBarEnabled = true
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -168,6 +216,34 @@ class MainActivity : AppCompatActivity() {
                 if (errorOverlay.visibility == View.VISIBLE) {
                     hideError()
                 }
+
+                // ─── Injetar CSS para forçar overflow-x: hidden ────────────
+                view?.evaluateJavascript(
+                    """
+                    (function() {
+                        // Flag para a web saber que está no app mobile
+                        window.IS_BATCAVERNA_MOBILE_APP = true;
+
+                        // Forçar overflow-x hidden em todos os níveis
+                        var style = document.createElement('style');
+                        style.id = 'batcaverna-mobile-fix';
+                        style.textContent = '* { max-width: 100vw !important; } html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; }';
+                        if (!document.getElementById('batcaverna-mobile-fix')) {
+                            document.head.appendChild(style);
+                        }
+
+                        // Garantir meta viewport correto
+                        var viewport = document.querySelector('meta[name="viewport"]');
+                        if (!viewport) {
+                            viewport = document.createElement('meta');
+                            viewport.name = 'viewport';
+                            document.head.appendChild(viewport);
+                        }
+                        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+                    })();
+                    """.trimIndent(),
+                    null
+                )
             }
 
             override fun onReceivedError(
@@ -240,6 +316,33 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                if (request == null) return
+                val resources = request.resources
+                var needsAudio = false
+                for (res in resources) {
+                    if (res == PermissionRequest.RESOURCE_AUDIO_CAPTURE) {
+                        needsAudio = true
+                        break
+                    }
+                }
+
+                if (needsAudio) {
+                    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        runOnUiThread {
+                            request.grant(resources)
+                        }
+                    } else {
+                        pendingAudioPermissionRequest = request
+                        requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                } else {
+                    runOnUiThread {
+                        request.grant(resources)
+                    }
+                }
+            }
         }
     }
 
@@ -268,7 +371,7 @@ class MainActivity : AppCompatActivity() {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 startActivity(intent)
             } catch (e: Exception) {
-                // Ignore se não tiver app instalado para o esquema
+                // Ignora se não tiver app instalado para o esquema
             }
             return true
         }

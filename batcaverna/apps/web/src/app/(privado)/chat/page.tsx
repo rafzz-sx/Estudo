@@ -646,11 +646,11 @@ export default function ChatPage() {
       </div>
 
       {/* ═══ PAINEL DO CHAT (SIDEBAR + MENSAGENS) ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px] shadow-2xl">
+      <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[560px] shadow-2xl w-full max-w-full">
         
         {/* ── Coluna Esquerda: Lista de Conversas (4 colunas) ── */}
         <div
-          className={`lg:col-span-4 border-r border-bat-border flex-col bg-bat-bg-card/70 ${
+          className={`lg:col-span-4 border-r border-bat-border flex-col bg-bat-bg-card/70 w-full max-w-full overflow-hidden ${
             verConversaNoCelular ? "hidden lg:flex" : "flex"
           }`}
         >
@@ -766,7 +766,7 @@ export default function ChatPage() {
 
         {/* ── Coluna Direita: Thread da Conversa (8 colunas) ── */}
         <div
-          className={`lg:col-span-8 flex-col bg-bat-bg-primary/40 ${
+          className={`lg:col-span-8 flex-col bg-bat-bg-primary/40 w-full max-w-full overflow-hidden ${
             verConversaNoCelular ? "flex" : "hidden lg:flex"
           }`}
         >
@@ -844,7 +844,7 @@ export default function ChatPage() {
               </div>
 
               {/* Mensagens Roláveis */}
-              <div className="flex-1 p-5 overflow-y-auto space-y-4 min-h-[400px]">
+              <div className="flex-1 p-3 sm:p-5 overflow-y-auto space-y-4 min-h-[300px] max-w-full">
                 {loadingMensagens ? (
                   <div className="p-8 text-center text-bat-text-muted text-xs">
                     Carregando mensagens...
@@ -993,44 +993,56 @@ export default function ChatPage() {
               )}
 
               {erroMicrofone && (
-                <div className="mx-4 mb-3 p-4 bg-bat-bg-secondary border-2 border-bat-gold-400/60 rounded-2xl shadow-2xl animate-fade-in text-xs text-bat-text">
+                <div className="mx-3 sm:mx-4 mb-3 p-3.5 sm:p-4 bg-bat-bg-secondary border-2 border-bat-gold-400/60 rounded-2xl shadow-2xl animate-fade-in text-xs text-bat-text">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-bat-gold-400/10 text-bat-gold-400 text-2xl flex-shrink-0">
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-bat-gold-400/10 text-bat-gold-400 text-xl sm:text-2xl flex-shrink-0">
                         🎙️
                       </div>
                       <div className="space-y-2.5">
                         <div>
                           <h4 className="font-bold text-bat-gold-400 text-sm flex items-center gap-2">
-                            Acesso ao Microfone Bloqueado pelo Navegador
+                            Permissão para Microfone
                           </h4>
                           <p className="text-bat-text-secondary text-xs mt-1 leading-relaxed">
-                            O navegador (Chrome/Edge) bloqueou o microfone. <strong>Por segurança, navegadores nunca exibem a notificação de permissão novamente de forma automática</strong> se ela foi bloqueada antes.
+                            {typeof window !== "undefined" && ((window as any).IS_BATCAVERNA_MOBILE_APP || /Android|iPhone|iPad/i.test(navigator.userAgent))
+                              ? "O app BatCaverna precisa da sua autorização para gravar áudios de voz."
+                              : "O navegador bloqueou o acesso ao microfone. Por segurança, navegadores exigem que você libere o acesso manualmente."}
                           </p>
                         </div>
 
                         {/* Passo a passo rápido */}
                         <div className="bg-bat-bg-primary/90 border border-bat-border rounded-xl p-3 space-y-1.5 text-[11px]">
-                          <p className="font-bold text-white">Como desbloquear agora no Chrome / Edge:</p>
-                          <ol className="list-decimal list-inside space-y-1 text-bat-text-muted">
-                            <li>Na barra de endereço do topo (onde está <span className="text-bat-gold-400 font-mono">estudo-tan.vercel.app</span>), clique no ícone de <strong>Cadeado 🔒</strong> ou <strong>Ajustes do site 🎛️</strong>.</li>
-                            <li>Na opção <strong>Microfone</strong>, mude de <em>Bloqueado</em> para <strong>Permitir</strong> (ou clique em <em>Redefinir permissões</em>).</li>
-                            <li>Aperte <strong>F5</strong> para recarregar a página e gravar!</li>
-                          </ol>
+                          {typeof window !== "undefined" && ((window as any).IS_BATCAVERNA_MOBILE_APP || /Android|iPhone|iPad/i.test(navigator.userAgent)) ? (
+                            <>
+                              <p className="font-bold text-white">Como permitir no celular:</p>
+                              <ol className="list-decimal list-inside space-y-1 text-bat-text-muted">
+                                <li>Ao abrir o gravador, selecione <strong className="text-bat-gold-400">Permitir durante o uso do app</strong> no aviso do Android.</li>
+                                <li>Se não apareceu, abra as <strong>Configurações do Android</strong> &gt; <strong>Aplicativos</strong> &gt; <strong>BatCaverna</strong> &gt; <strong>Permissões</strong> &gt; <strong>Microfone</strong> e mude para Permitir.</li>
+                              </ol>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-bold text-white">Como desbloquear no navegador (Chrome/Edge): </p>
+                              <ol className="list-decimal list-inside space-y-1 text-bat-text-muted">
+                                <li>Na barra de endereço do topo, clique no ícone de <strong>Cadeado 🔒</strong> ou <strong>Ajustes 🎛️</strong>.</li>
+                                <li>Em <strong>Microfone</strong>, selecione <strong>Permitir</strong>.</li>
+                                <li>Atualize a página para começar a gravar!</li>
+                              </ol>
+                            </>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {/* Botão de Anexar Áudio (sem precisar de permissão) */}
                           <button
                             type="button"
                             onClick={() => audioFileInputRef.current?.click()}
-                            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
+                            className="btn-primary py-2 px-3 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
                           >
                             <span>📁</span>
-                            <span>Enviar Arquivo de Áudio (.mp3, .m4a, gravação)</span>
+                            <span>Enviar Arquivo (.mp3, .m4a)</span>
                           </button>
 
-                          {/* Botão de tentar gravar */}
                           <button
                             type="button"
                             onClick={() => {
@@ -1039,7 +1051,7 @@ export default function ChatPage() {
                             }}
                             className="py-2 px-3 rounded-xl bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/40 text-bat-text text-xs font-medium cursor-pointer transition-colors"
                           >
-                            🔄 Já alterei no cadeado, tentar gravar
+                            🔄 Tentar Gravar Novamente
                           </button>
                         </div>
                       </div>
@@ -1057,8 +1069,11 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {/* ═══ INPUT DE ENVIO COM BOTÕES DE ÁUDIO E FOTO ═══ */}
-              <form onSubmit={handleEnviar} className="p-4 border-t border-bat-border bg-bat-bg-card/90 flex items-center gap-2">
+              {/* ═══ INPUT DE ENVIO COM BOTÕES DE ÁUDIO E FOTO (100% RESPONSIVO NO MOBILE) ═══ */}
+              <form
+                onSubmit={handleEnviar}
+                className="p-2 sm:p-4 border-t border-bat-border bg-bat-bg-card/95 flex items-center gap-1.5 sm:gap-2 w-full max-w-full overflow-hidden shrink-0"
+              >
                 {/* Input oculto de foto */}
                 <input
                   ref={fileInputRef}
@@ -1081,7 +1096,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2.5 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
+                  className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 p-0 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all flex items-center justify-center text-sm cursor-pointer"
                   title="Enviar Foto"
                 >
                   📷
@@ -1091,7 +1106,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => audioFileInputRef.current?.click()}
-                  className="p-2.5 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
+                  className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 p-0 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all flex items-center justify-center text-sm cursor-pointer"
                   title="Enviar Arquivo de Áudio (.mp3, .m4a)"
                 >
                   🎵
@@ -1102,16 +1117,17 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={pararGravacaoAudio}
-                    className="py-2.5 px-4 rounded-xl bg-bat-error text-white text-xs font-bold animate-pulse flex items-center gap-1.5 cursor-pointer"
+                    className="shrink-0 py-2 px-2.5 sm:px-4 rounded-xl bg-bat-error text-white text-xs font-bold animate-pulse flex items-center gap-1 cursor-pointer"
                   >
                     <span>⏹️</span>
-                    <span>Parar ({tempoGravacao}s)</span>
+                    <span className="hidden sm:inline">Parar</span>
+                    <span>({tempoGravacao}s)</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={iniciarGravacaoAudio}
-                    className="p-2.5 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all cursor-pointer"
+                    className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 p-0 rounded-xl bg-bat-bg-primary border border-bat-border text-bat-text-muted hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-all flex items-center justify-center text-sm cursor-pointer"
                     title="Gravar Áudio com Microfone"
                   >
                     🎤
@@ -1121,18 +1137,19 @@ export default function ChatPage() {
                 {/* Campo de texto */}
                 <input
                   type="text"
-                  placeholder={`Mensagem para ${conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || '...'}...`}
+                  placeholder={`Mensagem para ${conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || 'amigo'}...`}
                   value={textoMensagem}
                   onChange={(e) => setTextoMensagem(e.target.value)}
-                  className="flex-1 bg-bat-bg-primary border border-bat-border rounded-xl px-4 py-3 text-xs text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none transition-all"
+                  className="min-w-0 flex-1 bg-bat-bg-primary border border-bat-border rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none transition-all"
                 />
 
                 <button
                   type="submit"
                   disabled={!textoMensagem.trim() && !imagemPreview && !audioUrlPreview}
-                  className="btn-primary px-6 py-3 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  className="btn-primary shrink-0 px-3.5 sm:px-6 py-2.5 sm:py-3 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-md"
+                  title="Enviar Mensagem"
                 >
-                  <span>Enviar</span>
+                  <span className="hidden sm:inline">Enviar</span>
                   <span>⚡</span>
                 </button>
               </form>

@@ -4,18 +4,25 @@
 
 BEGIN;
 
--- 1. Garantir que a insígnia 'Fundador' existe no catálogo
+-- 1. Garantir que a insígnia 'Fundador' existe no catálogo com raridade 'fundador' (acima de lendária)
 INSERT INTO badges (nome, descricao, icone, criterio, cor_hex, raridade, criterio_tipo, criterio_valor)
 SELECT 
   'Fundador',
   'Esteve entre os primeiros soldados da caverna',
   '⭐',
-  'Concedido manualmente',
+  'Concedido manualmente aos pioneiros',
   '#06B6D4',
-  'lendaria',
+  'fundador',
   'manual',
   NULL
 WHERE NOT EXISTS (SELECT 1 FROM badges WHERE nome = 'Fundador');
+
+-- 1.1 Padronização das cores e raridades de catálogo (Lendário = Amarelo, Raro = Verde, Épico = Roxo, Comum = Cinza, Fundador = Cyan Cósmico)
+UPDATE badges SET raridade = 'fundador', cor_hex = '#06B6D4' WHERE nome = 'Fundador';
+UPDATE badges SET cor_hex = '#22C55E' WHERE raridade = 'rara' AND nome != 'Fundador';
+UPDATE badges SET cor_hex = '#F5C518' WHERE raridade = 'lendaria' AND nome != 'Fundador';
+UPDATE badges SET cor_hex = '#A855F7' WHERE raridade = 'epica' AND nome != 'Fundador';
+UPDATE badges SET cor_hex = '#94A3B8' WHERE raridade = 'comum' AND nome != 'Fundador';
 
 -- 2. Remover a insígnia Fundador de qualquer outro usuário
 DELETE FROM user_badges

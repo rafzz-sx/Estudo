@@ -21,8 +21,17 @@ export function NotificationCenter({ align = "auto" }: Props) {
   const [aberto, setAberto] = useState(false);
   const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
+  const [permissaoNotif, setPermissaoNotif] = useState<string>("default");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificadosIdsRef = useRef<Set<string>>(new Set());
+  const jaCarregouPrimeiraVezRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPermissaoNotif(Notification.permission);
+    }
+  }, []);
 
   const carregarNotificacoes = async () => {
     try {
@@ -30,8 +39,25 @@ export function NotificationCenter({ align = "auto" }: Props) {
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
-          setNotificacoes(json.data.notificacoes || []);
+          const lista: NotificacaoItem[] = json.data.notificacoes || [];
+          setNotificacoes(lista);
           setNaoLidas(json.data.nao_lidas || 0);
+
+          // Disparar notificação nativa do sistema operacional (Windows/Mac/Android)
+          if (jaCarregouPrimeiraVezRef.current && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            const novas = lista.filter((n) => !n.lida && !notificadosIdsRef.current.has(n.id));
+            for (const n of novas.slice(0, 3)) {
+              try {
+                new Notification(n.titulo, {
+                  body: n.mensagem,
+                  icon: "/favicon.ico",
+                });
+              } catch {}
+            }
+          }
+
+          lista.forEach((n) => notificadosIdsRef.current.add(n.id));
+          jaCarregouPrimeiraVezRef.current = true;
         }
       }
     } catch (e) {
@@ -198,6 +224,26 @@ export function NotificationCenter({ align = "auto" }: Props) {
               )}
             </div>
           </div>
+
+          {/* Banner de permissão do sistema (PC/Celular) */}
+          {permissaoNotif === "default" && typeof window !== "undefined" && "Notification" in window && (
+            <div className="px-4 py-2.5 bg-bat-gold-400/10 border-b border-bat-border flex items-center justify-between gap-2">
+              <span className="text-[11px] text-bat-text-secondary flex items-center gap-1.5 min-w-0 truncate">
+                <span>🔔</span> Ativar avisos no PC e celular
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  Notification.requestPermission().then((perm) => {
+                    setPermissaoNotif(perm);
+                  });
+                }}
+                className="text-[10px] font-bold text-black bg-bat-gold-400 hover:bg-bat-gold-300 px-2 py-0.5 rounded cursor-pointer shrink-0 transition-colors"
+              >
+                Permitir
+              </button>
+            </div>
+          )}
 
           <div className="max-h-80 overflow-y-auto divide-y divide-bat-border/40">
             {notificacoes.length === 0 ? (
