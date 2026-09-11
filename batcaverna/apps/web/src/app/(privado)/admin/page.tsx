@@ -145,7 +145,7 @@ export default function AdminPage() {
 
   // Versão do Sistema
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
-    versao_atual: "2.9.0",
+    versao_atual: "3.0.0",
     atualizado_em: new Date().toISOString(),
   });
 
