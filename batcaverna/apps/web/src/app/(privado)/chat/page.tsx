@@ -66,6 +66,107 @@ function textoPresenca(iso: string | null): string {
   return "Sem entrar há mais de um mês";
 }
 
+/** Formata segundos em mm:ss limpo e sem bugs */
+function formatarTempoAudio(segundos: number): string {
+  if (isNaN(segundos) || !isFinite(segundos) || segundos < 0) return "0:00";
+  const s = Math.round(segundos);
+  const min = Math.floor(s / 60);
+  const seg = s % 60;
+  return `${min}:${seg < 10 ? "0" : ""}${seg}`;
+}
+
+/** Player customizado e tático para mensagens de áudio na thread */
+function AudioMensagemPlayer({
+  src,
+  duracao,
+  souEu,
+}: {
+  src: string;
+  duracao?: number | null;
+  souEu: boolean;
+}) {
+  const [tocando, setTocando] = useState(false);
+  const [tempoAtual, setTempoAtual] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (tocando) {
+      audioRef.current.pause();
+      setTocando(false);
+    } else {
+      audioRef.current
+        .play()
+        .then(() => setTocando(true))
+        .catch(() => setTocando(false));
+    }
+  };
+
+  const duracaoTotal = duracao && duracao > 0 ? duracao : Math.max(1, Math.round(audioRef.current?.duration || 0));
+  const progresso = duracaoTotal > 0 ? Math.min(100, (tempoAtual / duracaoTotal) * 100) : 0;
+
+  return (
+    <div
+      className={`flex items-center gap-3 py-1 px-1 min-w-[190px] max-w-[260px] select-none ${
+        souEu ? "text-black" : "text-bat-text"
+      }`}
+    >
+      <audio
+        ref={audioRef}
+        src={src}
+        onTimeUpdate={() => {
+          if (audioRef.current) setTempoAtual(audioRef.current.currentTime);
+        }}
+        onEnded={() => {
+          setTocando(false);
+          setTempoAtual(0);
+        }}
+        preload="metadata"
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={togglePlay}
+        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm transition-all active:scale-95 cursor-pointer ${
+          souEu
+            ? "bg-black text-bat-gold-400 hover:bg-black/80"
+            : "bg-bat-gold-400 text-black hover:bg-bat-gold-300"
+        }`}
+        title={tocando ? "Pausar áudio" : "Ouvir áudio"}
+      >
+        <span className="text-xs font-bold pl-0.5">{tocando ? "⏸" : "▶"}</span>
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div
+          onClick={(e) => {
+            if (!audioRef.current || duracaoTotal <= 0) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            audioRef.current.currentTime = pos * duracaoTotal;
+            setTempoAtual(audioRef.current.currentTime);
+          }}
+          className={`h-2.5 rounded-full cursor-pointer relative overflow-hidden transition-all ${
+            souEu ? "bg-black/20" : "bg-bat-bg-primary border border-bat-border/80"
+          }`}
+        >
+          <div
+            className={`h-full rounded-full transition-all duration-75 ${
+              souEu ? "bg-black" : "bg-bat-gold-400"
+            }`}
+            style={{ width: `${progresso}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center text-[10px] font-mono mt-1 font-semibold opacity-85">
+          <span>{formatarTempoAudio(tempoAtual)}</span>
+          <span>{duracaoTotal > 0 ? formatarTempoAudio(duracaoTotal) : ""}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const { user } = useAuthStore();
   const [conversas, setConversas] = useState<Conversa[]>([]);
@@ -93,14 +194,21 @@ export default function ChatPage() {
   const [amigosParaGrupo, setAmigosParaGrupo] = useState<{id: string; apelido: string; selecionado: boolean}[]>([]);
   const [criandoGrupo, setCriandoGrupo] = useState(false);
 
-  // Áudio: gravação
+  // Áudio: gravação e prévia
   const [gravandoAudio, setGravandoAudio] = useState(false);
   const [tempoGravacao, setTempoGravacao] = useState(0);
   const [audioUrlPreview, setAudioUrlPreview] = useState<string | null>(null);
+  const [previewTocando, setPreviewTocando] = useState(false);
+  const [previewTempoAtual, setPreviewTempoAtual] = useState(0);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [erroMicrofone, setErroMicrofone] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const gravacaoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Controle de requisições de mensagens para evitar gargalo na rede móvel
+  const carregandoMensagensRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Imagem: upload e Lightbox
   const [imagemPreview, setImagemPreview] = useState<string | null>(null);
@@ -167,9 +275,23 @@ export default function ChatPage() {
   //    `silencioso` é usado pelo polling: recarrega sem piscar o spinner.
   const carregarMensagens = async (convId: string, silencioso = false) => {
     if (!convId) return;
+
+    // Evitar empilhar requisições na rede celular se a anterior ainda está em curso
+    if (carregandoMensagensRef.current) return;
+    carregandoMensagensRef.current = true;
+
     if (!silencioso) setLoadingMensagens(true);
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const res = await fetchWithAuth(`/api/chat/mensagens?conversa_id=${convId}`);
+      const res = await fetchWithAuth(`/api/chat/mensagens?conversa_id=${convId}`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -186,9 +308,12 @@ export default function ChatPage() {
           });
         }
       }
-    } catch (e) {
-      console.warn("Erro ao carregar mensagens:", e);
+    } catch (e: any) {
+      if (e?.name !== "AbortError") {
+        console.warn("Erro ao carregar mensagens:", e);
+      }
     } finally {
+      carregandoMensagensRef.current = false;
       if (!silencioso) setLoadingMensagens(false);
     }
   };
@@ -203,16 +328,17 @@ export default function ChatPage() {
 
     carregarMensagens(conversaAtivaId);
 
-    // Não há WebSocket na plataforma: o chat se mantém atualizado com uma
-    // consulta a cada 3 segundos. A aba em segundo plano não consulta, para
-    // não gastar requisição de quem deixou a página aberta.
+    // Polling a cada 5 segundos (ótimo equilíbrio entre tempo real e rede móvel)
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") {
         carregarMensagens(conversaAtivaId, true);
       }
-    }, 3000);
+    }, 5000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
   }, [conversaAtivaId]);
 
   // Lista de conversas: atualiza com menos frequência (só muda quando chega
@@ -285,12 +411,16 @@ export default function ChatPage() {
       };
 
       mediaRecorder.onstop = () => {
-        const tipoBlob = mediaRecorder.mimeType || mimeType || "audio/webm";
+        const rawMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+        // Remove parâmetros como ;codecs=opus para o tipo base do blob
+        const tipoBlob = rawMime.split(";")[0].trim() || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: tipoBlob });
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
           setAudioUrlPreview(reader.result as string);
+          setPreviewTempoAtual(0);
+          setPreviewTocando(false);
         };
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
@@ -339,7 +469,25 @@ export default function ChatPage() {
     }
   };
 
+  const togglePlayPreview = () => {
+    if (!previewAudioRef.current) return;
+    if (previewTocando) {
+      previewAudioRef.current.pause();
+      setPreviewTocando(false);
+    } else {
+      previewAudioRef.current
+        .play()
+        .then(() => setPreviewTocando(true))
+        .catch(() => setPreviewTocando(false));
+    }
+  };
+
   const cancelarAudio = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+    setPreviewTocando(false);
+    setPreviewTempoAtual(0);
     setAudioUrlPreview(null);
     setTempoGravacao(0);
   };
@@ -430,6 +578,11 @@ export default function ChatPage() {
         if (json.success && json.data) {
           setMensagens((prev) => [...prev, json.data]);
           setTextoMensagem("");
+          if (previewAudioRef.current) {
+            previewAudioRef.current.pause();
+          }
+          setPreviewTocando(false);
+          setPreviewTempoAtual(0);
           setAudioUrlPreview(null);
           setImagemPreview(null);
           setTempoGravacao(0);
@@ -630,7 +783,7 @@ export default function ChatPage() {
       )}
 
       {/* ═══ CABEÇALHO DO CHAT ═══ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${verConversaNoCelular ? "hidden lg:flex" : "flex"}`}>
         <div>
           <div className="flex items-center gap-3">
             <Link
@@ -669,7 +822,11 @@ export default function ChatPage() {
       </div>
 
       {/* ═══ PAINEL DO CHAT (SIDEBAR + MENSAGENS) ═══ */}
-      <div className="bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[560px] shadow-2xl w-full max-w-full">
+      <div className={`bg-bat-bg-card border border-bat-border rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 shadow-2xl w-full max-w-full ${
+        verConversaNoCelular
+          ? "h-[calc(100dvh-5.5rem)] lg:h-[750px] lg:min-h-[600px]"
+          : "min-h-[560px] lg:h-[750px]"
+      }`}>
         
         {/* ── Coluna Esquerda: Lista de Conversas (4 colunas) ── */}
         <div
@@ -789,14 +946,14 @@ export default function ChatPage() {
 
         {/* ── Coluna Direita: Thread da Conversa (8 colunas) ── */}
         <div
-          className={`lg:col-span-8 flex-col bg-bat-bg-primary/40 w-full max-w-full overflow-hidden ${
+          className={`lg:col-span-8 flex flex-col h-full bg-bat-bg-primary/40 w-full max-w-full overflow-hidden ${
             verConversaNoCelular ? "flex" : "hidden lg:flex"
           }`}
         >
           {conversaAtiva ? (
             <>
               {/* Header do Chat Ativo */}
-              <div className="p-4 border-b border-bat-border flex items-center justify-between gap-2 bg-bat-bg-card/80">
+              <div className="p-3 sm:p-4 border-b border-bat-border flex items-center justify-between gap-2 bg-bat-bg-card/80 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setVerConversaNoCelular(false)}
@@ -867,7 +1024,7 @@ export default function ChatPage() {
               </div>
 
               {/* Mensagens Roláveis */}
-              <div className="flex-1 p-3 sm:p-5 overflow-y-auto space-y-4 min-h-[300px] max-w-full">
+              <div className="flex-1 min-h-0 p-3 sm:p-5 overflow-y-auto space-y-4 max-w-full">
                 {loadingMensagens ? (
                   <div className="p-8 text-center text-bat-text-muted text-xs">
                     Carregando mensagens...
@@ -918,19 +1075,11 @@ export default function ChatPage() {
 
                             {/* Conteúdo de Áudio */}
                             {msg.tipo === "audio" && msg.midia_url && (
-                              <div className="flex items-center gap-2.5 py-1">
-                                <span className="text-xl">🎤</span>
-                                <audio
-                                  controls
-                                  src={msg.midia_url}
-                                  className="h-8 max-w-[220px]"
-                                />
-                                {msg.duracao_segundos && (
-                                  <span className="text-[10px] font-mono opacity-80">
-                                    {msg.duracao_segundos}s
-                                  </span>
-                                )}
-                              </div>
+                              <AudioMensagemPlayer
+                                src={msg.midia_url}
+                                duracao={msg.duracao_segundos}
+                                souEu={souEu}
+                              />
                             )}
 
                             {/* Conteúdo de Imagem */}
@@ -971,24 +1120,83 @@ export default function ChatPage() {
 
               {/* ═══ PREVIEWS DE MÍDIA ANTES DO ENVIO ═══ */}
               {audioUrlPreview && (
-                <div className="p-3 bg-bat-bg-secondary border-t border-bat-border flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🎤</span>
-                    <audio controls src={audioUrlPreview} className="h-8" />
-                    <span className="text-xs text-bat-text-muted font-mono">{tempoGravacao}s</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                <div className="p-3 sm:p-3.5 bg-bat-bg-secondary border-t border-bat-border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 animate-fade-in">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <audio
+                      ref={previewAudioRef}
+                      src={audioUrlPreview}
+                      onTimeUpdate={() => {
+                        if (previewAudioRef.current) {
+                          setPreviewTempoAtual(previewAudioRef.current.currentTime);
+                        }
+                      }}
+                      onEnded={() => {
+                        setPreviewTocando(false);
+                        setPreviewTempoAtual(0);
+                      }}
+                      preload="metadata"
+                      className="hidden"
+                    />
+
+                    {/* Botão Play/Pause estilizado */}
                     <button
-                      onClick={cancelarAudio}
-                      className="text-xs text-bat-error hover:underline cursor-pointer"
+                      type="button"
+                      onClick={togglePlayPreview}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-bat-gold-400 text-black flex items-center justify-center shrink-0 font-bold shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                      title={previewTocando ? "Pausar" : "Reproduzir prévia"}
                     >
-                      Descartar
+                      <span className="text-xs sm:text-sm pl-0.5">{previewTocando ? "⏸" : "▶"}</span>
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-bat-text font-semibold flex items-center gap-1.5 truncate">
+                          <span>🎤</span>
+                          <span>Áudio gravado</span>
+                        </span>
+                        <span className="text-bat-gold-400 font-mono font-bold text-xs shrink-0 ml-2">
+                          {formatarTempoAudio(previewTempoAtual)} / {formatarTempoAudio(tempoGravacao || 1)}
+                        </span>
+                      </div>
+
+                      {/* Barra de progresso interativa */}
+                      <div
+                        onClick={(e) => {
+                          const total = tempoGravacao || 1;
+                          if (!previewAudioRef.current || total <= 0) return;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                          previewAudioRef.current.currentTime = pos * total;
+                          setPreviewTempoAtual(previewAudioRef.current.currentTime);
+                        }}
+                        className="w-full bg-bat-bg-card h-2 sm:h-2.5 rounded-full overflow-hidden cursor-pointer border border-bat-border/80 relative"
+                      >
+                        <div
+                          className="bg-bat-gold-400 h-full rounded-full transition-all duration-75"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, (previewTempoAtual / (tempoGravacao || 1)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botões de Ação: Descartar e Enviar Áudio — SEMPRE visíveis em mobile e desktop */}
+                  <div className="flex items-center justify-end gap-2 shrink-0 pt-1 sm:pt-0">
+                    <button
+                      type="button"
+                      onClick={cancelarAudio}
+                      className="py-2 px-3 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer font-semibold border border-transparent hover:border-red-500/20"
+                    >
+                      🗑️ Descartar
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleEnviar()}
-                      className="btn-primary py-1.5 px-4 text-xs font-bold"
+                      className="btn-primary py-2 px-4 sm:px-5 text-xs font-bold flex items-center gap-1.5 shadow-lg active:scale-95 transition-all cursor-pointer"
                     >
-                      Enviar Áudio ⚡
+                      <span>Enviar Áudio</span>
+                      <span>⚡</span>
                     </button>
                   </div>
                 </div>
@@ -1095,6 +1303,7 @@ export default function ChatPage() {
               {/* ═══ INPUT DE ENVIO COM BOTÕES DE ÁUDIO E FOTO (100% RESPONSIVO NO MOBILE) ═══ */}
               <form
                 onSubmit={handleEnviar}
+                style={{ paddingBottom: "max(0.65rem, env(safe-area-inset-bottom))" }}
                 className="p-2 sm:p-4 border-t border-bat-border bg-bat-bg-card/95 flex items-center gap-1.5 sm:gap-2 w-full max-w-full overflow-hidden shrink-0"
               >
                 {/* Input oculto de foto */}
@@ -1169,7 +1378,7 @@ export default function ChatPage() {
                 <button
                   type="submit"
                   disabled={!textoMensagem.trim() && !imagemPreview && !audioUrlPreview}
-                  className="btn-primary shrink-0 px-3.5 sm:px-6 py-2.5 sm:py-3 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-md"
+                  className="btn-primary shrink-0 w-10 h-10 sm:w-auto sm:px-6 py-2.5 sm:py-3 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-md"
                   title="Enviar Mensagem"
                 >
                   <span className="hidden sm:inline">Enviar</span>

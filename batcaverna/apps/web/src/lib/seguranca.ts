@@ -207,6 +207,12 @@ const TIPOS_AUDIO = new Set([
   'audio/aac',
   'audio/m4a',
   'audio/x-m4a',
+  'audio/opus',
+  'audio/weba',
+  'audio/3gpp',
+  'audio/3gpp2',
+  'audio/x-wav',
+  'audio/flac',
 ]);
 
 /** ~4 MB de base64 ≈ 3 MB de arquivo. */
@@ -243,7 +249,7 @@ export function validarDataUrlMidia(
     return { ok: true, tipo: 'imagem' };
   }
 
-  const cabecalho = valor.slice(0, 64).toLowerCase();
+  const cabecalho = valor.slice(0, 128).toLowerCase();
   if (!cabecalho.startsWith('data:')) {
     return {
       ok: false,
@@ -251,7 +257,8 @@ export function validarDataUrlMidia(
     };
   }
 
-  const m = valor.match(/^data:([a-z0-9.+/-]+);base64,/i);
+  // Aceita parâmetros de MIME comuns em gravação de áudio (ex: data:audio/webm;codecs=opus;base64,...)
+  const m = valor.match(/^data:([a-z0-9.+/-]+)(?:;[a-z0-9.+=/-]+)*;base64,/i);
   if (!m) {
     return { ok: false, erro: 'Arquivo não reconhecido.' };
   }
@@ -308,7 +315,7 @@ export function validarMidiaUrl(
     const ext = urlSemQuery.split('.').pop()?.toLowerCase() || '';
 
     const ehVideo = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'quicktime'].includes(ext);
-    const ehAudio = ['mp3', 'ogg', 'wav', 'aac', 'm4a', 'weba'].includes(ext);
+    const ehAudio = ['mp3', 'ogg', 'wav', 'aac', 'm4a', 'weba', 'opus', 'flac', '3gp'].includes(ext);
     const ehGif = ext === 'gif';
 
     if (ehVideo && !permitirVideo) {

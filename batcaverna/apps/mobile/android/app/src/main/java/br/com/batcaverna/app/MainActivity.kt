@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -227,7 +228,7 @@ class MainActivity : AppCompatActivity() {
                         // Forçar overflow-x hidden em todos os níveis
                         var style = document.createElement('style');
                         style.id = 'batcaverna-mobile-fix';
-                        style.textContent = '* { max-width: 100vw !important; } html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; }';
+                        style.textContent = 'html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; } img, video, canvas { max-width: 100% !important; }';
                         if (!document.getElementById('batcaverna-mobile-fix')) {
                             document.head.appendChild(style);
                         }
@@ -288,6 +289,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                if (consoleMessage != null) {
+                    android.util.Log.d("BatCavernaWeb", "${consoleMessage.message()} -- line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                }
+                return true
+            }
+
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 topProgressBar.progress = newProgress
                 if (newProgress == 100) {

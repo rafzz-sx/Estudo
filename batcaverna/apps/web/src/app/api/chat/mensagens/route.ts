@@ -190,11 +190,11 @@ export async function GET(req: NextRequest) {
       .select('*, autor:users!autor_id (id, apelido, avatar_url)')
       .eq('conversa_id', conversaId)
       .order('enviado_em', { ascending: false })
-      .limit(100);
+      .limit(50);
 
     if (error) throw error;
 
-    // Inverte para exibir em ordem cronológica as 100 mensagens mais recentes
+    // Inverte para exibir em ordem cronológica as 50 mensagens mais recentes
     const ordenadas = (mensagens || []).reverse();
 
     const formatadas = ordenadas.map((m: any) => ({
