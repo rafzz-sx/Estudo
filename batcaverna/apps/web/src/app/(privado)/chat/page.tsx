@@ -518,8 +518,11 @@ export default function ChatPage() {
       _otimista: true,
     };
 
-    // 1. Inserir na lista imediatamente
+    // 1. Inserir na lista imediatamente e rolar para o final sem esperar o backend
     setMensagens((prev) => [...prev, msgOtimista]);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 20);
 
     // 2. Limpar os campos imediatamente (sensação de resposta instantânea)
     setTextoMensagem("");
@@ -556,9 +559,9 @@ export default function ChatPage() {
       let finalMidiaUrl = currentAudioPreview || currentImagemPreview || null;
       let finalDuracao = duracaoMsg;
 
-      // Se for áudio com Blob gravado, faz upload direto para o Supabase Storage via signed URL
+      // Se for áudio com Blob gravado, faz upload direto para o Supabase Storage via signed URL sem perder tempo recalculando duração
       if (tipoMsg === "audio" && audioBlob) {
-        const uploadRes = await uploadAudioChat(audioBlob, fetchWithAuth);
+        const uploadRes = await uploadAudioChat(audioBlob, fetchWithAuth, duracaoMsg);
         finalMidiaUrl = uploadRes.publicUrl;
         if (uploadRes.duracao > 0) finalDuracao = uploadRes.duracao;
       }

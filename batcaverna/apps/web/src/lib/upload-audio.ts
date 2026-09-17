@@ -60,9 +60,13 @@ export function converterBlobParaDataUrl(blob: Blob): Promise<string> {
 
 export async function uploadAudioChat(
   audioBlob: Blob,
-  fetchAuth: (url: string, init?: RequestInit) => Promise<Response>
+  fetchAuth: (url: string, init?: RequestInit) => Promise<Response>,
+  duracaoConhecida?: number
 ): Promise<{ publicUrl: string; duracao: number }> {
-  const duracao = await obterDuracaoAudio(audioBlob);
+  // Se a gravação já mediu a duração (ex: contador do microfone), usa direto sem esperar Audio element
+  const duracao = duracaoConhecida && duracaoConhecida > 0
+    ? duracaoConhecida
+    : await obterDuracaoAudio(audioBlob);
 
   // Determinar extensão a partir do tipo MIME
   const mimeType = audioBlob.type || 'audio/webm';

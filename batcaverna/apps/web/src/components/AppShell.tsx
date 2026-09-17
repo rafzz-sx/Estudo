@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BatBrand } from "@/components/BatLogo";
@@ -74,13 +74,23 @@ const navSectionsBase: NavSection[] = [
 
 const adminLink: NavLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
 
-/** Atalhos da barra inferior mobile (os 5 essenciais) */
-const bottomNavItems: NavLink[] = [
+/** Todos os atalhos para a barra móvel com rolagem horizontal suave */
+const bottomNavItemsBase: NavLink[] = [
   { href: "/dashboard", label: "Hoje", icon: "🏠" },
   { href: "/questoes", label: "Questões", icon: "❓" },
+  { href: "/simulado", label: "Simulado", icon: "⏱️" },
+  { href: "/redacao", label: "Redação", icon: "✍️" },
   { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
+  { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
+  { href: "/caderno", label: "Caderno", icon: "📓" },
+  { href: "/bizus", label: "Bizus", icon: "💡" },
   { href: "/chat", label: "Chat", icon: "💬" },
+  { href: "/ranking", label: "Ranking", icon: "🏆" },
+  { href: "/musica", label: "Música", icon: "🎧" },
+  { href: "/progresso", label: "Progresso", icon: "📊" },
+  { href: "/concursos", label: "Concursos", icon: "🎯" },
   { href: "/perfil", label: "Perfil", icon: "👤" },
+  { href: "/perfil?tab=config", label: "Config", icon: "⚙️" },
 ];
 
 /** Quantas revisões espaçadas venceram — vira o selo vermelho no menu. */
@@ -162,6 +172,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const toggleSection = (id: string) => {
     setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const bottomNavRef = useRef<HTMLDivElement>(null);
+
+  const bottomNavItems = userRole === "admin"
+    ? [...bottomNavItemsBase, { href: "/admin", label: "Admin", icon: "🛡️" }]
+    : bottomNavItemsBase;
+
+  // Auto-scroll suave para centralizar o atalho ativo na barra inferior
+  useEffect(() => {
+    if (bottomNavRef.current) {
+      const activeEl = bottomNavRef.current.querySelector('[data-active="true"]') as HTMLElement | null;
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+    }
+  }, [pathname, currentTab]);
 
   const handleLogout = async () => {
     try {
@@ -426,29 +452,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      {/* ═══ BOTTOM NAVIGATION BAR MOBILE ═══ */}
+      {/* ═══ BOTTOM NAVIGATION BAR MOBILE ROLÁVEL COM TODOS OS ATALHOS ═══ */}
       <nav
         aria-label="Navegação rápida móvel"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-2 py-1.5"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-1.5 py-1.5"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))" }}
       >
-        <div className="grid grid-cols-5 items-center justify-around gap-1 max-w-md mx-auto">
+        <div
+          ref={bottomNavRef}
+          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth w-full px-1"
+        >
           {bottomNavItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
+            const isConfig = item.href.includes("tab=config");
+            const isPerfil = item.href === "/perfil";
+            const isActive = isConfig
+              ? pathname === "/perfil" && currentTab === "config"
+              : isPerfil
+              ? pathname === "/perfil" && currentTab !== "config"
+              : (pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/")));
+
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all min-h-[46px] relative select-none ${
+                data-active={isActive ? "true" : undefined}
+                onClick={() => {
+                  if (isConfig) setCurrentTab("config");
+                  else if (isPerfil) setCurrentTab("");
+                }}
+                className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all min-h-[48px] shrink-0 relative select-none ${
                   isActive
-                    ? "text-bat-gold-400 font-bold bg-bat-gold-400/10 border border-bat-gold-400/20 shadow-xs"
-                    : "text-bat-text-secondary hover:text-bat-text hover:bg-bat-bg-elevated/40"
+                    ? "text-bat-gold-400 font-bold bg-bat-gold-400/15 border border-bat-gold-400/30 shadow-xs glow-gold"
+                    : "text-bat-text-secondary hover:text-bat-text hover:bg-bat-bg-elevated/40 border border-transparent"
                 }`}
               >
                 <span className="text-lg leading-none">{item.icon}</span>
-                <span className="text-[10px] mt-1 truncate max-w-full font-medium">{item.label}</span>
+                <span className="text-[10px] mt-1 whitespace-nowrap font-medium">{item.label}</span>
                 {item.contador === "revisoes" && revisoesPendentes > 0 && (
-                  <span className="absolute top-1 right-2 min-w-4 h-4 rounded-full bg-bat-gold-400 px-1 text-center text-[9px] font-black text-black leading-4 flex items-center justify-center">
+                  <span className="absolute top-1 right-1.5 min-w-4 h-4 rounded-full bg-bat-gold-400 px-1 text-center text-[9px] font-black text-black leading-4 flex items-center justify-center">
                     {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
                   </span>
                 )}

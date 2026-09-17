@@ -125,6 +125,15 @@ body {
   background: #F5C518;
 }
 
+/* ─── Utilitário para ocultar scrollbars visuais mantendo scroll tátil ─── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* ─── Seleção de texto ─────────────────────────────────────── */
 ::selection {
   background: rgba(245, 197, 24, 0.35);

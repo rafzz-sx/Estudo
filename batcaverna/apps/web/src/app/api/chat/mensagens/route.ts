@@ -96,6 +96,9 @@ const TIPOS_VALIDOS = new Set(['texto', 'audio', 'imagem']);
 /** ~8 MB de base64 ≈ 6 MB de arquivo: cabe foto e áudio de voz. */
 const MAX_MIDIA_CHAT = 8 * 1024 * 1024;
 
+/** Cache em memória de amizades ativas por conversa (TTL 60s) para envio ultrarrápido */
+const amizadesAtivasCache = new Map<string, number>();
+
 /**
  * Confere que o usuário é um dos dois lados da conversa.
  *
@@ -306,39 +309,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Para conversas diretas, conferir se a amizade ainda está ativa. Reutiliza dados de acesso sem consulta redundante.
+    // Para conversas diretas, conferir se a amizade ainda está ativa. Reutiliza dados de acesso e cache rápido.
     if (!acesso.ehGrupo) {
       let amizadeValida = false;
-      const amizadeId = acesso.amizade_id;
-      const userIdA = acesso.user_id_a;
-      const userIdB = acesso.user_id_b;
+      const agora = Date.now();
+      const expiraEm = amizadesAtivasCache.get(conversaId);
 
-      if (amizadeId) {
-        const { data: amizadeInfo } = await supabase
-          .from('amizades')
-          .select('status')
-          .eq('id', amizadeId)
-          .maybeSingle();
+      // 1. Atalho ultrarrápido: se já foi confirmada nos últimos 60s, não perde tempo consultando o banco
+      if (expiraEm && expiraEm > agora) {
+        amizadeValida = true;
+      } else {
+        const amizadeId = acesso.amizade_id;
+        const userIdA = acesso.user_id_a;
+        const userIdB = acesso.user_id_b;
 
-        if (amizadeInfo && amizadeInfo.status === 'aceita') {
-          amizadeValida = true;
+        if (amizadeId) {
+          const { data: amizadeInfo } = await supabase
+            .from('amizades')
+            .select('status')
+            .eq('id', amizadeId)
+            .maybeSingle();
+
+          if (amizadeInfo && amizadeInfo.status === 'aceita') {
+            amizadeValida = true;
+          }
+        } else if (userIdA && userIdB) {
+          // Fallback robusto: verifica se há amizade aceita entre os dois usuários
+          const { data: amizadeInfo } = await supabase
+            .from('amizades')
+            .select('id, status')
+            .or(
+              `and(user_id_solicitante.eq.${userIdA},user_id_destinatario.eq.${userIdB}),` +
+              `and(user_id_solicitante.eq.${userIdB},user_id_destinatario.eq.${userIdA})`
+            )
+            .eq('status', 'aceita')
+            .maybeSingle();
+
+          if (amizadeInfo) {
+            amizadeValida = true;
+            // Associa a amizade encontrada na conversa para requisições futuras
+            supabase.from('conversas').update({ amizade_id: amizadeInfo.id }).eq('id', conversaId).then();
+          }
         }
-      } else if (userIdA && userIdB) {
-        // Fallback robusto: verifica se há amizade aceita entre os dois usuários
-        const { data: amizadeInfo } = await supabase
-          .from('amizades')
-          .select('id, status')
-          .or(
-            `and(user_id_solicitante.eq.${userIdA},user_id_destinatario.eq.${userIdB}),` +
-            `and(user_id_solicitante.eq.${userIdB},user_id_destinatario.eq.${userIdA})`
-          )
-          .eq('status', 'aceita')
-          .maybeSingle();
 
-        if (amizadeInfo) {
-          amizadeValida = true;
-          // Associa a amizade encontrada na conversa para requisições futuras
-          supabase.from('conversas').update({ amizade_id: amizadeInfo.id }).eq('id', conversaId).then();
+        if (amizadeValida) {
+          amizadesAtivasCache.set(conversaId, agora + 60_000);
         }
       }
 
@@ -411,31 +426,23 @@ export async function POST(req: NextRequest) {
       novaMsg = resComModeracao.data;
     }
 
-    // Atualizar timestamp da conversa
-    await supabase
+    // Atualizar timestamp da conversa em segundo plano (não bloqueia a resposta ao cliente)
+    supabase
       .from('conversas')
       .update({ ultima_mensagem_em: new Date().toISOString() })
-      .eq('id', conversaId);
+      .eq('id', conversaId)
+      .then();
 
-    // Alerta ao vivo para a moderação. Só o que for grave o bastante — o
-    // palavrão solto fica na fila do painel e espera. Um sino que toca a
-    // cada "que prova do caralho" é um sino que o admin desliga na
-    // primeira semana, e aí a ameaça de verdade passa junto.
+    // Alerta ao vivo para a moderação em segundo plano
     if (analise.alertaImediato && textoFinal) {
-      try {
-        await avisarModeracao(supabase, {
-          analise,
-          mensagemId: novaMsg.id,
-          conversaId,
-          autorId: user.id,
-          destinatarioId: acesso.outroId,
-          texto: textoFinal,
-        });
-      } catch (e) {
-        // A mensagem já está gravada e sinalizada; o painel mostra de
-        // qualquer jeito. Falhar aqui não pode derrubar o envio.
-        console.error('Falha ao notificar moderação:', e);
-      }
+      avisarModeracao(supabase, {
+        analise,
+        mensagemId: novaMsg.id,
+        conversaId,
+        autorId: user.id,
+        destinatarioId: acesso.outroId,
+        texto: textoFinal,
+      }).catch((e) => console.error('Falha ao notificar moderação:', e));
     }
 
     return NextResponse.json({
