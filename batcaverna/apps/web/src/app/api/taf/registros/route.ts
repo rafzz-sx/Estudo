@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         exercicio: r.exercicio,
         unidade: r.unidade,
         maior_melhor: r.maior_melhor,
-        marcas: [],
+        marcas: [] as any[],
       };
       grupo.marcas.push({
         id: r.id,

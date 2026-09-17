@@ -69,7 +69,7 @@ export async function GET(
     const { data: user, error } = await supabase
       .from('users')
       .select(`
-        id, nome, apelido, avatar_url, banner_url, banner_tipo, bio,
+        id, nome, apelido, email, avatar_url, banner_url, banner_tipo, bio,
         xp_total, nivel_atual, maior_combo_pessoal, streak_dias, criado_em,
         user_concurso_favoritos (concursos (id, sigla)),
         user_categoria_escrita (texto)

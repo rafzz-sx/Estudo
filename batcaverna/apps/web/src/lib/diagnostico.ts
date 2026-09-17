@@ -61,9 +61,220 @@ export interface AssuntoDiagnostico {
   teoria_titulo: string | null;
 }
 
-interface LinhaResposta {
+export interface RespostaDiagnostico {
+  questao_id: string;
   correta: boolean | null;
-  questoes: { assunto_id: string | null } | null;
+  respondido_em: string;
+  assunto_id: string | null;
+}
+
+interface CatalogoAssuntosConcurso {
+  totalPorAssunto: Map<string, number>;
+  nomes: Map<
+    string,
+    { nome: string; materia_id: string | null; materia: string; emoji: string | null }
+  >;
+  teoriaPorTema: Map<string, { id: string; titulo: string }>;
+  maxQuestoes: number;
+}
+
+/** Cache em memória do catálogo de cada concurso (30 min). */
+const CACHE_CATALOGO_MS = 30 * 60 * 1000;
+const cacheCatalogo = new Map<
+  string,
+  { dados: CatalogoAssuntosConcurso; validoAte: number }
+>();
+const promessasCatalogo = new Map<string, Promise<CatalogoAssuntosConcurso>>();
+
+export function limparCacheDiagnostico(concursoId?: string) {
+  if (concursoId) {
+    cacheCatalogo.delete(concursoId);
+    promessasCatalogo.delete(concursoId);
+  } else {
+    cacheCatalogo.clear();
+    promessasCatalogo.clear();
+  }
+}
+
+/**
+ * Busca o histórico de respostas do usuário em query única, ordenada por respondido_em DESC.
+ * Serve como fonte comum para radarDeFraqueza, evolucaoSemanal e errosEmAberto.
+ */
+export async function obterHistoricoRespostas(
+  supabase: SupabaseClient,
+  userId: string,
+  concursoId?: string | null
+): Promise<RespostaDiagnostico[]> {
+  const dados = await lerTudo<{
+    questao_id: string;
+    correta: boolean | null;
+    respondido_em: string;
+    questoes: { assunto_id: string | null } | { assunto_id: string | null }[] | null;
+  }>(() => {
+    if (concursoId) {
+      return supabase
+        .from('user_questao_respostas')
+        .select('questao_id, correta, respondido_em, questoes!inner (assunto_id)')
+        .eq('user_id', userId)
+        .eq('questoes.concurso_id', concursoId)
+        .order('respondido_em', { ascending: false });
+    }
+
+    return supabase
+      .from('user_questao_respostas')
+      .select('questao_id, correta, respondido_em, questoes (assunto_id)')
+      .eq('user_id', userId)
+      .order('respondido_em', { ascending: false });
+  });
+
+  return (dados ?? []).map((r) => {
+    const qAssunto = Array.isArray(r.questoes)
+      ? r.questoes[0]?.assunto_id
+      : r.questoes?.assunto_id;
+
+    return {
+      questao_id: r.questao_id,
+      correta: r.correta,
+      respondido_em: r.respondido_em,
+      assunto_id: qAssunto ?? null,
+    };
+  });
+}
+
+/**
+ * Carrega a estrutura de assuntos, questões e teorias do concurso.
+ * Como estes dados são estáticos e dependem apenas do concurso (não do usuário),
+ * são cacheados e deduplicados em memória por 30 minutos.
+ */
+export async function obterCatalogoConcurso(
+  supabase: SupabaseClient,
+  concursoId: string
+): Promise<CatalogoAssuntosConcurso> {
+  const agora = Date.now();
+  const guardado = cacheCatalogo.get(concursoId);
+  if (guardado && guardado.validoAte > agora) {
+    return guardado.dados;
+  }
+
+  const emAndamento = promessasCatalogo.get(concursoId);
+  if (emAndamento) {
+    return emAndamento;
+  }
+
+  const promessa = (async () => {
+    try {
+      // 1. Contagem de questões por assunto no concurso
+      const questoes = await lerTudo<{ id: string; assunto_id: string | null }>(() =>
+        supabase
+          .from('questoes')
+          .select('id, assunto_id')
+          .eq('concurso_id', concursoId)
+      );
+
+      const totalPorAssunto = new Map<string, number>();
+      for (const q of questoes) {
+        if (!q.assunto_id) continue;
+        totalPorAssunto.set(q.assunto_id, (totalPorAssunto.get(q.assunto_id) ?? 0) + 1);
+      }
+
+      if (totalPorAssunto.size === 0) {
+        return {
+          totalPorAssunto,
+          nomes: new Map(),
+          teoriaPorTema: new Map(),
+          maxQuestoes: 0,
+        };
+      }
+
+      // 2. Metadados de assuntos e matérias em lotes paralelos
+      const ids = [...totalPorAssunto.keys()];
+      const nomes = new Map<
+        string,
+        { nome: string; materia_id: string | null; materia: string; emoji: string | null }
+      >();
+
+      const lotesAssuntos: string[][] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        lotesAssuntos.push(ids.slice(i, i + 200));
+      }
+
+      const resultadosAssuntos = await Promise.all(
+        lotesAssuntos.map((lote) =>
+          supabase
+            .from('assuntos')
+            .select('id, nome, materia_id, materias (nome, icone_emoji)')
+            .in('id', lote)
+        )
+      );
+
+      interface LinhaAssuntoComMateria {
+        id: string;
+        nome: string;
+        materia_id: string | null;
+        materias: { nome: string; icone_emoji: string | null } | { nome: string; icone_emoji: string | null }[] | null;
+      }
+
+      for (const res of resultadosAssuntos) {
+        const registros = (res.data ?? []) as unknown as LinhaAssuntoComMateria[];
+        for (const a of registros) {
+          const m = Array.isArray(a.materias) ? a.materias[0] : a.materias;
+          nomes.set(a.id, {
+            nome: a.nome,
+            materia_id: a.materia_id,
+            materia: m?.nome ?? 'Geral',
+            emoji: m?.icone_emoji ?? null,
+          });
+        }
+      }
+
+      // 3. Teoria disponível em lotes paralelos
+      const nomesDeAssunto = [...new Set([...nomes.values()].map((n) => n.nome))];
+      const teoriaPorTema = new Map<string, { id: string; titulo: string }>();
+
+      const lotesTeoria: string[][] = [];
+      for (let i = 0; i < nomesDeAssunto.length; i += 200) {
+        lotesTeoria.push(nomesDeAssunto.slice(i, i + 200));
+      }
+
+      const resultadosTeoria = await Promise.all(
+        lotesTeoria.map((lote) =>
+          supabase
+            .from('teoria_conteudo')
+            .select('id, tema, titulo')
+            .in('tema', lote)
+        )
+      );
+
+      for (const res of resultadosTeoria) {
+        for (const t of res.data ?? []) {
+          if (!teoriaPorTema.has(t.tema)) {
+            teoriaPorTema.set(t.tema, { id: t.id, titulo: t.titulo });
+          }
+        }
+      }
+
+      const maxQuestoes = Math.max(...totalPorAssunto.values());
+
+      const dados: CatalogoAssuntosConcurso = {
+        totalPorAssunto,
+        nomes,
+        teoriaPorTema,
+        maxQuestoes,
+      };
+
+      cacheCatalogo.set(concursoId, {
+        dados,
+        validoAte: Date.now() + CACHE_CATALOGO_MS,
+      });
+
+      return dados;
+    } finally {
+      promessasCatalogo.delete(concursoId);
+    }
+  })();
+
+  promessasCatalogo.set(concursoId, promessa);
+  return promessa;
 }
 
 /**
@@ -76,40 +287,22 @@ interface LinhaResposta {
 export async function radarDeFraqueza(
   supabase: SupabaseClient,
   userId: string,
-  concursoId: string
+  concursoId: string,
+  historico?: RespostaDiagnostico[]
 ): Promise<AssuntoDiagnostico[]> {
-  // ─── 1. Quanto cada assunto cai neste concurso ───────────
-  const questoes = await lerTudo<{ id: string; assunto_id: string | null }>(() =>
-    supabase
-      .from('questoes')
-      .select('id, assunto_id')
-      .eq('concurso_id', concursoId)
-  );
-
-  const totalPorAssunto = new Map<string, number>();
-  for (const q of questoes) {
-    if (!q.assunto_id) continue;
-    totalPorAssunto.set(q.assunto_id, (totalPorAssunto.get(q.assunto_id) ?? 0) + 1);
-  }
+  // ─── 1. Quanto cada assunto cai neste concurso (catálogo cacheado) ─
+  const catalogo = await obterCatalogoConcurso(supabase, concursoId);
+  const { totalPorAssunto, nomes, teoriaPorTema, maxQuestoes } = catalogo;
 
   if (totalPorAssunto.size === 0) return [];
 
   // ─── 2. Desempenho do aluno, por assunto ─────────────────
-  // O filtro por concurso vem do JOIN com `questoes`: responder Geometria
-  // Plana numa prova do ENEM não deveria contar como preparo para a EEAR
-  // no radar da EEAR — as bancas cobram o mesmo assunto em profundidades
-  // diferentes.
-  const respostas = await lerTudo<LinhaResposta>(() =>
-    supabase
-      .from('user_questao_respostas')
-      .select('correta, questoes!inner (assunto_id)')
-      .eq('user_id', userId)
-      .eq('questoes.concurso_id', concursoId)
-  );
+  const respostas =
+    historico ?? (await obterHistoricoRespostas(supabase, userId, concursoId));
 
   const desempenho = new Map<string, { total: number; acertos: number }>();
   for (const r of respostas) {
-    const id = r.questoes?.assunto_id;
+    const id = r.assunto_id;
     if (!id) continue;
     const atual = desempenho.get(id) ?? { total: 0, acertos: 0 };
     atual.total += 1;
@@ -124,54 +317,7 @@ export async function radarDeFraqueza(
   const acertosGeral = [...desempenho.values()].reduce((a, d) => a + d.acertos, 0);
   const mediaAluno = totalGeral > 0 ? acertosGeral / totalGeral : 0.5;
 
-  // ─── 3. Nomes ────────────────────────────────────────────
-  const ids = [...totalPorAssunto.keys()];
-  const nomes = new Map<
-    string,
-    { nome: string; materia_id: string | null; materia: string; emoji: string | null }
-  >();
-
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await supabase
-      .from('assuntos')
-      .select('id, nome, materia_id, materias (nome, icone_emoji)')
-      .in('id', ids.slice(i, i + 200));
-
-    for (const a of data ?? []) {
-      const m = (a as any).materias;
-      nomes.set(a.id, {
-        nome: a.nome,
-        materia_id: a.materia_id,
-        materia: m?.nome ?? 'Geral',
-        emoji: m?.icone_emoji ?? null,
-      });
-    }
-  }
-
-  // ─── 4. Teoria disponível ────────────────────────────────
-  // O casamento é por NOME do tema, não por `assunto_id`. Motivo: as
-  // matérias-guarda-chuva do ENEM ("Ciências da Natureza") têm os próprios
-  // assuntos, e o texto de Ecologia está cadastrado sob "Biologia". Ligar só
-  // por id deixaria 134 questões sem teoria tendo o texto pronto.
-  const nomesDeAssunto = [...new Set([...nomes.values()].map((n) => n.nome))];
-  const teoriaPorTema = new Map<string, { id: string; titulo: string }>();
-
-  for (let i = 0; i < nomesDeAssunto.length; i += 200) {
-    const { data } = await supabase
-      .from('teoria_conteudo')
-      .select('id, tema, titulo')
-      .in('tema', nomesDeAssunto.slice(i, i + 200));
-
-    for (const t of data ?? []) {
-      if (!teoriaPorTema.has(t.tema)) {
-        teoriaPorTema.set(t.tema, { id: t.id, titulo: t.titulo });
-      }
-    }
-  }
-
-  // ─── 5. Prioridade ───────────────────────────────────────
-  const maxQuestoes = Math.max(...totalPorAssunto.values());
-
+  // ─── 3. Prioridade ───────────────────────────────────────
   const linhas: AssuntoDiagnostico[] = [];
 
   for (const [assuntoId, quantas] of totalPorAssunto) {
@@ -188,7 +334,7 @@ export async function radarDeFraqueza(
     // Peso da frequência com raiz quadrada: sem ela, um assunto de 134
     // questões esmagaria um de 30 mesmo com o aluno indo bem no primeiro e
     // mal no segundo. A raiz achata a escala sem apagar a diferença.
-    const peso = Math.sqrt(quantas / maxQuestoes);
+    const peso = maxQuestoes > 0 ? Math.sqrt(quantas / maxQuestoes) : 0;
 
     const prioridade = Math.round(peso * (1 - taxaAjustada) * 100);
 
@@ -249,29 +395,40 @@ export async function evolucaoSemanal(
   supabase: SupabaseClient,
   userId: string,
   semanas = 12,
-  concursoId?: string | null
+  concursoId?: string | null,
+  historico?: RespostaDiagnostico[]
 ): Promise<PontoEvolucao[]> {
   const desde = new Date();
   desde.setDate(desde.getDate() - semanas * 7);
+  const desdeISO = desde.toISOString();
 
-  const respostas = await lerTudo<{ correta: boolean | null; respondido_em: string }>(
-    () => {
-      const q = supabase
-        .from('user_questao_respostas')
-        .select(
-          concursoId
-            ? 'correta, respondido_em, questoes!inner (concurso_id)'
-            : 'correta, respondido_em'
-        )
-        .eq('user_id', userId)
-        .gte('respondido_em', desde.toISOString());
+  let respostasFiltradas: { correta: boolean | null; respondido_em: string }[];
 
-      return concursoId ? q.eq('questoes.concurso_id', concursoId) : q;
-    }
-  );
+  if (historico) {
+    respostasFiltradas = historico.filter(
+      (r) => r.respondido_em && r.respondido_em >= desdeISO
+    );
+  } else {
+    const respostas = await lerTudo<{ correta: boolean | null; respondido_em: string }>(
+      () => {
+        const q = supabase
+          .from('user_questao_respostas')
+          .select(
+            concursoId
+              ? 'correta, respondido_em, questoes!inner (concurso_id)'
+              : 'correta, respondido_em'
+          )
+          .eq('user_id', userId)
+          .gte('respondido_em', desdeISO);
+
+        return concursoId ? q.eq('questoes.concurso_id', concursoId) : q;
+      }
+    );
+    respostasFiltradas = respostas;
+  }
 
   const porSemana = new Map<string, { total: number; acertos: number }>();
-  for (const r of respostas) {
+  for (const r of respostasFiltradas) {
     if (!r.respondido_em) continue;
     const chave = segundaDaSemana(r.respondido_em);
     const atual = porSemana.get(chave) ?? { total: 0, acertos: 0 };
@@ -311,25 +468,32 @@ export interface ErrosEmAberto {
 export async function errosEmAberto(
   supabase: SupabaseClient,
   userId: string,
-  concursoId?: string | null
+  concursoId?: string | null,
+  historico?: RespostaDiagnostico[]
 ): Promise<ErrosEmAberto> {
-  const respostas = await lerTudo<{
-    questao_id: string;
-    correta: boolean | null;
-    respondido_em: string;
-  }>(() => {
-    const q = supabase
-      .from('user_questao_respostas')
-      .select(
-        concursoId
-          ? 'questao_id, correta, respondido_em, questoes!inner (concurso_id)'
-          : 'questao_id, correta, respondido_em'
-      )
-      .eq('user_id', userId)
-      .order('respondido_em', { ascending: false });
+  let respostas: { questao_id: string; correta: boolean | null; respondido_em: string }[];
 
-    return concursoId ? q.eq('questoes.concurso_id', concursoId) : q;
-  });
+  if (historico) {
+    respostas = historico;
+  } else {
+    respostas = await lerTudo<{
+      questao_id: string;
+      correta: boolean | null;
+      respondido_em: string;
+    }>(() => {
+      const q = supabase
+        .from('user_questao_respostas')
+        .select(
+          concursoId
+            ? 'questao_id, correta, respondido_em, questoes!inner (concurso_id)'
+            : 'questao_id, correta, respondido_em'
+        )
+        .eq('user_id', userId)
+        .order('respondido_em', { ascending: false });
+
+      return concursoId ? q.eq('questoes.concurso_id', concursoId) : q;
+    });
+  }
 
   // A lista vem em ordem decrescente: o primeiro registro de cada questão é
   // a resposta mais recente.
@@ -351,4 +515,32 @@ export async function errosEmAberto(
   const abertos = erradas.filter((id) => !resolvidas.has(id));
 
   return { ids: abertos, total: abertos.length };
+}
+
+/**
+ * Executa o diagnóstico completo de um aluno em um concurso fazendo
+ * APENAS UMA busca ao histórico de respostas (user_questao_respostas),
+ * eliminando a redundância de buscar toda a base três vezes.
+ */
+export async function carregarDiagnosticoCompleto(
+  supabase: SupabaseClient,
+  userId: string,
+  concursoId: string,
+  semanas = 12
+) {
+  // 1. Puxa o histórico de respostas uma única vez
+  const historico = await obterHistoricoRespostas(supabase, userId, concursoId);
+
+  // 2. Executa as três agregações em paralelo reutilizando o histórico em memória
+  const [erros, radar, evolucao] = await Promise.all([
+    errosEmAberto(supabase, userId, concursoId, historico),
+    radarDeFraqueza(supabase, userId, concursoId, historico),
+    evolucaoSemanal(supabase, userId, semanas, concursoId, historico),
+  ]);
+
+  return {
+    erros,
+    radar,
+    evolucao,
+  };
 }

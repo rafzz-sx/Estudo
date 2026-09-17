@@ -124,7 +124,14 @@ export function MiniPerfilModal({
   if (!userId) return null;
 
   const nivelInfo = calcularNivel(dados?.xp_total || 0);
-  const isVideo = dados?.banner_tipo === "video" || dados?.banner_url?.endsWith(".mp4");
+  const isVideo =
+    dados?.banner_tipo === "video" ||
+    (dados?.banner_url
+      ? dados.banner_url.includes(".mp4") ||
+        dados.banner_url.includes(".webm") ||
+        dados.banner_url.includes(".mov") ||
+        dados.banner_url.startsWith("data:video/")
+      : false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">

@@ -278,7 +278,7 @@ function Simulado() {
     const restante = salva.duracaoMinutos * 60 - decorrido;
 
     setSimuladoId(salva.simuladoId);
-    setQuestoes(salva.questoes);
+    setQuestoes(salva.questoes as any);
     setDistribuicao(null);
     setRespostas(salva.respostas ?? {});
     // Volta para onde a pessoa parou. Antes era sempre 0: quem recarregava na

@@ -146,9 +146,9 @@ export async function POST(req: NextRequest) {
     }
 
     const diagnostico = {
-      concurso: concurso.sigla,
       concurso_nome: concurso.nome,
       ...parse.resumo,
+      concurso: concurso.sigla,
       ja_no_banco: parse.questoes.length - novas.length,
       a_inserir: paraInserir.length,
       por_materia: porMateria,

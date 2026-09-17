@@ -22,9 +22,69 @@ function formatarTempo(seg: number): string {
   return `${m}min`;
 }
 
-const BANNER_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm";
-const AVATAR_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+const BANNER_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,image/avif,video/mp4,video/webm,video/quicktime,video/x-m4v";
+const AVATAR_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,image/avif";
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB (vídeos no Storage)
+const MAX_BANNER_IMG_SIZE = 25 * 1024 * 1024; // 25MB (imagens de banner)
+const MAX_AVATAR_SIZE = 15 * 1024 * 1024; // 15MB (foto de perfil)
+
+/** Otimiza fotos pesadas no cliente via Canvas (reduz tamanho sem perda visível) */
+async function otimizarImagemCliente(file: File, maxDim = 1920, qualidade = 0.85): Promise<File> {
+  if (typeof window === 'undefined' || !file.type.startsWith('image/') || file.type === 'image/gif') {
+    return file;
+  }
+  // Se for menor que 1.5MB, não precisa reprocessar
+  if (file.size <= 1.5 * 1024 * 1024) {
+    return file;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width <= maxDim && height <= maxDim && file.size < 2 * 1024 * 1024) {
+        resolve(file);
+        return;
+      }
+      if (width > height && width > maxDim) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob && blob.size < file.size) {
+            const novoArquivo = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), {
+              type: 'image/webp',
+            });
+            resolve(novoArquivo);
+          } else {
+            resolve(file);
+          }
+        },
+        'image/webp',
+        qualidade
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
 
 const TODOS_CONCURSOS = [
   { sigla: "EEAR", emoji: "✈️", nome: "Aeronáutica" },
@@ -58,6 +118,7 @@ function PerfilConteudo() {
   const [msgFeedback, setMsgFeedback] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [tempoTotalEstudo, setTempoTotalEstudo] = useState(0);
 
   // Amigos
@@ -234,82 +295,131 @@ function PerfilConteudo() {
   useEffect(() => {
     if (bannerPreview) {
       setBannerIsVideo(
-        bannerPreview.endsWith(".mp4") ||
-        bannerPreview.endsWith(".webm") ||
+        user?.banner_tipo === "video" ||
+        bannerPreview.includes(".mp4") ||
+        bannerPreview.includes(".webm") ||
+        bannerPreview.includes(".mov") ||
         bannerPreview.startsWith("data:video/")
       );
     }
-  }, [bannerPreview]);
+  }, [bannerPreview, user?.banner_tipo]);
 
-  // Upload Foto e Banner
+  // Upload Foto e Banner (Upload direto ao Supabase Storage sem passar pela Vercel)
   const handleFileSelect = async (file: File, type: "avatar" | "banner") => {
-    if (file.size > MAX_FILE_SIZE) {
-      setMsgFeedback("⚠️ Arquivo muito grande! Máximo 15MB.");
-      setTimeout(() => setMsgFeedback(null), 4000);
+    const isVideo = file.type.startsWith("video/") || /\.(mp4|webm|mov|quicktime|m4v|ogv)$/i.test(file.name);
+    const isGif = file.type === "image/gif" || /\.gif$/i.test(file.name);
+    const limiteMax = isVideo ? MAX_VIDEO_SIZE : type === "avatar" ? MAX_AVATAR_SIZE : MAX_BANNER_IMG_SIZE;
+
+    if (file.size > limiteMax) {
+      const limiteMb = Math.round(limiteMax / 1024 / 1024);
+      setMsgFeedback(`⚠️ Arquivo muito grande! O limite para ${isVideo ? "vídeos" : "fotos"} é de ${limiteMb}MB.`);
+      setTimeout(() => setMsgFeedback(null), 4500);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const dataUrl = e.target?.result as string;
-      if (!dataUrl) return;
+    // Otimizar fotos no cliente para economizar banda (vídeos e gifs mantêm 100% integridade)
+    const arquivoFinal = (!isVideo && !isGif) ? await otimizarImagemCliente(file) : file;
+    const fallbackTipo = isVideo ? "video" : isGif ? "gif" : "imagem";
+
+    // Preview local instantâneo via ObjectURL
+    const previewUrl = URL.createObjectURL(arquivoFinal);
+    if (type === "avatar") {
+      setAvatarPreview(previewUrl);
+      setUploadingAvatar(true);
+    } else {
+      setBannerPreview(previewUrl);
+      setBannerIsVideo(isVideo);
+      setUploadingBanner(true);
+    }
+    setUploadProgress(0);
+    setMsgFeedback(`⏳ Preparando upload de ${type === "banner" ? (isVideo ? "vídeo (até 100MB)" : "banner") : "foto"}...`);
+
+    try {
+      // 1. Obter URL assinada para upload direto ao Storage
+      const signedRes = await fetchWithAuth("/api/upload/signed-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: type,
+          nomeArquivo: arquivoFinal.name,
+          contentType: arquivoFinal.type || (isVideo ? "video/mp4" : "image/jpeg"),
+        }),
+      });
+
+      const signedJson = await signedRes.json().catch(() => ({}));
+      if (!signedRes.ok || !signedJson.success || !signedJson.signedUrl) {
+        throw new Error(signedJson.error || "Falha ao preparar upload no storage.");
+      }
+
+      const { signedUrl, publicUrl, midiaTipo } = signedJson;
+      setMsgFeedback(`⏳ Enviando ${isVideo ? "vídeo" : "arquivo"}...`);
+
+      // 2. Upload direto ao Supabase Storage (sem limite de 4.5MB da Vercel) com barra de progresso
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", signedUrl, true);
+        xhr.setRequestHeader("Content-Type", arquivoFinal.type || (isVideo ? "video/mp4" : "image/jpeg"));
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Falha no upload para o storage (HTTP ${xhr.status}).`));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Erro de rede no upload para o storage."));
+        };
+
+        xhr.send(arquivoFinal);
+      });
+
+      // 3. Salvar URL definitiva no perfil do usuário
+      setMsgFeedback("⏳ Concluindo atualização do perfil...");
+      const patchBody =
+        type === "avatar"
+          ? { avatar_url: publicUrl }
+          : { banner_url: publicUrl, banner_tipo: midiaTipo || fallbackTipo };
+
+      const res = await fetchWithAuth("/api/usuarios/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody),
+      });
+
+      const patchJson = await res.json().catch(() => ({}));
+      if (!res.ok || !patchJson.success) {
+        throw new Error(patchJson.error || "Erro ao salvar perfil no servidor.");
+      }
 
       if (type === "avatar") {
-        setAvatarPreview(dataUrl);
-        setUploadingAvatar(true);
-        setMsgFeedback("⏳ Salvando foto de perfil no banco de dados...");
-
-        try {
-          const res = await fetchWithAuth("/api/usuarios/me", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ avatar_url: dataUrl }),
-          });
-
-          if (res.ok) {
-            updateUser({ avatar_url: dataUrl });
-            setMsgFeedback("✓ Foto de perfil salva com sucesso!");
-          } else {
-            setMsgFeedback("⚠️ Erro ao salvar foto no servidor.");
-          }
-        } catch {
-          setMsgFeedback("⚠️ Falha ao salvar foto.");
-        } finally {
-          setUploadingAvatar(false);
-          setTimeout(() => setMsgFeedback(null), 3500);
-        }
+        updateUser({ avatar_url: publicUrl });
+        setAvatarPreview(publicUrl);
+        setMsgFeedback("✓ Foto de perfil salva com sucesso!");
       } else {
-        const isVideo = file.type.startsWith("video/") || file.name.endsWith(".mp4") || file.name.endsWith(".webm");
-        const isGif = file.type === "image/gif" || file.name.endsWith(".gif");
-        const tipo = isVideo ? "video" : isGif ? "gif" : "imagem";
-
-        setBannerPreview(dataUrl);
-        setBannerIsVideo(isVideo);
-        setUploadingBanner(true);
-        setMsgFeedback("⏳ Salvando banner no banco de dados...");
-
-        try {
-          const res = await fetchWithAuth("/api/usuarios/me", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ banner_url: dataUrl, banner_tipo: tipo }),
-          });
-
-          if (res.ok) {
-            updateUser({ banner_url: dataUrl, banner_tipo: tipo });
-            setMsgFeedback("✓ Banner salvo com sucesso!");
-          } else {
-            setMsgFeedback("⚠️ Erro ao salvar banner no servidor.");
-          }
-        } catch {
-          setMsgFeedback("⚠️ Falha ao salvar banner.");
-        } finally {
-          setUploadingBanner(false);
-          setTimeout(() => setMsgFeedback(null), 3500);
-        }
+        const finalTipo = midiaTipo || fallbackTipo;
+        updateUser({ banner_url: publicUrl, banner_tipo: finalTipo });
+        setBannerPreview(publicUrl);
+        setBannerIsVideo(finalTipo === "video");
+        setMsgFeedback("✓ Banner salvo com sucesso!");
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error("Erro no fluxo de upload:", err);
+      setMsgFeedback(`⚠️ ${err.message || "Falha ao salvar arquivo."}`);
+    } finally {
+      setUploadingAvatar(false);
+      setUploadingBanner(false);
+      setUploadProgress(null);
+      setTimeout(() => setMsgFeedback(null), 4000);
+    }
   };
 
   // Salvar Informações de Texto
@@ -325,8 +435,6 @@ function PerfilConteudo() {
             nome,
             apelido,
             bio,
-            avatar_url: avatarPreview,
-            banner_url: bannerPreview,
           }),
         }),
         fetchWithAuth("/api/usuarios/me/concursos-favoritos", {
@@ -488,18 +596,32 @@ function PerfilConteudo() {
             </div>
           )}
 
-          {/* Overlay de upload */}
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
-            <div className="text-center">
-              <span className="text-white text-2xl block mb-1">📷</span>
-              <span className="text-white text-xs font-semibold">
-                {uploadingBanner ? "Salvando Banner..." : "Trocar Banner"}
+          {/* Overlay de upload e progresso */}
+          {uploadProgress !== null ? (
+            <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-30 px-6">
+              <span className="text-bat-gold-400 text-sm font-bold mb-2">
+                Enviando banner... {uploadProgress}%
               </span>
-              <span className="text-white/70 text-[10px] block mt-0.5">
-                Imagem, GIF animado ou Vídeo (MP4/WebM)
-              </span>
+              <div className="w-full max-w-xs bg-white/20 rounded-full h-2.5 overflow-hidden border border-bat-gold-400/30">
+                <div
+                  className="bg-gradient-to-r from-bat-gold-400 to-amber-500 h-full transition-all duration-150"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+              <div className="text-center">
+                <span className="text-white text-2xl block mb-1">📷</span>
+                <span className="text-white text-xs font-semibold">
+                  {uploadingBanner ? "Salvando Banner..." : "Trocar Banner"}
+                </span>
+                <span className="text-white/70 text-[10px] block mt-0.5">
+                  Foto, GIF ou Vídeo (MP4/WebM/MOV até 100MB)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <input
@@ -510,6 +632,7 @@ function PerfilConteudo() {
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFileSelect(file, "banner");
+            e.target.value = "";
           }}
         />
 
@@ -546,6 +669,7 @@ function PerfilConteudo() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) handleFileSelect(file, "avatar");
+              e.target.value = "";
             }}
           />
 

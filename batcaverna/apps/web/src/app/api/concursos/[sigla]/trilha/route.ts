@@ -137,8 +137,8 @@ export async function GET(
           if (t.materia_id !== m.id) continue;
           const entrada = temasDaMateria.get(t.tema) ?? {
             tema: t.tema,
-            teoria: [],
-            videos: [],
+            teoria: [] as any[],
+            videos: [] as any[],
           };
           entrada.teoria.push({
             ...t,
@@ -151,8 +151,8 @@ export async function GET(
           if (v.materia_id !== m.id || !v.tema) continue;
           const entrada = temasDaMateria.get(v.tema) ?? {
             tema: v.tema,
-            teoria: [],
-            videos: [],
+            teoria: [] as any[],
+            videos: [] as any[],
           };
           entrada.videos.push(v);
           temasDaMateria.set(v.tema, entrada);

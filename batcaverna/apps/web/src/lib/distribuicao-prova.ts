@@ -70,6 +70,17 @@ const cacheDistribuicao = new Map<
   string,
   { fatias: FatiaMateria[]; validoAte: number }
 >();
+const promessasDistribuicao = new Map<string, Promise<FatiaMateria[]>>();
+
+export function limparCacheDistribuicao(concursoId?: string) {
+  if (concursoId) {
+    cacheDistribuicao.delete(concursoId);
+    promessasDistribuicao.delete(concursoId);
+  } else {
+    cacheDistribuicao.clear();
+    promessasDistribuicao.clear();
+  }
+}
 
 export async function distribuicaoDaProva(
   supabase: SupabaseClient,
@@ -79,15 +90,27 @@ export async function distribuicaoDaProva(
   const guardado = cacheDistribuicao.get(concursoId);
   if (guardado && guardado.validoAte > agora) return guardado.fatias;
 
-  const fatias = await calcularDistribuicao(supabase, concursoId);
+  const emAndamento = promessasDistribuicao.get(concursoId);
+  if (emAndamento) return emAndamento;
 
-  // Só guarda resultado útil: um erro passageiro de rede não pode deixar o
-  // concurso sem distribuição por meia hora.
-  if (fatias.length > 0) {
-    cacheDistribuicao.set(concursoId, { fatias, validoAte: agora + CACHE_MS });
-  }
+  const promessa = (async () => {
+    try {
+      const fatias = await calcularDistribuicao(supabase, concursoId);
 
-  return fatias;
+      // Só guarda resultado útil: um erro passageiro de rede não pode deixar o
+      // concurso sem distribuição por meia hora.
+      if (fatias.length > 0) {
+        cacheDistribuicao.set(concursoId, { fatias, validoAte: Date.now() + CACHE_MS });
+      }
+
+      return fatias;
+    } finally {
+      promessasDistribuicao.delete(concursoId);
+    }
+  })();
+
+  promessasDistribuicao.set(concursoId, promessa);
+  return promessa;
 }
 
 async function calcularDistribuicao(

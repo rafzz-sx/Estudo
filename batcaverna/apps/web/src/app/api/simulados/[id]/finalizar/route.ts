@@ -219,6 +219,9 @@ export async function POST(
       // dias tem de poder cair no mesmo simulado que fechou a corrente.
       streak_dias: streak,
       tempo_estudo_total_segundos: dadosUser?.tempo_estudo_total_segundos ?? 0,
+      usou_escudo: false,
+      escudos_restantes: dadosUser?.escudos_streak ?? 0,
+      era_revisao: false,
     });
 
     return NextResponse.json({

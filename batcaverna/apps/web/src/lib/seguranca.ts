@@ -285,6 +285,54 @@ export function validarDataUrlMidia(
   };
 }
 
+/**
+ * Valida mídia seja como URL HTTPS (ex: Supabase Storage) ou Data URL (base64 legado).
+ * Detecta se é imagem, vídeo, gif ou áudio pela extensão ou cabeçalho MIME.
+ */
+export function validarMidiaUrl(
+  valor: unknown,
+  opcoes: { permitirVideo?: boolean; permitirAudio?: boolean; maxBytes?: number } = {}
+): ResultadoMidia {
+  const { permitirVideo = false, permitirAudio = false } = opcoes;
+
+  if (valor === null || valor === '') return { ok: true };
+  if (typeof valor !== 'string') return { ok: false, erro: 'Formato inválido.' };
+
+  // URL HTTPS (ex: Supabase Storage ou CDN)
+  if (/^https:\/\//i.test(valor)) {
+    if (valor.length > 2048) {
+      return { ok: false, erro: 'Endereço da mídia longo demais.' };
+    }
+
+    const urlSemQuery = valor.split('?')[0];
+    const ext = urlSemQuery.split('.').pop()?.toLowerCase() || '';
+
+    const ehVideo = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'quicktime'].includes(ext);
+    const ehAudio = ['mp3', 'ogg', 'wav', 'aac', 'm4a', 'weba'].includes(ext);
+    const ehGif = ext === 'gif';
+
+    if (ehVideo && !permitirVideo) {
+      return { ok: false, erro: 'Vídeos não são permitidos para este campo.' };
+    }
+    if (ehAudio && !permitirAudio) {
+      return { ok: false, erro: 'Áudios não são permitidos para este campo.' };
+    }
+
+    const tipo: 'imagem' | 'gif' | 'video' | 'audio' = ehVideo
+      ? 'video'
+      : ehAudio
+      ? 'audio'
+      : ehGif
+      ? 'gif'
+      : 'imagem';
+
+    return { ok: true, tipo };
+  }
+
+  // Se for data URL, valida normalmente
+  return validarDataUrlMidia(valor, opcoes);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 4. Texto vindo do usuário
 // ═══════════════════════════════════════════════════════════════

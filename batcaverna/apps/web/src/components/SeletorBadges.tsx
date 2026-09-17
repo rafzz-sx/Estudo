@@ -119,7 +119,11 @@ export function SeletorBadges() {
               a faixa sem esticar nem estourar as bordas. */}
           <div className="relative h-20 overflow-hidden bg-bat-bg-secondary">
             {user?.banner_url ? (
-              user.banner_tipo === "video" || user.banner_url.endsWith(".mp4") ? (
+              user.banner_tipo === "video" ||
+              user.banner_url.includes(".mp4") ||
+              user.banner_url.includes(".webm") ||
+              user.banner_url.includes(".mov") ||
+              user.banner_url.startsWith("data:video/") ? (
                 <video
                   src={user.banner_url}
                   autoPlay

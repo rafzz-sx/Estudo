@@ -21,7 +21,7 @@ export async function GET() {
 
     // Data truncada na hora (SOMENTE A HORA SEM OS MINUTOS)
     const dataHoraCheia = new Date();
-    dataHoraCheia.setMinutes(0, 0, 0, 0);
+    dataHoraCheia.setMinutes(0, 0, 0);
 
     if (error || !data || data.versao_atual !== VERSAO_APP) {
       try {

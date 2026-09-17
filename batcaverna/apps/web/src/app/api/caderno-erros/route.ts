@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
         chave,
         materia: q.materias?.nome ?? '—',
         emoji: q.materias?.icone_emoji ?? '📚',
-        questoes: [],
+        questoes: [] as any[],
       };
 
       grupo.questoes.push({

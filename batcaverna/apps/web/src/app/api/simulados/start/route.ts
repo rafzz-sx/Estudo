@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
           ).data ?? [];
 
       ids = pool
-        .map((q) => q.id)
+        .map((q: any) => q.id)
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(quantidade, pool.length));
     }

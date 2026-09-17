@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import {
-  validarDataUrlMidia,
+  validarMidiaUrl,
+  aplicarLimite,
   limparTexto,
   MAX_AVATAR_BYTES,
   MAX_BANNER_BYTES,
@@ -39,44 +39,48 @@ export async function GET(req: NextRequest) {
     const completo = new URL(req.url).searchParams.get('completo') === '1';
 
     // 1. Dados do usuário
-    const { data: user, error: uErr } = await supabase
+    const { data: userRaw, error: uErr } = await supabase
       .from('users')
       .select(`
         id, nome, apelido, email, email_verified,
-        avatar_url, banner_tipo, bio,
+        avatar_url, banner_url, banner_tipo, bio,
         data_nascimento, role, xp_total, nivel_atual,
         maior_combo_pessoal, combo_atual, combo_atualizado_em,
         streak_dias, maior_streak, ultimo_dia_estudado, criado_em,
         total_questoes_respondidas, total_acertos,
         tempo_estudo_total_segundos, ultimo_login_em, sessao_expira_em
-        ${completo ? ', banner_url' : ''}
       `)
       .eq('id', userId)
       .single();
 
-    if (uErr || !user) {
+    if (uErr || !userRaw) {
       return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const user = userRaw as any;
+    if (!completo) {
+      delete user.banner_url;
     }
 
     // 2. Calcular nível exato e progresso de XP
     const nivelCalculado = calcularNivel(user.xp_total || 0);
 
     // 3. Tempo total de estudo
-    // `lerTudo` porque `study_sessions` passou a ter UMA LINHA POR DIA por
-    // usuário (a virada de dia é o que faz "tempo de hoje" funcionar). Sem
-    // paginação, o total de estudo pararia de crescer calado ao passar das
-    // 1.000 do teto do PostgREST — cerca de três anos de uso diário.
-    const sessions = await lerTudo<{ duracao_segundos: number | null }>(() =>
-      supabase
+    // Usa o contador persistido na tabela users; se zerado, calcula em query única
+    let tempoTotalEstudo = user.tempo_estudo_total_segundos ?? 0;
+    if (tempoTotalEstudo === 0) {
+      const { data: sessions } = await supabase
         .from('study_sessions')
         .select('duracao_segundos')
-        .eq('user_id', userId)
-    );
+        .eq('user_id', userId);
 
-    const tempoTotalEstudo = sessions.reduce(
-      (acc, s) => acc + (s.duracao_segundos || 0),
-      0
-    );
+      if (sessions && sessions.length > 0) {
+        tempoTotalEstudo = sessions.reduce(
+          (acc, s) => acc + (s.duracao_segundos || 0),
+          0
+        );
+      }
+    }
 
     // 4. Questões e precisão — usa os contadores persistidos (migration 004)
     //    e só varre a tabela de respostas se eles ainda não existirem.
@@ -155,6 +159,10 @@ export async function PATCH(req: NextRequest) {
     const userId = await getUserFromRequest(req);
     if (!userId) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
+    // Rate limiting: máximo 30 atualizações de perfil por minuto por IP
+    const bloqueio = aplicarLimite(req, 'patch-perfil', 30, 60);
+    if (bloqueio) return bloqueio;
+
     const body = await req.json();
     const { nome, apelido, bio, banner_url, banner_tipo, avatar_url } = body;
 
@@ -177,10 +185,8 @@ export async function PATCH(req: NextRequest) {
 
     // ─── Validação do que vem do usuário ────────────────────
     //
-    // Antes, avatar_url e banner_url eram gravados CRUS: qualquer string,
-    // de qualquer tamanho, com qualquer prefixo. O limite de 15 MB existia
-    // só no navegador — quem chamasse a API direto passava por cima dele e
-    // podia gravar 200 MB de lixo, ou um `javascript:` no lugar da imagem.
+    // Aceita URLs HTTPS do Supabase Storage ou data URLs (legado).
+    // O limite de tamanho e formato é validado estritamente.
 
     if (nome !== undefined && nome !== null) {
       const limpo = limparTexto(nome, 100);
@@ -198,7 +204,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (avatar_url !== undefined) {
-      const v = validarDataUrlMidia(avatar_url, { maxBytes: MAX_AVATAR_BYTES });
+      const v = validarMidiaUrl(avatar_url, { maxBytes: MAX_AVATAR_BYTES });
       if (!v.ok) {
         return NextResponse.json(
           { success: false, error: v.erro },
@@ -209,7 +215,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (banner_url !== undefined) {
-      const v = validarDataUrlMidia(banner_url, {
+      const v = validarMidiaUrl(banner_url, {
         permitirVideo: true,
         maxBytes: MAX_BANNER_BYTES,
       });
@@ -220,8 +226,12 @@ export async function PATCH(req: NextRequest) {
         );
       }
       updates.banner_url = banner_url || null;
-      // O tipo vem do conteúdo real do arquivo, não do que o cliente disse.
-      if (v.tipo) updates.banner_tipo = v.tipo;
+      // O tipo vem do conteúdo real do arquivo, da extensão ou do especificado
+      if (v.tipo && ['imagem', 'gif', 'video'].includes(v.tipo)) {
+        updates.banner_tipo = v.tipo;
+      } else if (banner_tipo && ['imagem', 'gif', 'video'].includes(banner_tipo)) {
+        updates.banner_tipo = banner_tipo;
+      }
     }
 
     // banner_tipo só é aceito do cliente quando não veio banner novo, e

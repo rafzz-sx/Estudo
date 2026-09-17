@@ -71,13 +71,13 @@ export async function PATCH(
             (p: unknown): p is Record<string, unknown> =>
               !!p && typeof p === 'object'
           )
-          .map((p) => ({
+          .map((p: any) => ({
             titulo: String(p.titulo ?? '').trim().slice(0, 80) || 'Passo',
             conteudo: String(p.conteudo ?? '').trim().slice(0, 2000),
             formula: p.formula ? String(p.formula).trim().slice(0, 500) : null,
           }))
           // Passo sem conteúdo é linha em branco na tela do aluno.
-          .filter((p) => p.conteudo);
+          .filter((p: any) => p.conteudo);
 
         if (passos.length > MAX_PASSOS) {
           return NextResponse.json(

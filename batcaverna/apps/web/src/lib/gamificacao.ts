@@ -256,7 +256,7 @@ export async function conferirBadges(
   const atingiramCriterio = badges.filter((b) => {
     const campo = CAMPO_POR_CRITERIO[b.criterio_tipo as string];
     if (!campo || b.criterio_valor == null) return false;
-    return (estado[campo] ?? 0) >= b.criterio_valor;
+    return Number(estado[campo] ?? 0) >= b.criterio_valor;
   });
 
   if (!atingiramCriterio.length) return [];

@@ -617,9 +617,11 @@ export default function DashboardPage() {
       {radar && radar.fracos.length > 0 && (
         <section className="space-y-3">
           <RadarFraqueza
-            fracos={radar.fracos}
-            pontosCegos={radar.pontos_cegos}
-            concursoSigla={concurso?.sigla ?? "Seu concurso"}
+            fracos={radar.fracos as any}
+            pontosCegos={radar.pontos_cegos as any}
+            sigla={concurso?.sigla ?? "Seu concurso"}
+            totalAssuntos={radar.total_assuntos ?? 0}
+            dominados={radar.dominados ?? 0}
           />
         </section>
       )}
@@ -634,7 +636,7 @@ export default function DashboardPage() {
       {/* ═══════════ PROJEÇÃO DE NOTA (SE DISPONÍVEL) ═══════════ */}
       {projecao && (
         <section className="space-y-3">
-          <ProjecaoNota dados={projecao} />
+          <ProjecaoNota dados={projecao} sigla={concurso?.sigla ?? "SEU CONCURSO"} />
         </section>
       )}
 

@@ -5,6 +5,8 @@ import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 
 interface TicketMensagem {
   id: string;
+  ticket_id?: string;
+  autor_id?: string;
   autor_role: "usuario" | "admin";
   conteudo: string;
   enviado_em: string;

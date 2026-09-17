@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
-import {
-  radarDeFraqueza,
-  evolucaoSemanal,
-  errosEmAberto,
-} from '@/lib/diagnostico';
+import { carregarDiagnosticoCompleto } from '@/lib/diagnostico';
 import { projetarNota } from '@/lib/projecao-nota';
 
 /**
@@ -76,7 +72,17 @@ export async function GET(req: NextRequest) {
         .eq('user_id', user.id)
         .limit(1)
         .maybeSingle();
-      concurso = (fav as any)?.concursos ?? null;
+      interface LinhaFavoritoConcurso {
+        concursos: {
+          id: string;
+          sigla: string;
+          nome: string;
+          emoji: string | null;
+          cor_tema: string | null;
+        } | null;
+      }
+      const favObj = fav as unknown as LinhaFavoritoConcurso | null;
+      concurso = favObj?.concursos ?? null;
     }
 
     // Sem concurso favoritado não há o que orientar: a tela mostra o convite
@@ -129,18 +135,14 @@ export async function GET(req: NextRequest) {
       .eq('ativa', true)
       .lte('agendada_para', hojeISO);
 
-    // ─── 4. Erros ainda não refeitos ─────────────────────────
-    // Não existe tabela de caderno de erros: a lista é derivada da última
-    // resposta de cada questão. A regra mora em `diagnostico.ts` para esta
-    // tela e /caderno nunca divergirem.
-    const erros = await errosEmAberto(supabase, user.id, concurso.id);
+    // ─── 4. Diagnóstico completo (1 única query de respostas em vez de 3) ───
+    const { erros, radar, evolucao } = await carregarDiagnosticoCompleto(
+      supabase,
+      user.id,
+      concurso.id,
+      12
+    );
     const errosAbertos = erros.total;
-
-    // ─── 5. Radar e evolução ─────────────────────────────────
-    const [radar, evolucao] = await Promise.all([
-      radarDeFraqueza(supabase, user.id, concurso.id),
-      evolucaoSemanal(supabase, user.id, 12, concurso.id),
-    ]);
 
     const fracos = radar
       .filter((a) => a.situacao === 'critico' || a.situacao === 'atencao')
