@@ -4,12 +4,76 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 import { contarPorId } from '@/lib/contagens';
 
 /**
- * Cronograma de estudos por edital.
+ * Cronograma de estudos por edital calibrado com pesos oficiais.
  *
- * O peso de cada matéria não é arbitrado: é a fração que ela ocupa no banco
- * de questões oficiais daquele concurso. Se Matemática é 30% da prova da
- * EEAR, ela recebe 30% das horas do plano.
+ * O peso de cada matéria segue o número oficial de questões do edital (ex: 24 questões
+ * cada na EEAR = 25% para cada matéria; pesos específicos na ESA/EsPCEx/ENEM),
+ * evitando distorções quando uma matéria tem poucas questões cadastradas no app.
  */
+
+const PESOS_OFICIAIS_POR_CONCURSO: Record<string, Record<string, number>> = {
+  EEAR: {
+    'Português': 24,
+    'Matemática': 24,
+    'Física': 24,
+    'Inglês': 24,
+  },
+  ESA: {
+    'Português': 14,
+    'Matemática': 14,
+    'História do Brasil': 6,
+    'Geografia do Brasil': 6,
+    'História': 6,
+    'Geografia': 6,
+    'Inglês': 10,
+    'Redação': 10,
+  },
+  ESPCEX: {
+    'Português': 20,
+    'Matemática': 20,
+    'Física': 12,
+    'Química': 12,
+    'História do Brasil': 6,
+    'Geografia do Brasil': 6,
+    'História': 6,
+    'Geografia': 6,
+    'Inglês': 12,
+    'Redação': 15,
+  },
+  ENEM: {
+    'Linguagens': 45,
+    'Ciências Humanas': 45,
+    'Ciências da Natureza': 45,
+    'Matemática': 45,
+    'Redação': 45,
+  },
+  CN: {
+    'Português': 20,
+    'Matemática': 20,
+    'Inglês': 20,
+    'Redação': 20,
+  },
+  EPCAR: {
+    'Português': 16,
+    'Matemática': 16,
+    'Inglês': 16,
+    'Redação': 16,
+  },
+  EFOMM: {
+    'Português': 20,
+    'Matemática': 20,
+    'Física': 20,
+    'Inglês': 20,
+    'Redação': 20,
+  },
+  EAM: {
+    'Português': 15,
+    'Matemática': 15,
+    'Física': 10,
+    'Química': 10,
+    'Inglês': 10,
+  },
+};
 
 /** Distribui minutos entre matérias pelo peso, sem perder nem inventar tempo. */
 function distribuirMinutos(
@@ -178,43 +242,66 @@ export async function POST(req: NextRequest) {
       ? body.dias_semana.map(Number).filter((d: number) => d >= 0 && d <= 6)
       : [1, 2, 3, 4, 5];
 
-    // ─── Peso das matérias = frequência real na prova ────────
-    let { data: vinculos } = await supabase
+    // ─── Peso das matérias = calibração oficial do edital ────────
+    let vinculosRes: any = await supabase
       .from('concurso_materias')
-      .select('materias (id, nome, icone_emoji)')
+      .select('peso_edital, peso_na_prova, materias (id, nome, icone_emoji)')
       .eq('concurso_id', concurso.id);
 
-    let materias = (vinculos ?? [])
-      .map((v: any) => v.materias)
-      .filter(Boolean);
+    // Fallback caso a coluna peso_edital ainda não esteja no schema cache
+    if (vinculosRes.error && (vinculosRes.error.code === '42703' || vinculosRes.error.message?.includes('peso_edital'))) {
+      vinculosRes = await supabase
+        .from('concurso_materias')
+        .select('materias (id, nome, icone_emoji)')
+        .eq('concurso_id', concurso.id);
+    }
 
-    if (!materias.length) {
+    const vinculos = vinculosRes.data ?? [];
+
+    let materiasComVinculo: { materia: any; pesoEdital?: number }[] = (vinculos ?? [])
+      .map((v: any) => ({
+        materia: v.materias,
+        pesoEdital: Number(v.peso_edital || v.peso_na_prova) || undefined,
+      }))
+      .filter((x: any) => Boolean(x.materia));
+
+    if (!materiasComVinculo.length) {
       const { data: defaultMats } = await supabase
         .from('materias')
         .select('id, nome, icone_emoji')
         .in('nome', ['Português', 'Matemática', 'Física', 'Química', 'História', 'Geografia', 'Inglês', 'Redação']);
-      materias = defaultMats ?? [];
+      materiasComVinculo = (defaultMats ?? []).map((m: any) => ({ materia: m }));
     }
 
     const contagem = await contarPorId(
       supabase,
       'materia_id',
-      materias.map((m: any) => m.id),
+      materiasComVinculo.map((x) => x.materia.id),
       { concurso_id: concurso.id }
     );
 
-    const totalQuestoesNoConcurso = Object.values(contagem).reduce((a, b) => a + b, 0);
+    const siglaUpper = concurso.sigla?.toUpperCase().replace(/[^A-Z]/g, '') || '';
+    const pesosOficiaisConcurso = PESOS_OFICIAIS_POR_CONCURSO[siglaUpper] || {};
 
-    // Distribuição balanceada: se há questões no banco, cada matéria tem peso proporcional à frequência
-    // Matérias do edital que não têm questões cadastradas (ex: Redação) recebem peso base para não serem excluídas
-    const pesoMinimo = totalQuestoesNoConcurso > 0
-      ? Math.max(1, Math.round(totalQuestoesNoConcurso / (materias.length * 3)))
-      : 1;
+    const comPeso = materiasComVinculo.map(({ materia, pesoEdital }) => {
+      // Prioridade 1: peso do edital gravado no banco de dados
+      // Prioridade 2: peso oficial padronizado por banca (ex: EEAR 24 questões por matéria)
+      // Prioridade 3: contagem de questões no banco de dados
+      // Prioridade 4: peso mínimo 1
+      let pesoFinal = 1;
+      if (pesoEdital && pesoEdital > 0) {
+        pesoFinal = pesoEdital;
+      } else if (pesosOficiaisConcurso[materia.nome] && pesosOficiaisConcurso[materia.nome] > 0) {
+        pesoFinal = pesosOficiaisConcurso[materia.nome];
+      } else if (contagem[materia.id] && contagem[materia.id] > 0) {
+        pesoFinal = contagem[materia.id];
+      }
 
-    const comPeso = materias.map((m: any) => ({
-      ...m,
-      peso: (contagem[m.id] && contagem[m.id] > 0) ? contagem[m.id] : pesoMinimo,
-    }));
+      return {
+        ...materia,
+        peso: pesoFinal,
+      };
+    });
 
     if (!comPeso.length) {
       return NextResponse.json(
@@ -349,6 +436,28 @@ export async function POST(req: NextRequest) {
           minutos_alvo: minutos,
           tipo: ehTeoria ? 'estudar_teoria' : 'resolver_questoes',
           peso: Number(((m.peso / comPeso.reduce((a: number, x: any) => a + x.peso, 0)) * 100).toFixed(2)),
+          ordem: ordem++,
+        });
+      }
+
+      // ─── Revisão Espaçada (D+1, D+7, D+30) ───────────────────
+      // A partir da semana 2, introduz slots dedicados à recuperação ativa da memória
+      if (semana >= 2) {
+        const diaRevisao = diasSemana[ordem % diasSemana.length] ?? 5;
+        const dataAlvoRevisao = obterDataDiaSemana(segundaDaSemana, diaRevisao, semana);
+        const ehMes = semana % 4 === 0;
+
+        itens.push({
+          plano_id: plano.id,
+          materia_id: null,
+          titulo: ehMes
+            ? '🔄 Revisão Espaçada (D+30) — Caderno de erros e fixação profunda do mês'
+            : '🔄 Revisão Espaçada (D+7) — Releitura ativa de resumos e autoavaliação da semana anterior',
+          semana,
+          data_alvo: dataAlvoRevisao,
+          minutos_alvo: ehMes ? 60 : 45,
+          tipo: 'revisar',
+          peso: 5,
           ordem: ordem++,
         });
       }

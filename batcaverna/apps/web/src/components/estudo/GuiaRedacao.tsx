@@ -7,6 +7,7 @@ import {
   REPERTORIOS,
   ARMADILHAS,
   ELEMENTOS_PROPOSTA,
+  DIFERENCAS_MILITAR_VS_ENEM,
 } from "@/lib/redacao-guia";
 
 /**
@@ -20,10 +21,11 @@ import {
  * parede de texto aberta faz o aluno rolar sem ler.
  */
 
-type Secao = "anatomia" | "conectivos" | "repertorios" | "proposta" | "armadilhas";
+type Secao = "anatomia" | "militar" | "conectivos" | "repertorios" | "proposta" | "armadilhas";
 
 const SECOES: { chave: Secao; rotulo: string }[] = [
   { chave: "anatomia", rotulo: "🧱 Estrutura" },
+  { chave: "militar", rotulo: "⚔️ Militar vs ENEM" },
   { chave: "conectivos", rotulo: "🔗 Conectivos" },
   { chave: "repertorios", rotulo: "💡 Repertórios" },
   { chave: "proposta", rotulo: "🎯 Proposta" },
@@ -393,6 +395,63 @@ export function GuiaRedacao() {
               Pena de morte, castigo físico, esterilização, exclusão de grupo:
               200 pontos a menos, por mais bem escrito que esteja o resto.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════ MILITAR VS ENEM ═══════════ */}
+      {secao === "militar" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-bat-gold-400/30 bg-bat-gold-400/10 p-4">
+            <p className="text-sm font-bold text-bat-gold-400 flex items-center gap-2">
+              <span>⚔️</span> Redação Militar (ESA, EEAR, EsPCEx, Colégio Naval, EPCAr)
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-bat-text-secondary">
+              A maior causa de reprovação de alunos que vêm do ENEM para concursos militares é
+              escrever uma proposta de intervenção social. As bancas das Forças Armadas esperam uma
+              <strong> dissertação clássica formal</strong>, com conclusão conclusiva e título obrigatório.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {DIFERENCAS_MILITAR_VS_ENEM.map((item) => (
+              <article
+                key={item.topico}
+                className="rounded-2xl border border-bat-border bg-bat-bg-card p-4 space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold text-bat-text flex items-center gap-2">
+                    <span className="text-bat-gold-400">⚡</span>
+                    {item.topico}
+                  </h4>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-bat-bg-primary text-bat-gold-400 border border-bat-gold-400/20">
+                    Regra de Ouro
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-bat-bg-primary/80 border border-bat-border/60">
+                  <p className="text-xs font-semibold text-bat-text">
+                    {item.regra}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1 text-xs">
+                  <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-bat-text-secondary">
+                    <p className="font-bold text-red-400 text-[11px] mb-1 flex items-center gap-1">
+                      <span>⚠️</span> No ENEM vs Na Banca Militar
+                    </p>
+                    <p className="leading-relaxed">{item.diferencaEnem}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-bat-text-secondary">
+                    <p className="font-bold text-emerald-400 text-[11px] mb-1 flex items-center gap-1">
+                      <span>💡</span> Como fazer no concurso
+                    </p>
+                    <p className="leading-relaxed">{item.exemploPratico}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       )}

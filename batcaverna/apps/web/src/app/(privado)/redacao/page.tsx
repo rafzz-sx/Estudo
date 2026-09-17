@@ -10,6 +10,12 @@ import {
   contarPalavras,
   estimarLinhas,
 } from "@/lib/redacao";
+import {
+  MATRIZES,
+  MatrizId,
+  obterMatriz,
+  formatarNotaBanca,
+} from "@/lib/redacao-matrizes";
 import { GuiaRedacao } from "@/components/estudo/GuiaRedacao";
 
 /**
@@ -37,6 +43,7 @@ interface Tema {
 interface MinhaRedacao {
   id: string;
   tema_titulo: string;
+  matriz_id?: string | null;
   palavras: number;
   linhas: number;
   c1: number | null;
@@ -61,10 +68,13 @@ export default function RedacaoPage() {
 
   // ─── Escrita ───────────────────────────────────────────────
   const [temaId, setTemaId] = useState("");
+  const [matrizAtivaId, setMatrizAtivaId] = useState<MatrizId>("enem");
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const inicio = useRef<number | null>(null);
   const [segundos, setSegundos] = useState(0);
+
+  const matrizAtiva = obterMatriz(matrizAtivaId);
 
   // ─── Autoavaliação ─────────────────────────────────────────
   const [avaliando, setAvaliando] = useState<MinhaRedacao | null>(null);
@@ -124,6 +134,7 @@ export default function RedacaoPage() {
         method: "POST",
         body: JSON.stringify({
           tema_id: temaId,
+          matriz_id: matrizAtivaId,
           texto,
           tempo_segundos: segundos || null,
         }),
@@ -140,7 +151,7 @@ export default function RedacaoPage() {
         setNotas({});
         setAnotacoes("");
         setAba("historico");
-        setAviso("✅ Redação guardada. Agora corrija você mesmo, abaixo.");
+        setAviso("✅ Redação guardada. Agora faça a autoavaliação com a régua da banca abaixo.");
       } else {
         setAviso(json.error ?? "Não consegui guardar.");
       }
@@ -151,12 +162,14 @@ export default function RedacaoPage() {
     }
   };
 
+  const matrizEmAvaliacao = obterMatriz(avaliando?.matriz_id || matrizAtivaId);
+
   const salvarAvaliacao = async () => {
     if (!avaliando) return;
-    const faltando = COMPETENCIAS.filter((c) => notas[`c${c.numero}`] == null);
+    const faltando = matrizEmAvaliacao.criterios.filter((c) => notas[`c${c.numero}`] == null);
     if (faltando.length) {
       setAviso(
-        `Avalie todas as competências. Falta: ${faltando
+        `Avalie todos os critérios da banca. Falta: ${faltando
           .map((c) => `C${c.numero}`)
           .join(", ")}.`
       );
@@ -180,7 +193,7 @@ export default function RedacaoPage() {
     setAvaliando(null);
     setNotas({});
     setAnotacoes("");
-    setAviso(`✅ Avaliada: ${json.data.nota_total} de ${NOTA_MAXIMA}.`);
+    setAviso(`✅ Avaliação salva com sucesso! Pontuação: ${formatarNotaBanca(json.data.nota_total, avaliando.matriz_id)}.`);
   };
 
   const abrirTexto = async (id: string) => {
@@ -293,6 +306,52 @@ export default function RedacaoPage() {
             </div>
           ) : (
             <>
+              {/* Seletor de Banca / Modalidade */}
+              <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-bat-text-muted">
+                  🎯 Escolha a Banca / Modalidade de Correção
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {(Object.keys(MATRIZES) as MatrizId[]).map((mId) => {
+                    const m = MATRIZES[mId];
+                    const ativo = matrizAtivaId === mId;
+                    return (
+                      <button
+                        key={mId}
+                        type="button"
+                        onClick={() => setMatrizAtivaId(mId)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          ativo
+                            ? "border-bat-gold-400 bg-bat-gold-400/10 shadow-md shadow-bat-gold-400/5"
+                            : "border-bat-border bg-bat-bg-secondary hover:border-bat-border/80"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-xs font-bold ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                            {mId === "enem" ? "🎓" : mId === "militar" ? "⚔️" : "🛡️"} {m.sigla}
+                          </span>
+                          <span className="text-[10px] font-mono text-bat-text-muted">
+                            {m.pontuacaoTotal} pts
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-bat-text-secondary leading-tight line-clamp-2">
+                          {m.descricao}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Alerta contextual da banca escolhida */}
+                <div className="mt-3 p-3 rounded-xl bg-bat-bg-primary/80 border border-bat-border flex items-start gap-2.5 text-xs text-bat-text-secondary">
+                  <span className="text-base shrink-0">💡</span>
+                  <div>
+                    <p className="font-semibold text-bat-text">{matrizAtiva.tituloInfo}</p>
+                    <p className="text-[11px] text-bat-text-muted mt-0.5">{matrizAtiva.alertaBanca}</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
                 <label
                   htmlFor="tema"
@@ -464,18 +523,23 @@ export default function RedacaoPage() {
                 >
                   <div className="flex flex-wrap items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-bat-text">
-                        {r.tema_titulo}
-                      </p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-bat-bg-secondary text-bat-gold-400 border border-bat-border">
+                          {r.matriz_id === "militar" ? "⚔️ Militar" : r.matriz_id === "cebraspe" ? "🛡️ Cebraspe" : "🎓 ENEM"}
+                        </span>
+                        <p className="truncate text-sm font-medium text-bat-text">
+                          {r.tema_titulo}
+                        </p>
+                      </div>
                       <p className="text-xs text-bat-text-muted">
                         {new Date(r.criado_em).toLocaleDateString("pt-BR")} ·{" "}
-                        {r.palavras} palavras
+                        {r.palavras} palavras · ~{r.linhas} linhas
                       </p>
                     </div>
 
                     {r.avaliada_em ? (
                       <span className="shrink-0 rounded-lg bg-bat-gold-400/15 px-3 py-1 text-sm font-bold text-bat-gold-400 tabular-nums">
-                        {r.nota_total}/{NOTA_MAXIMA}
+                        {formatarNotaBanca(r.nota_total, r.matriz_id)}
                       </span>
                     ) : (
                       <button
@@ -541,14 +605,21 @@ export default function RedacaoPage() {
           </header>
 
           <div className="space-y-5">
-            {COMPETENCIAS.map((c) => {
+            {matrizEmAvaliacao.criterios.map((c) => {
               const chave = `c${c.numero}`;
               const escolhido = notas[chave];
               return (
                 <div key={c.numero} className="border-t border-bat-border pt-4">
-                  <p className="text-sm font-bold text-bat-text">
-                    C{c.numero} · {c.titulo}
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-bat-text">
+                      {c.titulo}
+                    </p>
+                    {c.pesoBanca && (
+                      <span className="text-[10px] font-medium text-bat-gold-400 bg-bat-gold-400/10 px-2 py-0.5 rounded border border-bat-gold-400/20">
+                        {c.pesoBanca}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 text-xs text-bat-text-muted">{c.resumo}</p>
                   <p className="mt-2 text-xs italic text-bat-text-secondary">
                     {c.pergunta}
@@ -574,7 +645,9 @@ export default function RedacaoPage() {
                               : "text-bat-text-muted"
                           }`}
                         >
-                          {n.pontos}
+                          {matrizEmAvaliacao.divisorExibicao > 1
+                            ? Math.round(n.pontos / matrizEmAvaliacao.divisorExibicao)
+                            : n.pontos}
                         </span>
                         <span className="text-xs leading-snug text-bat-text-secondary">
                           {n.descricao}
@@ -599,13 +672,13 @@ export default function RedacaoPage() {
               value={anotacoes}
               onChange={(e) => setAnotacoes(e.target.value)}
               rows={3}
-              placeholder="Ex.: repeti 'além disso' três vezes; a proposta não tem detalhamento…"
+              placeholder="Ex.: esqueci do título na linha 1; conectivos militares bem empregados; sem erros de crase…"
               className="input-field w-full resize-y text-sm"
             />
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <span className="heading text-lg font-bold tabular-nums text-bat-gold-400">
-                {somaParcial}/{NOTA_MAXIMA}
+                Pontuação: {formatarNotaBanca(somaParcial, matrizEmAvaliacao.id)}
               </span>
               <button
                 onClick={salvarAvaliacao}

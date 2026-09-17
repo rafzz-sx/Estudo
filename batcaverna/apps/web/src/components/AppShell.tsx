@@ -13,7 +13,7 @@ import { DynamicIsland } from "@/components/DynamicIsland";
 import { usePlayerStore } from "@/stores/player-store";
 import { ConviteFeedback } from "@/components/ConviteFeedback";
 
-// ─── Links do menu ───────────────────────────────────────────
+// ─── Links do menu categorizados ──────────────────────────────
 interface NavLink {
   href: string;
   label: string;
@@ -22,29 +22,66 @@ interface NavLink {
   contador?: "revisoes";
 }
 
-const navLinksBase: NavLink[] = [
-  // "Plano de Hoje" e não "Dashboard": o nome é a promessa da tela. Quem
-  // abre a plataforma às 20h de uma terça quer saber por onde começar.
-  { href: "/dashboard", label: "Plano de Hoje", icon: "🏠" },
-  { href: "/progresso", label: "Meu Progresso", icon: "📊" },
-  { href: "/concursos", label: "Concursos", icon: "🎯" },
-  { href: "/questoes", label: "Questões", icon: "❓" },
-  { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
-  { href: "/caderno", label: "Caderno de Erros", icon: "📓" },
-  { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
-  { href: "/simulado", label: "Simulado", icon: "⏱️" },
-  { href: "/redacao", label: "Redação", icon: "✍️" },
-  { href: "/bizus", label: "Bizus", icon: "💡" },
-  { href: "/ranking", label: "Ranking", icon: "🏆" },
-  { href: "/chat", label: "Chat & Squad", icon: "💬" },
-  { href: "/musica", label: "Música", icon: "🎧" },
-  { href: "/tickets", label: "Suporte", icon: "🎫" },
-  { href: "/feedback", label: "Feedback", icon: "⭐" },
-  { href: "/perfil", label: "Meu Perfil", icon: "👤" },
-  { href: "/perfil?tab=config", label: "Configurações", icon: "⚙️" },
+interface NavSection {
+  id: string;
+  title: string;
+  links: NavLink[];
+}
+
+const navSectionsBase: NavSection[] = [
+  {
+    id: "estudo",
+    title: "Estudo Ativo",
+    links: [
+      { href: "/dashboard", label: "Plano de Hoje", icon: "🏠" },
+      { href: "/questoes", label: "Questões", icon: "❓" },
+      { href: "/simulado", label: "Simulado", icon: "⏱️" },
+      { href: "/redacao", label: "Redação", icon: "✍️" },
+      { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
+    ],
+  },
+  {
+    id: "retencao",
+    title: "Retenção & Tática",
+    links: [
+      { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
+      { href: "/caderno", label: "Caderno de Erros", icon: "📓" },
+      { href: "/bizus", label: "Bizus", icon: "💡" },
+      { href: "/progresso", label: "Meu Progresso", icon: "📊" },
+      { href: "/concursos", label: "Concursos", icon: "🎯" },
+    ],
+  },
+  {
+    id: "esquadrao",
+    title: "Esquadrão & Foco",
+    links: [
+      { href: "/chat", label: "Chat & Squad", icon: "💬" },
+      { href: "/ranking", label: "Ranking", icon: "🏆" },
+      { href: "/musica", label: "Música", icon: "🎧" },
+    ],
+  },
+  {
+    id: "conta",
+    title: "Conta & Apoio",
+    links: [
+      { href: "/perfil", label: "Meu Perfil", icon: "👤" },
+      { href: "/perfil?tab=config", label: "Configurações", icon: "⚙️" },
+      { href: "/tickets", label: "Suporte", icon: "🎫" },
+      { href: "/feedback", label: "Feedback", icon: "⭐" },
+    ],
+  },
 ];
 
 const adminLink: NavLink = { href: "/admin", label: "Painel Admin", icon: "🛡️" };
+
+/** Atalhos da barra inferior mobile (os 5 essenciais) */
+const bottomNavItems: NavLink[] = [
+  { href: "/dashboard", label: "Hoje", icon: "🏠" },
+  { href: "/questoes", label: "Questões", icon: "❓" },
+  { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
+  { href: "/chat", label: "Chat", icon: "💬" },
+  { href: "/perfil", label: "Perfil", icon: "👤" },
+];
 
 /** Quantas revisões espaçadas venceram — vira o selo vermelho no menu. */
 function useRevisoesPendentes() {
@@ -75,6 +112,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>("");
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const revisoesPendentes = useRevisoesPendentes();
 
   // Sincronizar tab ativa da URL para destacar Perfil vs Configurações
@@ -113,10 +151,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const userRole = storeUser?.role || "user";
   const userAvatar = storeUser?.avatar_url;
 
-  // Só mostra link admin se o usuário for admin de verdade
-  const navLinks = userRole === "admin"
-    ? [...navLinksBase, adminLink]
-    : navLinksBase;
+  // Se for admin, adiciona o link na seção de Conta
+  const navSections = navSectionsBase.map((sec) => {
+    if (sec.id === "conta" && userRole === "admin") {
+      return { ...sec, links: [...sec.links, adminLink] };
+    }
+    return sec;
+  });
+
+  const toggleSection = (id: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleLogout = async () => {
     try {
@@ -128,6 +173,47 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Há faixa carregada no player? O <main> usa isto para abrir espaço.
   const tocandoAlgo = usePlayerStore((s) => s.fila.length > 0);
+
+  const renderNavLinks = (links: NavLink[], onNavigate?: () => void) => {
+    return (
+      <div className="space-y-1">
+        {links.map((link) => {
+          const isConfig = link.href.includes("tab=config");
+          const isPerfil = link.href === "/perfil";
+          const isActive = isConfig
+            ? pathname === "/perfil" && currentTab === "config"
+            : isPerfil
+            ? pathname === "/perfil" && currentTab !== "config"
+            : (pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/")));
+
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => {
+                if (isConfig) setCurrentTab("config");
+                else if (isPerfil) setCurrentTab("");
+                if (onNavigate) onNavigate();
+              }}
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
+                isActive
+                  ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 glow-gold font-bold"
+                  : "text-bat-text-secondary hover:bg-bat-bg-elevated hover:text-bat-text border border-transparent"
+              }`}
+            >
+              <span className="text-base">{link.icon}</span>
+              <span className="flex-1 truncate">{link.label}</span>
+              {link.contador === "revisoes" && revisoesPendentes > 0 && (
+                <span className="min-w-5 rounded-full bg-bat-gold-400 px-1.5 text-center text-[10px] font-extrabold text-black">
+                  {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-bat-bg flex w-full max-w-full overflow-x-hidden">
@@ -162,38 +248,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <StudySessionBadge />
         </div>
 
-        {/* Nav links */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navLinks.map((link) => {
-            const isConfig = link.href.includes("tab=config");
-            const isPerfil = link.href === "/perfil";
-            const isActive = isConfig
-              ? pathname === "/perfil" && currentTab === "config"
-              : isPerfil
-              ? pathname === "/perfil" && currentTab !== "config"
-              : (pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/")));
+        {/* Nav categorizado com seções colapsáveis */}
+        <nav className="flex-1 py-3 px-3 space-y-3 overflow-y-auto custom-scrollbar">
+          {navSections.map((section) => {
+            const isCollapsed = !!collapsedSections[section.id];
+            const hasActiveChild = section.links.some((link) => {
+              if (link.href.includes("tab=config")) {
+                return pathname === "/perfil" && currentTab === "config";
+              }
+              if (link.href === "/perfil") {
+                return pathname === "/perfil" && currentTab !== "config";
+              }
+              return pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/"));
+            });
+
+            // Se tem item ativo e o usuário não colapsou explicitamente, mantém expandido
+            const displayCollapsed = isCollapsed && !hasActiveChild;
+
             return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => {
-                  if (isConfig) setCurrentTab("config");
-                  else if (isPerfil) setCurrentTab("");
-                }}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
-                  isActive
-                    ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 glow-gold font-bold"
-                    : "text-bat-text-secondary hover:bg-bat-bg-elevated hover:text-bat-text border border-transparent"
-                }`}
-              >
-                <span className="text-base">{link.icon}</span>
-                <span className="flex-1">{link.label}</span>
-                {link.contador === "revisoes" && revisoesPendentes > 0 && (
-                  <span className="min-w-5 rounded-full bg-bat-gold-400 px-1.5 text-center text-[10px] font-extrabold text-black">
-                    {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
-                  </span>
-                )}
-              </Link>
+              <div key={section.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.id)}
+                  className="w-full flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-bat-text-muted hover:text-bat-text transition-colors cursor-pointer"
+                >
+                  <span>{section.title}</span>
+                  <svg
+                    className={`w-3.5 h-3.5 transition-transform duration-200 text-bat-text-muted ${
+                      displayCollapsed ? "-rotate-90" : "rotate-0"
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {!displayCollapsed && renderNavLinks(section.links)}
+              </div>
             );
           })}
         </nav>
@@ -235,7 +327,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="text-bat-text p-1 hover:bg-bat-bg-elevated rounded-lg transition cursor-pointer shrink-0"
-              aria-label="Abrir Menu"
+              aria-label="Abrir Menu Completo"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -263,7 +355,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* ═══ SIDEBAR MOBILE (overlay) ═══ */}
+      {/* ═══ SIDEBAR MOBILE (drawer / overlay) ═══ */}
       {sidebarOpen && (
         <>
           <div
@@ -275,7 +367,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <BatBrand iconSize={32} textSize="text-lg" />
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="text-bat-text-muted hover:text-bat-text transition cursor-pointer"
+                className="text-bat-text-muted hover:text-bat-text transition cursor-pointer p-1"
+                aria-label="Fechar menu"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -288,41 +381,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <StudySessionBadge />
             </div>
 
-            <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overscroll-contain">
-              {navLinks.map((link) => {
-                const isConfig = link.href.includes("tab=config");
-                const isPerfil = link.href === "/perfil";
-                const isActive = isConfig
-                  ? pathname === "/perfil" && currentTab === "config"
-                  : isPerfil
-                  ? pathname === "/perfil" && currentTab !== "config"
-                  : (pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + "/")));
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => {
-                      if (isConfig) setCurrentTab("config");
-                      else if (isPerfil) setCurrentTab("");
-                      setSidebarOpen(false);
-                    }}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
-                      isActive
-                        ? "bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 font-bold"
-                        : "text-bat-text-secondary hover:bg-bat-bg-elevated hover:text-bat-text border border-transparent"
-                    }`}
-                  >
-                    <span className="text-base">{link.icon}</span>
-                    <span className="flex-1">{link.label}</span>
-                    {link.contador === "revisoes" && revisoesPendentes > 0 && (
-                      <span className="min-w-5 rounded-full bg-bat-gold-400 px-1.5 text-center text-[10px] font-extrabold text-black">
-                        {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+            <nav className="flex-1 py-3 px-3 space-y-3 overflow-y-auto overscroll-contain">
+              {navSections.map((section) => (
+                <div key={section.id} className="space-y-1">
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
+                    {section.title}
+                  </div>
+                  {renderNavLinks(section.links, () => setSidebarOpen(false))}
+                </div>
+              ))}
             </nav>
+
             {/* Usuário e Logout no menu mobile */}
             <div className="px-4 py-3 border-t border-bat-border">
               <Link
@@ -357,12 +426,43 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
+      {/* ═══ BOTTOM NAVIGATION BAR MOBILE ═══ */}
+      <nav
+        aria-label="Navegação rápida móvel"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-2 py-1.5"
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div className="grid grid-cols-5 items-center justify-around gap-1 max-w-md mx-auto">
+          {bottomNavItems.map((item) => {
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all min-h-[46px] relative select-none ${
+                  isActive
+                    ? "text-bat-gold-400 font-bold bg-bat-gold-400/10 border border-bat-gold-400/20 shadow-xs"
+                    : "text-bat-text-secondary hover:text-bat-text hover:bg-bat-bg-elevated/40"
+                }`}
+              >
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span className="text-[10px] mt-1 truncate max-w-full font-medium">{item.label}</span>
+                {item.contador === "revisoes" && revisoesPendentes > 0 && (
+                  <span className="absolute top-1 right-2 min-w-4 h-4 rounded-full bg-bat-gold-400 px-1 text-center text-[9px] font-black text-black leading-4 flex items-center justify-center">
+                    {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* ═══ CONTEÚDO PRINCIPAL ═══ */}
-      {/* Quando há música tocando, o player flutua sobre o topo. No celular
-          ele cobria o título da página; o respiro extra desce o conteúdo
-          exatamente a altura dele — e some junto com o player. */}
+      {/* Respiro inferior 'pb-24 lg:pb-8' garante que em telas mobile a Bottom Bar
+          nunca cubra os botões de ação ou o final do scroll */}
       <main
-        className={`flex-1 lg:ml-64 min-w-0 w-full max-w-full min-h-screen overflow-x-hidden ${
+        className={`flex-1 lg:ml-64 min-w-0 w-full max-w-full min-h-screen overflow-x-hidden pb-24 lg:pb-8 ${
           tocandoAlgo ? "pt-32 lg:pt-20" : "pt-16 lg:pt-0"
         }`}
       >
@@ -373,3 +473,4 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

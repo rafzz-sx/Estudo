@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
+import { uploadAudioChat } from "@/lib/upload-audio";
+import { AudioMensagemPlayer, formatarTempoAudio } from "@/components/chat/AudioMensagemPlayer";
+import { NovoGrupoModal } from "@/components/chat/NovoGrupoModal";
+import { Skeleton } from "@/components/Skeleton";
 
 interface Mensagem {
   id: string;
@@ -20,6 +24,8 @@ interface Mensagem {
     apelido: string;
     avatar_url: string | null;
   };
+  _otimista?: boolean;
+  _erroEnvio?: boolean;
 }
 
 interface Conversa {
@@ -66,107 +72,6 @@ function textoPresenca(iso: string | null): string {
   return "Sem entrar há mais de um mês";
 }
 
-/** Formata segundos em mm:ss limpo e sem bugs */
-function formatarTempoAudio(segundos: number): string {
-  if (isNaN(segundos) || !isFinite(segundos) || segundos < 0) return "0:00";
-  const s = Math.round(segundos);
-  const min = Math.floor(s / 60);
-  const seg = s % 60;
-  return `${min}:${seg < 10 ? "0" : ""}${seg}`;
-}
-
-/** Player customizado e tático para mensagens de áudio na thread */
-function AudioMensagemPlayer({
-  src,
-  duracao,
-  souEu,
-}: {
-  src: string;
-  duracao?: number | null;
-  souEu: boolean;
-}) {
-  const [tocando, setTocando] = useState(false);
-  const [tempoAtual, setTempoAtual] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (tocando) {
-      audioRef.current.pause();
-      setTocando(false);
-    } else {
-      audioRef.current
-        .play()
-        .then(() => setTocando(true))
-        .catch(() => setTocando(false));
-    }
-  };
-
-  const duracaoTotal = duracao && duracao > 0 ? duracao : Math.max(1, Math.round(audioRef.current?.duration || 0));
-  const progresso = duracaoTotal > 0 ? Math.min(100, (tempoAtual / duracaoTotal) * 100) : 0;
-
-  return (
-    <div
-      className={`flex items-center gap-3 py-1 px-1 min-w-[190px] max-w-[260px] select-none ${
-        souEu ? "text-black" : "text-bat-text"
-      }`}
-    >
-      <audio
-        ref={audioRef}
-        src={src}
-        onTimeUpdate={() => {
-          if (audioRef.current) setTempoAtual(audioRef.current.currentTime);
-        }}
-        onEnded={() => {
-          setTocando(false);
-          setTempoAtual(0);
-        }}
-        preload="metadata"
-        className="hidden"
-      />
-      <button
-        type="button"
-        onClick={togglePlay}
-        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm transition-all active:scale-95 cursor-pointer ${
-          souEu
-            ? "bg-black text-bat-gold-400 hover:bg-black/80"
-            : "bg-bat-gold-400 text-black hover:bg-bat-gold-300"
-        }`}
-        title={tocando ? "Pausar áudio" : "Ouvir áudio"}
-      >
-        <span className="text-xs font-bold pl-0.5">{tocando ? "⏸" : "▶"}</span>
-      </button>
-
-      <div className="flex-1 min-w-0">
-        <div
-          onClick={(e) => {
-            if (!audioRef.current || duracaoTotal <= 0) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            audioRef.current.currentTime = pos * duracaoTotal;
-            setTempoAtual(audioRef.current.currentTime);
-          }}
-          className={`h-2.5 rounded-full cursor-pointer relative overflow-hidden transition-all ${
-            souEu ? "bg-black/20" : "bg-bat-bg-primary border border-bat-border/80"
-          }`}
-        >
-          <div
-            className={`h-full rounded-full transition-all duration-75 ${
-              souEu ? "bg-black" : "bg-bat-gold-400"
-            }`}
-            style={{ width: `${progresso}%` }}
-          />
-        </div>
-
-        <div className="flex justify-between items-center text-[10px] font-mono mt-1 font-semibold opacity-85">
-          <span>{formatarTempoAudio(tempoAtual)}</span>
-          <span>{duracaoTotal > 0 ? formatarTempoAudio(duracaoTotal) : ""}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ChatPage() {
   const { user } = useAuthStore();
   const [conversas, setConversas] = useState<Conversa[]>([]);
@@ -204,6 +109,8 @@ export default function ChatPage() {
   const [erroMicrofone, setErroMicrofone] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const audioBlobRef = useRef<Blob | null>(null);
+  const previewUrlCriadaRef = useRef<string | null>(null);
   const gravacaoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Controle de requisições de mensagens para evitar gargalo na rede móvel
@@ -368,13 +275,15 @@ export default function ChatPage() {
     let stream: MediaStream | null = null;
 
     try {
-      // Tentar obter stream de áudio com fallbacks de constraints
+      // Tentar obter stream de áudio com fallbacks de constraints (mono 24kHz para voz humana)
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 24000,
           },
         });
       } catch {
@@ -394,11 +303,19 @@ export default function ChatPage() {
 
       let mediaRecorder: MediaRecorder;
       try {
-        const options: MediaRecorderOptions = {};
+        const options: MediaRecorderOptions = {
+          audioBitsPerSecond: 28000, // Comprime para ~100KB a cada 30 segundos mantendo voz nítida
+        };
         if (mimeType) options.mimeType = mimeType;
         mediaRecorder = new MediaRecorder(stream, options);
       } catch {
-        mediaRecorder = new MediaRecorder(stream);
+        try {
+          const options: MediaRecorderOptions = {};
+          if (mimeType) options.mimeType = mimeType;
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch {
+          mediaRecorder = new MediaRecorder(stream);
+        }
       }
 
       mediaRecorderRef.current = mediaRecorder;
@@ -415,13 +332,21 @@ export default function ChatPage() {
         // Remove parâmetros como ;codecs=opus para o tipo base do blob
         const tipoBlob = rawMime.split(";")[0].trim() || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: tipoBlob });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          setAudioUrlPreview(reader.result as string);
-          setPreviewTempoAtual(0);
-          setPreviewTocando(false);
-        };
+        audioBlobRef.current = audioBlob;
+
+        // Limpar Object URL anterior se existir
+        if (previewUrlCriadaRef.current) {
+          URL.revokeObjectURL(previewUrlCriadaRef.current);
+          previewUrlCriadaRef.current = null;
+        }
+
+        // Criar Object URL instantânea para preview sem travar thread em Base64
+        const objectUrl = URL.createObjectURL(audioBlob);
+        previewUrlCriadaRef.current = objectUrl;
+        setAudioUrlPreview(objectUrl);
+        setPreviewTempoAtual(0);
+        setPreviewTocando(false);
+
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
         }
@@ -486,6 +411,11 @@ export default function ChatPage() {
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
     }
+    if (previewUrlCriadaRef.current) {
+      URL.revokeObjectURL(previewUrlCriadaRef.current);
+      previewUrlCriadaRef.current = null;
+    }
+    audioBlobRef.current = null;
     setPreviewTocando(false);
     setPreviewTempoAtual(0);
     setAudioUrlPreview(null);
@@ -516,27 +446,29 @@ export default function ChatPage() {
         alert("O arquivo de áudio deve ter no máximo 20MB.");
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target?.result as string;
-        setAudioUrlPreview(base64);
-        setErroMicrofone(null);
+      if (previewUrlCriadaRef.current) {
+        URL.revokeObjectURL(previewUrlCriadaRef.current);
+        previewUrlCriadaRef.current = null;
+      }
+      audioBlobRef.current = file;
+      const objectUrl = URL.createObjectURL(file);
+      previewUrlCriadaRef.current = objectUrl;
+      setAudioUrlPreview(objectUrl);
+      setErroMicrofone(null);
 
-        // Tentar obter duração do áudio automaticamente
-        try {
-          const tempAudio = new Audio(base64);
-          tempAudio.onloadedmetadata = () => {
-            if (tempAudio.duration && !isNaN(tempAudio.duration)) {
-              setTempoGravacao(Math.round(tempAudio.duration));
-            } else {
-              setTempoGravacao(1);
-            }
-          };
-        } catch {
-          setTempoGravacao(1);
-        }
-      };
-      reader.readAsDataURL(file);
+      // Tentar obter duração do áudio automaticamente
+      try {
+        const tempAudio = new Audio(objectUrl);
+        tempAudio.onloadedmetadata = () => {
+          if (tempAudio.duration && !isNaN(tempAudio.duration)) {
+            setTempoGravacao(Math.round(tempAudio.duration));
+          } else {
+            setTempoGravacao(1);
+          }
+        };
+      } catch {
+        setTempoGravacao(1);
+      }
       e.target.value = "";
     }
   };
@@ -546,71 +478,123 @@ export default function ChatPage() {
     if (e) e.preventDefault();
     if (!conversaAtiva) return;
 
-    let payload: any = {
+    const audioBlob = audioBlobRef.current;
+    const currentAudioPreview = audioUrlPreview;
+    const currentImagemPreview = imagemPreview;
+    const currentTexto = textoMensagem.trim();
+
+    const ehAudio = Boolean(currentAudioPreview || audioBlob);
+    const ehImagem = !ehAudio && Boolean(currentImagemPreview);
+    const ehTexto = !ehAudio && !ehImagem && Boolean(currentTexto);
+
+    if (!ehAudio && !ehImagem && !ehTexto) return;
+
+    const tipoMsg: "audio" | "imagem" | "texto" = ehAudio ? "audio" : ehImagem ? "imagem" : "texto";
+    const conteudoMsg =
+      tipoMsg === "audio"
+        ? "Mensagem de áudio"
+        : tipoMsg === "imagem"
+        ? (currentTexto || "Foto enviada")
+        : currentTexto;
+
+    const duracaoMsg = tempoGravacao || 1;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    // Criar mensagem otimista imediata para feedback instantâneo na tela
+    const msgOtimista: Mensagem = {
+      id: tempId,
       conversa_id: conversaAtiva.id,
+      remetente_id: user?.id || "",
+      conteudo: conteudoMsg,
+      tipo: tipoMsg,
+      midia_url: currentAudioPreview || currentImagemPreview || null,
+      duracao_segundos: duracaoMsg,
+      enviado_em: new Date().toISOString(),
+      remetente: {
+        id: user?.id || "",
+        apelido: user?.apelido || "Você",
+        avatar_url: user?.avatar_url || null,
+      },
+      _otimista: true,
     };
 
-    if (audioUrlPreview) {
-      payload.tipo = "audio";
-      payload.midia_url = audioUrlPreview;
-      payload.duracao_segundos = tempoGravacao || 1;
-      payload.conteudo = "Mensagem de áudio";
-    } else if (imagemPreview) {
-      payload.tipo = "imagem";
-      payload.midia_url = imagemPreview;
-      payload.conteudo = textoMensagem.trim() || "Foto enviada";
-    } else if (textoMensagem.trim()) {
-      payload.tipo = "texto";
-      payload.conteudo = textoMensagem.trim();
-    } else {
-      return;
-    }
+    // 1. Inserir na lista imediatamente
+    setMensagens((prev) => [...prev, msgOtimista]);
 
+    // 2. Limpar os campos imediatamente (sensação de resposta instantânea)
+    setTextoMensagem("");
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+    setPreviewTocando(false);
+    setPreviewTempoAtual(0);
+    setAudioUrlPreview(null);
+    setImagemPreview(null);
+    setTempoGravacao(0);
+    audioBlobRef.current = null;
+    previewUrlCriadaRef.current = null;
+
+    // 3. Atualizar preview na lista lateral de conversas imediatamente
+    setConversas((prev) =>
+      prev.map((c) =>
+        c.id === conversaAtiva.id
+          ? {
+              ...c,
+              ultima_mensagem:
+                tipoMsg === "audio"
+                  ? "🎤 Áudio"
+                  : tipoMsg === "imagem"
+                  ? "📷 Foto"
+                  : conteudoMsg,
+            }
+          : c
+      )
+    );
+
+    // 4. Processar upload e gravação em segundo plano
     try {
+      let finalMidiaUrl = currentAudioPreview || currentImagemPreview || null;
+      let finalDuracao = duracaoMsg;
+
+      // Se for áudio com Blob gravado, faz upload direto para o Supabase Storage via signed URL
+      if (tipoMsg === "audio" && audioBlob) {
+        const uploadRes = await uploadAudioChat(audioBlob, fetchWithAuth);
+        finalMidiaUrl = uploadRes.publicUrl;
+        if (uploadRes.duracao > 0) finalDuracao = uploadRes.duracao;
+      }
+
       const res = await fetchWithAuth("/api/chat/mensagens", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          conversa_id: conversaAtiva.id,
+          tipo: tipoMsg,
+          conteudo: conteudoMsg,
+          midia_url: finalMidiaUrl,
+          duracao_segundos: finalDuracao,
+        }),
       });
 
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
-          setMensagens((prev) => [...prev, json.data]);
-          setTextoMensagem("");
-          if (previewAudioRef.current) {
-            previewAudioRef.current.pause();
-          }
-          setPreviewTocando(false);
-          setPreviewTempoAtual(0);
-          setAudioUrlPreview(null);
-          setImagemPreview(null);
-          setTempoGravacao(0);
-
-          // Atualizar lista de conversas
-          setConversas((prev) =>
-            prev.map((c) =>
-              c.id === conversaAtiva.id
-                ? {
-                    ...c,
-                    ultima_mensagem:
-                      payload.tipo === "audio"
-                        ? "🎤 Áudio"
-                        : payload.tipo === "imagem"
-                        ? "📷 Foto"
-                        : payload.conteudo,
-                  }
-                : c
-            )
+          // Substitui a mensagem temporária pela oficial retornada do banco
+          setMensagens((prev) =>
+            prev.map((m) => (m.id === tempId ? json.data : m))
           );
+        } else {
+          throw new Error(json?.error || "Erro ao salvar mensagem.");
         }
       } else {
         const errJson = await res.json().catch(() => ({}));
-        alert(errJson?.error || "Não foi possível enviar a mensagem.");
+        throw new Error(errJson?.error || "Falha ao enviar mensagem.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao enviar mensagem:", err);
-      alert("Erro de conexão ao enviar mensagem.");
+      // Marcar falha no balão da mensagem otimista
+      setMensagens((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, _otimista: false, _erroEnvio: true } : m))
+      );
     }
   };
 
@@ -652,8 +636,7 @@ export default function ChatPage() {
     setModalGrupoAberto(true);
   };
 
-  const criarGrupo = async () => {
-    if (!nomeGrupo.trim() || criandoGrupo) return;
+  const criarGrupo = async (nome: string) => {
     const selecionados = amigosParaGrupo.filter((a) => a.selecionado).map((a) => a.id);
     if (selecionados.length === 0) {
       alert('Selecione pelo menos 1 amigo para o grupo!');
@@ -664,7 +647,7 @@ export default function ChatPage() {
       const res = await fetchWithAuth('/api/chat/grupos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: nomeGrupo.trim(), participante_ids: selecionados }),
+        body: JSON.stringify({ nome, participante_ids: selecionados }),
       });
       const json = await res.json();
       if (json.success) {
@@ -693,81 +676,18 @@ export default function ChatPage() {
       />
 
       {/* ═══ MODAL DE CRIAR GRUPO DE ESTUDO ═══ */}
-      {modalGrupoAberto && (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
-            onClick={() => setModalGrupoAberto(false)}
-          />
-          <div className="fixed inset-x-4 top-[10%] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-[420px] max-h-[80vh] overflow-y-auto bg-bat-bg-card border border-bat-border rounded-2xl shadow-2xl z-50 p-6 animate-in fade-in-50 zoom-in-95">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="heading text-lg text-bat-text font-bold">⚔️ Criar Grupo de Estudo</h3>
-              <button
-                onClick={() => setModalGrupoAberto(false)}
-                className="w-7 h-7 rounded-lg bg-bat-bg-secondary text-bat-text-muted hover:text-bat-text flex items-center justify-center text-xs cursor-pointer"
-              >✕</button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-bat-text-secondary font-semibold mb-1.5">Nome do Grupo</label>
-                <input
-                  type="text"
-                  value={nomeGrupo}
-                  onChange={(e) => setNomeGrupo(e.target.value)}
-                  placeholder="Ex: Squad EEAR 2026"
-                  maxLength={100}
-                  className="w-full bg-bat-bg-primary border border-bat-border rounded-xl px-4 py-2.5 text-sm text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-bat-text-secondary font-semibold mb-1.5">
-                  Selecionar Amigos ({amigosParaGrupo.filter(a => a.selecionado).length} selecionados)
-                </label>
-                {amigosParaGrupo.length === 0 ? (
-                  <p className="text-xs text-bat-text-muted py-4 text-center">
-                    Você ainda não tem amigos aceitos. Adicione amigos primeiro!
-                  </p>
-                ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {amigosParaGrupo.map((amigo) => (
-                      <label
-                        key={amigo.id}
-                        className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border ${
-                          amigo.selecionado
-                            ? 'bg-bat-gold-400/10 border-bat-gold-400/30'
-                            : 'bg-bat-bg-secondary border-transparent hover:border-bat-border'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={amigo.selecionado}
-                          onChange={() => {
-                            setAmigosParaGrupo(prev =>
-                              prev.map(a => a.id === amigo.id ? { ...a, selecionado: !a.selecionado } : a)
-                            );
-                          }}
-                          className="accent-[#F5C518] w-4 h-4"
-                        />
-                        <span className="text-sm text-bat-text font-medium">{amigo.apelido}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={criarGrupo}
-                disabled={criandoGrupo || !nomeGrupo.trim() || amigosParaGrupo.filter(a => a.selecionado).length === 0}
-                className="w-full btn-primary py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {criandoGrupo ? 'Criando...' : `⚔️ Criar Grupo (${amigosParaGrupo.filter(a => a.selecionado).length + 1} membros)`}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      <NovoGrupoModal
+        aberto={modalGrupoAberto}
+        onClose={() => setModalGrupoAberto(false)}
+        amigos={amigosParaGrupo}
+        onToggleAmigo={(id) => {
+          setAmigosParaGrupo((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, selecionado: !a.selecionado } : a))
+          );
+        }}
+        onCriarGrupo={criarGrupo}
+        criando={criandoGrupo}
+      />
       {/* ═══ LIGHTBOX FULLSCREEN PARA FOTOS ═══ */}
       {lightboxUrl && (
         <div
@@ -852,9 +772,16 @@ export default function ChatPage() {
           {/* Lista de Contatos */}
           <div className="flex-1 overflow-y-auto divide-y divide-bat-border/30">
             {loadingConversas ? (
-              <div className="p-8 text-center text-bat-text-muted text-xs">
-                <span className="text-2xl block mb-2 animate-pulse">🦇</span>
-                Carregando seus amigos...
+              <div className="p-3 space-y-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <div key={n} className="flex items-center gap-3 p-3 rounded-xl bg-bat-bg-secondary/30">
+                    <Skeleton variant="circular" width={40} height={40} />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton variant="text" width="65%" height={14} />
+                      <Skeleton variant="text" width="40%" height={10} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : conversasFiltradas.length === 0 ? (
               <div className="p-8 text-center text-bat-text-muted text-xs">
@@ -1105,12 +1032,25 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        <span className="text-[10px] text-bat-text-muted mt-1 px-1">
-                          {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-bat-text-muted mt-1 px-1">
+                          {msg._otimista ? (
+                            <span className="flex items-center gap-1 text-bat-gold-400 font-medium">
+                              <span className="inline-block w-2 h-2 rounded-full border border-bat-gold-400 border-t-transparent animate-spin" />
+                              Enviando...
+                            </span>
+                          ) : msg._erroEnvio ? (
+                            <span className="text-red-400 font-medium flex items-center gap-1">
+                              ⚠️ Não enviada
+                            </span>
+                          ) : (
+                            <span>
+                              {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })

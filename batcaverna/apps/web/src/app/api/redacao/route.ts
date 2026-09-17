@@ -29,28 +29,47 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
 
-    const [temasRes, minhasRes] = await Promise.all([
-      supabase
-        .from('redacao_temas')
-        .select('id, titulo, ano, origem, textos_apoio, fonte_url, concurso_id')
-        .eq('ativo', true)
-        .order('ano', { ascending: false, nullsFirst: false })
-        .limit(100),
-      supabase
+    let temasData: any[] = [];
+    let minhasData: any[] = [];
+
+    const temasRes = await supabase
+      .from('redacao_temas')
+      .select('id, titulo, ano, origem, textos_apoio, fonte_url, concurso_id')
+      .eq('ativo', true)
+      .order('ano', { ascending: false, nullsFirst: false })
+      .limit(100);
+
+    temasData = temasRes.data ?? [];
+
+    // Tenta buscar com matriz_id, com fallback caso a coluna ainda não tenha sido criada
+    const minhasResComMatriz = await supabase
+      .from('redacoes')
+      .select(
+        'id, tema_id, tema_titulo, matriz_id, palavras, linhas, c1, c2, c3, c4, c5, nota_total, avaliada_em, anotacoes, criado_em'
+      )
+      .eq('user_id', user.id)
+      .order('criado_em', { ascending: false })
+      .limit(50);
+
+    if (minhasResComMatriz.error && (minhasResComMatriz.error.code === '42703' || minhasResComMatriz.error.message?.includes('matriz_id'))) {
+      const minhasResBase = await supabase
         .from('redacoes')
         .select(
           'id, tema_id, tema_titulo, palavras, linhas, c1, c2, c3, c4, c5, nota_total, avaliada_em, anotacoes, criado_em'
         )
         .eq('user_id', user.id)
         .order('criado_em', { ascending: false })
-        .limit(50),
-    ]);
+        .limit(50);
+      minhasData = (minhasResBase.data ?? []).map((r: any) => ({ ...r, matriz_id: 'enem' }));
+    } else {
+      minhasData = minhasResComMatriz.data ?? [];
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        temas: temasRes.data ?? [],
-        minhas: minhasRes.data ?? [],
+        temas: temasData,
+        minhas: minhasData,
       },
     });
   } catch (error) {
@@ -87,6 +106,9 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
     const temaId = uuidOuNulo(body?.tema_id);
+    const matrizId = ['enem', 'militar', 'cebraspe'].includes(body?.matriz_id)
+      ? body.matriz_id
+      : 'enem';
 
     // O título fica gravado na própria redação: sem isso, apagar um tema
     // deixaria o histórico do aluno sem saber sobre o que ele escreveu.
@@ -110,23 +132,44 @@ export async function POST(req: NextRequest) {
 
     const tempo = Number(body?.tempo_segundos);
 
-    const { data, error } = await supabase
+    const basePayload = {
+      user_id: user.id,
+      tema_id: temaId,
+      tema_titulo: titulo,
+      texto,
+      palavras: contarPalavras(texto),
+      linhas: estimarLinhas(texto),
+      tempo_segundos: Number.isFinite(tempo) && tempo > 0 ? Math.floor(tempo) : null,
+    };
+
+    let data: any = null;
+
+    // Tentativa 1: Inserir com matriz_id
+    const resComMatriz = await supabase
       .from('redacoes')
-      .insert({
-        user_id: user.id,
-        tema_id: temaId,
-        tema_titulo: titulo,
-        texto,
-        palavras: contarPalavras(texto),
-        linhas: estimarLinhas(texto),
-        tempo_segundos: Number.isFinite(tempo) && tempo > 0 ? Math.floor(tempo) : null,
-      })
+      .insert({ ...basePayload, matriz_id: matrizId })
       .select(
-        'id, tema_id, tema_titulo, palavras, linhas, c1, c2, c3, c4, c5, nota_total, avaliada_em, criado_em'
+        'id, tema_id, tema_titulo, matriz_id, palavras, linhas, c1, c2, c3, c4, c5, nota_total, avaliada_em, criado_em'
       )
       .single();
 
-    if (error) throw error;
+    if (resComMatriz.error && (resComMatriz.error.code === '42703' || resComMatriz.error.message?.includes('matriz_id'))) {
+      // Fallback: se a coluna matriz_id ainda não existir no banco
+      const resBase = await supabase
+        .from('redacoes')
+        .insert(basePayload)
+        .select(
+          'id, tema_id, tema_titulo, palavras, linhas, c1, c2, c3, c4, c5, nota_total, avaliada_em, criado_em'
+        )
+        .single();
+
+      if (resBase.error) throw resBase.error;
+      data = { ...resBase.data, matriz_id: matrizId };
+    } else if (resComMatriz.error) {
+      throw resComMatriz.error;
+    } else {
+      data = resComMatriz.data;
+    }
 
     return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (error) {

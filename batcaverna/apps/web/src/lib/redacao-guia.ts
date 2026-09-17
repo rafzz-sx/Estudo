@@ -935,3 +935,48 @@ export const ELEMENTOS_PROPOSTA: ElementoProposta[] = [
     ],
   },
 ];
+
+// ═══════════════════════════════════════════════════════════════
+// 6. REDAÇÃO PARA CONCURSOS MILITARES (ESA, EEAR, EsPCEx, CN, EPCAr)
+// ═══════════════════════════════════════════════════════════════
+
+export interface RegraMilitar {
+  topico: string;
+  regra: string;
+  diferencaEnem: string;
+  exemploPratico: string;
+}
+
+export const DIFERENCAS_MILITAR_VS_ENEM: RegraMilitar[] = [
+  {
+    topico: 'Conclusão (O erro mais caro)',
+    regra: 'NUNCA faça proposta de intervenção social com agente/ação no modelo ENEM.',
+    diferencaEnem: 'No ENEM a proposta é obrigatória (C5 vale 200 pontos). Na banca militar (ESA, EEAR, EsPCEx, CN) propor intervenção social é considerado desvio temático ou perda de foco argumentativo.',
+    exemploPratico: 'Conclua por SÍNTESE ou DEDUÇÃO: retome a tese com novas palavras, sintetize os dois argumentos desenvolvidos e termine com uma reflexão conclusiva afirmativa e madura.',
+  },
+  {
+    topico: 'Título da Redação',
+    regra: 'O título é OBRIGATÓRIO na maioria dos editais militares (ESA, EEAR, EsPCEx).',
+    diferencaEnem: 'No ENEM o título é facultativo e não pontua. No concurso militar, omitir o título ou colocá-lo fora do centro da linha 1 desconta pontos preciosos ou desclassifica.',
+    exemploPratico: 'Centralize na Linha 1, sem aspas e sem ponto final (a menos que seja oração completa). Não pule linhas entre o título e a introdução.',
+  },
+  {
+    topico: 'Limite Rígido de Linhas',
+    regra: 'Mínimo de 20 linhas e máximo de 30 linhas (ou conforme edital específico).',
+    diferencaEnem: 'No ENEM o texto só é zerado com menos de 7 linhas. Na ESA e EEAR, redação com menos de 17 ou 20 linhas é sumariamente ANULADA (nota zero imediata).',
+    exemploPratico: 'Mire sempre entre 25 e 28 linhas: Introdução (5-6 linhas), D1 (7-8 linhas), D2 (7-8 linhas), Conclusão (5-6 linhas).',
+  },
+  {
+    topico: 'Rigor Vernáculo e Gramática',
+    regra: 'O desconto por desvios gramaticais é severo.',
+    diferencaEnem: 'No ENEM você pode errar até duas vezes na C1 sem perder ponto. Nas Forças Armadas, cada erro ortográfico, vírgula errada ou crase indevida desconta direto da nota final.',
+    exemploPratico: 'Evite períodos longos demais. Se uma frase passou de 3 linhas, divida-a com ponto e conectivo de transição (ex: "Dessarte,...", "Outrossim,...").',
+  },
+  {
+    topico: 'Tom e Postura Textual',
+    regra: 'Impessoalidade absoluta, sobriedade e maturidade cívica.',
+    diferencaEnem: 'Evite sentimentalismos, gírias ou postura panfletária/vitimista. Demonstre maturidade cívica, respeito aos valores republicanos e visão de Estado.',
+    exemploPratico: 'Prefira: "Torna-se imperativo reconhecer a relevância estratégica da soberania nacional..." a fórmulas emotivas como "É uma tristeza ver que nada muda".',
+  },
+];
+

@@ -6,6 +6,7 @@ import { aplicarLimite } from '@/lib/seguranca';
 export const dynamic = 'force-dynamic';
 
 const FORMATOS_AVATAR = new Set(['png', 'jpeg', 'jpg', 'webp', 'gif', 'avif']);
+const FORMATOS_AUDIO = new Set(['webm', 'mp4', 'ogg', 'opus', 'mp3', 'wav', 'aac', 'm4a', 'weba']);
 const FORMATOS_BANNER = new Set([
   'png',
   'jpeg',
@@ -26,7 +27,7 @@ const FORMATOS_BANNER = new Set([
  * Gera uma URL assinada para upload direto do navegador ao Supabase Storage.
  * Com isso:
  * 1. O arquivo binário NÃO passa pelo servidor Vercel (eliminando o limite de 4.5 MB no body).
- * 2. Suporta arquivos de vídeo de até 50 MB (ou mais) com streaming e progresso real.
+ * 2. Suporta arquivos de vídeo de até 50 MB e áudio comprimido de voz instantâneo.
  * 3. O banco de dados salva apenas a URL pública final (~100 bytes ao invés de megabytes em base64).
  */
 export async function POST(req: NextRequest) {
@@ -43,9 +44,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { tipo, nomeArquivo, contentType } = body;
 
-    if (tipo !== 'banner' && tipo !== 'avatar') {
+    if (tipo !== 'banner' && tipo !== 'avatar' && tipo !== 'audio-chat') {
       return NextResponse.json(
-        { success: false, error: 'Tipo de mídia inválido. Use "banner" ou "avatar".' },
+        { success: false, error: 'Tipo de mídia inválido. Use "banner", "avatar" ou "audio-chat".' },
         { status: 400 }
       );
     }
@@ -59,7 +60,12 @@ export async function POST(req: NextRequest) {
 
     // Extrair extensão
     const ext = nomeArquivo.split('.').pop()?.toLowerCase() || '';
-    const formatosPermitidos = tipo === 'avatar' ? FORMATOS_AVATAR : FORMATOS_BANNER;
+    const formatosPermitidos =
+      tipo === 'avatar'
+        ? FORMATOS_AVATAR
+        : tipo === 'audio-chat'
+        ? FORMATOS_AUDIO
+        : FORMATOS_BANNER;
 
     if (!formatosPermitidos.has(ext)) {
       return NextResponse.json(
@@ -72,13 +78,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Identificar tipo de mídia
-    const ehVideo = ['mp4', 'webm', 'mov', 'quicktime', 'm4v'].includes(ext) || String(contentType).startsWith('video/');
-    const ehGif = ext === 'gif' || contentType === 'image/gif';
-    const midiaTipo: 'video' | 'gif' | 'imagem' = ehVideo ? 'video' : ehGif ? 'gif' : 'imagem';
+    const ehAudio = tipo === 'audio-chat' || FORMATOS_AUDIO.has(ext) || String(contentType).startsWith('audio/');
+    const ehVideo = !ehAudio && (['mp4', 'webm', 'mov', 'quicktime', 'm4v'].includes(ext) || String(contentType).startsWith('video/'));
+    const ehGif = !ehAudio && (ext === 'gif' || contentType === 'image/gif');
+    const midiaTipo: 'video' | 'gif' | 'imagem' | 'audio' = ehAudio ? 'audio' : ehVideo ? 'video' : ehGif ? 'gif' : 'imagem';
 
     // Gerar caminho limpo e isolado por usuário
     const randomId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
-    const path = `${tipo}s/${user.id}/${Date.now()}-${randomId}.${ext}`;
+    const prefixoPasta = tipo === 'audio-chat' ? 'audios' : `${tipo}s`;
+    const path = `${prefixoPasta}/${user.id}/${Date.now()}-${randomId}.${ext}`;
 
     const supabase = createServerSupabaseClient();
 
@@ -99,6 +107,14 @@ export async function POST(req: NextRequest) {
           'video/webm',
           'video/quicktime',
           'video/x-m4v',
+          'audio/webm',
+          'audio/mp4',
+          'audio/ogg',
+          'audio/opus',
+          'audio/mpeg',
+          'audio/wav',
+          'audio/aac',
+          'audio/x-m4a',
         ],
       });
     }

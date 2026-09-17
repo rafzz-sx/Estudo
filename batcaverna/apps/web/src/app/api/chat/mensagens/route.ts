@@ -6,7 +6,7 @@ import {
   inteiroNaFaixa,
   limparTexto,
   uuidOuNulo,
-  validarDataUrlMidia,
+  validarMidiaUrl,
 } from '@/lib/seguranca';
 import {
   analisarMensagem,
@@ -112,7 +112,14 @@ async function participaDaConversa(
   supabase: SupabaseClient,
   conversaId: string,
   userId: string
-): Promise<{ participa: boolean; outroId: string | null; ehGrupo?: boolean }> {
+): Promise<{
+  participa: boolean;
+  outroId: string | null;
+  ehGrupo?: boolean;
+  amizade_id?: string | null;
+  user_id_a?: string | null;
+  user_id_b?: string | null;
+}> {
   const { data } = await supabase
     .from('conversas')
     .select('user_id_a, user_id_b, tipo, criador_id, amizade_id')
@@ -133,7 +140,14 @@ async function participaDaConversa(
         { onConflict: 'conversa_id,user_id' }
       ).then();
     }
-    return { participa: true, outroId, ehGrupo };
+    return {
+      participa: true,
+      outroId,
+      ehGrupo,
+      amizade_id: data.amizade_id,
+      user_id_a: data.user_id_a,
+      user_id_b: data.user_id_b,
+    };
   }
 
   // 2. Se for grupo, verificar na tabela de participantes
@@ -145,7 +159,14 @@ async function participaDaConversa(
       .eq('user_id', userId)
       .maybeSingle();
     if (part) {
-      return { participa: true, outroId: null, ehGrupo: true };
+      return {
+        participa: true,
+        outroId: null,
+        ehGrupo: true,
+        amizade_id: data.amizade_id,
+        user_id_a: data.user_id_a,
+        user_id_b: data.user_id_b,
+      };
     }
   }
 
@@ -257,9 +278,9 @@ export async function POST(req: NextRequest) {
     // com uma mensagem que entrega o nome do enum.
     const tipo = TIPOS_VALIDOS.has(body?.tipo) ? body.tipo : 'texto';
 
-    // A mídia chega como data URL e é gravada na própria linha.
+    // A mídia pode chegar como URL pública (Storage) ou data URL (legado)
     if (midia_url) {
-      const midia = validarDataUrlMidia(midia_url, {
+      const midia = validarMidiaUrl(midia_url, {
         permitirVideo: true,
         permitirAudio: true,
         maxBytes: MAX_MIDIA_CHAT,
@@ -285,33 +306,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Para conversas diretas, conferir se a amizade ainda está ativa. Grupos não têm amizade_id.
+    // Para conversas diretas, conferir se a amizade ainda está ativa. Reutiliza dados de acesso sem consulta redundante.
     if (!acesso.ehGrupo) {
       let amizadeValida = false;
-      const { data: convInfo } = await supabase
-        .from('conversas')
-        .select('amizade_id, user_id_a, user_id_b')
-        .eq('id', conversaId)
-        .maybeSingle();
+      const amizadeId = acesso.amizade_id;
+      const userIdA = acesso.user_id_a;
+      const userIdB = acesso.user_id_b;
 
-      if (convInfo?.amizade_id) {
+      if (amizadeId) {
         const { data: amizadeInfo } = await supabase
           .from('amizades')
           .select('status')
-          .eq('id', convInfo.amizade_id)
+          .eq('id', amizadeId)
           .maybeSingle();
 
         if (amizadeInfo && amizadeInfo.status === 'aceita') {
           amizadeValida = true;
         }
-      } else if (convInfo?.user_id_a && convInfo?.user_id_b) {
+      } else if (userIdA && userIdB) {
         // Fallback robusto: verifica se há amizade aceita entre os dois usuários
         const { data: amizadeInfo } = await supabase
           .from('amizades')
           .select('id, status')
           .or(
-            `and(user_id_solicitante.eq.${convInfo.user_id_a},user_id_destinatario.eq.${convInfo.user_id_b}),` +
-            `and(user_id_solicitante.eq.${convInfo.user_id_b},user_id_destinatario.eq.${convInfo.user_id_a})`
+            `and(user_id_solicitante.eq.${userIdA},user_id_destinatario.eq.${userIdB}),` +
+            `and(user_id_solicitante.eq.${userIdB},user_id_destinatario.eq.${userIdA})`
           )
           .eq('status', 'aceita')
           .maybeSingle();

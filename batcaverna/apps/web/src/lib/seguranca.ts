@@ -305,8 +305,8 @@ export function validarMidiaUrl(
   if (valor === null || valor === '') return { ok: true };
   if (typeof valor !== 'string') return { ok: false, erro: 'Formato inválido.' };
 
-  // URL HTTPS (ex: Supabase Storage ou CDN)
-  if (/^https:\/\//i.test(valor)) {
+  // URL HTTP(S) (ex: Supabase Storage ou CDN)
+  if (/^https?:\/\//i.test(valor)) {
     if (valor.length > 2048) {
       return { ok: false, erro: 'Endereço da mídia longo demais.' };
     }
@@ -314,8 +314,11 @@ export function validarMidiaUrl(
     const urlSemQuery = valor.split('?')[0];
     const ext = urlSemQuery.split('.').pop()?.toLowerCase() || '';
 
-    const ehVideo = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'quicktime'].includes(ext);
-    const ehAudio = ['mp3', 'ogg', 'wav', 'aac', 'm4a', 'weba', 'opus', 'flac', '3gp'].includes(ext);
+    const ehAudio =
+      ['mp3', 'ogg', 'wav', 'aac', 'm4a', 'weba', 'opus', 'flac', '3gp'].includes(ext) ||
+      valor.includes('/audios/') ||
+      (ext === 'webm' && !permitirVideo && permitirAudio);
+    const ehVideo = !ehAudio && ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'quicktime'].includes(ext);
     const ehGif = ext === 'gif';
 
     if (ehVideo && !permitirVideo) {
