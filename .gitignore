@@ -38,3 +38,6 @@ BANCO DE QUESTOES/
 
 # Antigravity awesome skills
 .agents/skills/
+
+# Binaries
+*.apk
