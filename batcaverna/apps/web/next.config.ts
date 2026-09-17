@@ -34,11 +34,10 @@ const headersSeguranca = [
     value: "strict-origin-when-cross-origin",
   },
   {
-    // Nenhuma página precisa de câmera, microfone, localização ou
-    // pagamento. Negar por padrão evita que um script de terceiro peça.
+    // Permite microfone e câmera para a própria plataforma (mensagens de voz no chat e envio de fotos).
     key: "Permissions-Policy",
     value:
-      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+      "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()",
   },
   {
     // Impede que outro site abra a BatCaverna numa janela e mantenha
@@ -63,8 +62,8 @@ const headersSeguranca = [
       // data: e blob: = avatar e banner, que são gravados como data URL
       "img-src 'self' data: blob: https://i.ytimg.com https://*.supabase.co",
       "font-src 'self' data:",
-      // archive.org = acervo de música em domínio público
-      "media-src 'self' data: blob: https://archive.org https://*.archive.org",
+      // archive.org = acervo de música; *.supabase.co = áudios e vídeos de mídia
+      "media-src 'self' data: blob: https://archive.org https://*.archive.org https://*.supabase.co",
       // youtube-nocookie = player das vídeo-aulas
       "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
       "connect-src 'self' https://*.supabase.co https://archive.org https://*.archive.org",

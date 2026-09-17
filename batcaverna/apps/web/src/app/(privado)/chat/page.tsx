@@ -239,8 +239,21 @@ export default function ChatPage() {
       return;
     }
 
+    let stream: MediaStream | null = null;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Tentar obter stream de áudio com fallbacks de constraints
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
       // Suporte multiplataforma a codecs (iOS, Safari, Android, Chrome)
       const codecs = [
@@ -253,10 +266,15 @@ export default function ChatPage() {
       ];
       const mimeType = codecs.find((c) => !c || (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c))) || "";
 
-      const options: MediaRecorderOptions = {};
-      if (mimeType) options.mimeType = mimeType;
+      let mediaRecorder: MediaRecorder;
+      try {
+        const options: MediaRecorderOptions = {};
+        if (mimeType) options.mimeType = mimeType;
+        mediaRecorder = new MediaRecorder(stream, options);
+      } catch {
+        mediaRecorder = new MediaRecorder(stream);
+      }
 
-      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -274,7 +292,9 @@ export default function ChatPage() {
         reader.onloadend = () => {
           setAudioUrlPreview(reader.result as string);
         };
-        stream.getTracks().forEach((track) => track.stop());
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
       };
 
       mediaRecorder.start();
@@ -287,6 +307,9 @@ export default function ChatPage() {
       }, 1000);
     } catch (err: any) {
       console.warn("Erro microfone:", err);
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
       let msg = "Permissão para microfone não concedida ou dispositivo indisponível.";
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
         msg = "O navegador bloqueou o acesso ao microfone. Para o navegador voltar a perguntar ou permitir: clique no ícone de cadeado/ajustes 🔒 ao lado de 'estudo-tan.vercel.app' na barra de endereço do navegador, mude 'Microfone' para 'Permitir' (ou 'Perguntar') e recarregue a página.";

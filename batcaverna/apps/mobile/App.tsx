@@ -10,6 +10,7 @@ import {
   BackHandler,
   Platform,
   Linking,
+  PermissionsAndroid,
 } from "react-native";
 import { WebView, WebViewNavigation } from "react-native-webview";
 
@@ -88,6 +89,16 @@ function BatCavernaApp() {
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorDetails, setErrorDetails] = useState("");
+
+  // ─── Solicitar permissões nativas de microfone e câmera no Android ──
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+      ]).catch(() => {});
+    }
+  }, []);
 
   // ─── Suporte ao Botão Físico de Voltar no Android ──────────────────
   useEffect(() => {
@@ -176,9 +187,12 @@ function BatCavernaApp() {
           ref={webViewRef}
           source={{ uri: PLATFORM_URL }}
           style={styles.webview}
+          mediaCapturePermissionGrantType="grant"
+          androidLayerType="hardware"
+          overScrollMode="never"
+          textZoom={100}
           javaScriptEnabled={true}
           domStorageEnabled={true}
-          databaseEnabled={true}
           sharedCookiesEnabled={true}
           thirdPartyCookiesEnabled={true}
           startInLoadingState={false}
