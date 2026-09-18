@@ -173,38 +173,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const bottomNavRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-  const startXRef = useRef(0);
-  const scrollLeftRef = useRef(0);
-  const hasDraggedRef = useRef(false);
-
   const bottomNavItems = userRole === "admin"
     ? [...bottomNavItemsBase, { href: "/admin", label: "Admin", icon: "🛡️" }]
     : bottomNavItemsBase;
-
-  // Handlers para permitir arrastar e deslizar livremente tanto com o dedo (touch) quanto com o mouse
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!bottomNavRef.current) return;
-    isDraggingRef.current = true;
-    startXRef.current = e.pageX - bottomNavRef.current.offsetLeft;
-    scrollLeftRef.current = bottomNavRef.current.scrollLeft;
-    hasDraggedRef.current = false;
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || !bottomNavRef.current) return;
-    const x = e.pageX - bottomNavRef.current.offsetLeft;
-    const distance = x - startXRef.current;
-    if (Math.abs(distance) > 6) {
-      hasDraggedRef.current = true;
-    }
-    bottomNavRef.current.scrollLeft = scrollLeftRef.current - distance;
-  };
-
-  const handlePointerUp = () => {
-    isDraggingRef.current = false;
-  };
 
   const handleLogout = async () => {
     try {
@@ -472,17 +443,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* ═══ BOTTOM NAVIGATION BAR MOBILE ROLÁVEL COM TODOS OS ATALHOS ═══ */}
       <nav
         aria-label="Navegação rápida móvel"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-1 py-1.5 select-none"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-1 py-1.5"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))" }}
       >
         <div
-          ref={bottomNavRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full px-2 cursor-grab active:cursor-grabbing"
+          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full px-2"
           style={{
             WebkitOverflowScrolling: "touch",
             touchAction: "pan-x",
@@ -502,24 +467,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                data-active={isActive ? "true" : undefined}
-                draggable={false}
-                onClick={(e) => {
-                  if (hasDraggedRef.current) {
-                    e.preventDefault();
-                    return;
-                  }
+                onClick={() => {
                   if (isConfig) setCurrentTab("config");
                   else if (isPerfil) setCurrentTab("");
                 }}
-                className={`flex flex-col items-center justify-center py-1.5 px-3.5 rounded-xl transition-all min-h-[48px] min-w-[68px] shrink-0 relative select-none touch-manipulation ${
+                className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-colors min-h-[48px] min-w-[66px] shrink-0 relative select-none ${
                   isActive
                     ? "text-bat-gold-400 font-bold bg-bat-gold-400/15 border border-bat-gold-400/30 shadow-xs glow-gold"
                     : "text-bat-text-secondary hover:text-bat-text hover:bg-bat-bg-elevated/40 border border-transparent"
                 }`}
               >
-                <span className="text-xl leading-none pointer-events-none">{item.icon}</span>
-                <span className="text-[10px] mt-1 whitespace-nowrap font-medium pointer-events-none">{item.label}</span>
+                <span className="text-xl leading-none">{item.icon}</span>
+                <span className="text-[10px] mt-1 whitespace-nowrap font-medium">{item.label}</span>
                 {item.contador === "revisoes" && revisoesPendentes > 0 && (
                   <span className="absolute top-1 right-1.5 min-w-4 h-4 rounded-full bg-bat-gold-400 px-1 text-center text-[9px] font-black text-black leading-4 flex items-center justify-center">
                     {revisoesPendentes > 99 ? "99+" : revisoesPendentes}

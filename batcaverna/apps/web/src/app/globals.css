@@ -323,3 +323,12 @@ body {
 .input-field::placeholder {
   color: #4A4A5A;
 }
+
+/* ─── Scrollbar invisível para esteiras horizontais ────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
