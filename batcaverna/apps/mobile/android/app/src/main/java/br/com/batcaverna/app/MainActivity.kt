@@ -144,34 +144,10 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.javaScriptCanOpenWindowsAutomatically = true
 
-        // Desabilitar scroll horizontal no WebView nativo
+        // Desabilitar barra nativa de scroll horizontal mas permitir rolagem de conteúdo web
         webView.isHorizontalScrollBarEnabled = false
         webView.isVerticalScrollBarEnabled = true
         webView.overScrollMode = View.OVER_SCROLL_NEVER
-
-        // ─── Bloquear arraste horizontal via Touch ─────────────────────────
-        var startX = 0f
-        var startY = 0f
-        webView.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = event.x
-                    startY = event.y
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = abs(event.x - startX)
-                    val dy = abs(event.y - startY)
-                    // Se o arraste é mais horizontal que vertical, bloqueia
-                    if (dx > dy && dx > 10) {
-                        true // Consumir o evento horizontal
-                    } else {
-                        false
-                    }
-                }
-                else -> false
-            }
-        }
 
         // Garante compatibilidade total de User-Agent com Chrome Mobile
         val defaultUA = settings.userAgentString

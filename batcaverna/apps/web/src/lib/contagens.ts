@@ -48,9 +48,10 @@ export interface FiltroContagem {
   materia_id?: string | null;
   ano?: number | null;
   area_conhecimento?: string | null;
+  incluir_anuladas?: boolean;
 }
 
-/** Conta questões ativas que casam com o filtro. */
+/** Conta questões ativas que casam com o filtro (excluindo anuladas pela banca por padrão). */
 export async function contarQuestoes(
   supabase: SupabaseClient,
   filtro: FiltroContagem = {}
@@ -58,6 +59,10 @@ export async function contarQuestoes(
   let query = supabase
     .from('questoes')
     .select('id', { count: 'exact', head: true });
+
+  if (!filtro.incluir_anuladas) {
+    query = query.or('anulada.is.null,anulada.eq.false');
+  }
 
   if (filtro.concurso_id) query = query.eq('concurso_id', filtro.concurso_id);
   if (filtro.materia_id) query = query.eq('materia_id', filtro.materia_id);
@@ -71,9 +76,10 @@ export async function contarQuestoes(
 }
 
 /**
- * Conta questões para uma lista de ids de forma otimizada.
- * Faz uma única query filtrada por IN(...) em vez de N requisições separadas,
- * reduzindo a latência da tela inicial em até 60%.
+ * Conta questões para uma lista de ids de forma precisa e sem limite de linhas.
+ * Executa contagens exatas em paralelo via count: 'exact', head: true,
+ * contornando o teto de 1.000 linhas do PostgREST que zerava contadores de matérias
+ * como Matemática e Inglês.
  * Devolve { [id]: total }.
  */
 export async function contarPorId(
@@ -84,41 +90,13 @@ export async function contarPorId(
 ): Promise<Record<string, number>> {
   if (!ids.length) return {};
 
-  try {
-    let query = supabase
-      .from('questoes')
-      .select(campo)
-      .in(campo, ids);
-
-    if (extra.concurso_id && campo !== 'concurso_id') query = query.eq('concurso_id', extra.concurso_id);
-    if (extra.materia_id && campo !== 'materia_id') query = query.eq('materia_id', extra.materia_id);
-    if (extra.ano) query = query.eq('ano', extra.ano);
-    if (extra.area_conhecimento) query = query.eq('area_conhecimento', extra.area_conhecimento);
-
-    const { data, error } = await query;
-    if (error || !data) throw error;
-
-    const contagens: Record<string, number> = {};
-    for (const id of ids) contagens[id] = 0;
-
-    for (const item of data as any[]) {
-      const chave = item[campo];
-      if (chave && contagens[chave] !== undefined) {
-        contagens[chave] += 1;
-      }
-    }
-
-    return contagens;
-  } catch {
-    // Fallback seguro caso ocorra algum erro no agrupamento
-    const resultados = await Promise.all(
-      ids.map(async (id) => {
-        const total = await contarQuestoes(supabase, { ...extra, [campo]: id });
-        return [id, total] as const;
-      })
-    );
-    return Object.fromEntries(resultados);
-  }
+  const resultados = await Promise.all(
+    ids.map(async (id) => {
+      const total = await contarQuestoes(supabase, { ...extra, [campo]: id });
+      return [id, total] as const;
+    })
+  );
+  return Object.fromEntries(resultados);
 }
 
 /**
@@ -140,6 +118,7 @@ export async function anosDisponiveis(
       .from('questoes')
       .select('ano')
       .not('ano', 'is', null)
+      .or('anulada.is.null,anulada.eq.false')
       .range(inicio, inicio + PAGINA - 1);
 
     if (concursoId) query = query.eq('concurso_id', concursoId);

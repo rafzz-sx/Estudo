@@ -106,6 +106,11 @@ export async function GET(req: NextRequest) {
         { count: 'exact' }
       );
 
+    // Exclui por padrão questões anuladas pela banca para os estudantes
+    if (searchParams.get('incluir_anuladas') !== '1') {
+      query = query.or('anulada.is.null,anulada.eq.false');
+    }
+
     if (concursoId) query = query.eq('concurso_id', concursoId);
     if (materiaId) query = query.eq('materia_id', materiaId);
 

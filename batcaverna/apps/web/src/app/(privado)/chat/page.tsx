@@ -203,15 +203,48 @@ export default function ChatPage() {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setMensagens((atuais) => {
-            // Evita re-render (e scroll indesejado) quando nada mudou.
-            if (
-              silencioso &&
-              atuais.length === json.data.length &&
-              atuais[atuais.length - 1]?.id === json.data[json.data.length - 1]?.id
-            ) {
-              return atuais;
+            // Preservar mensagens com envio otimista em andamento
+            const otimistas = atuais.filter((m) => m._otimista);
+
+            if (otimistas.length === 0) {
+              // Evita re-render (e scroll indesejado) quando nada mudou.
+              if (
+                silencioso &&
+                atuais.length === json.data.length &&
+                atuais[atuais.length - 1]?.id === json.data[json.data.length - 1]?.id
+              ) {
+                return atuais;
+              }
+              return json.data;
             }
-            return json.data;
+
+            // Se há mensagens otimistas pendentes:
+            // Anexar as que ainda não estão presentes na resposta do servidor
+            const serverIds = new Set(json.data.map((m: Mensagem) => m.id));
+            const pendentes = otimistas.filter((otimista) => {
+              if (serverIds.has(otimista.id)) return false;
+              // Se o servidor já retornou a mensagem salva correspondente
+              const jaChegou = json.data.some((servidor: Mensagem) => {
+                if (servidor.remetente?.id !== otimista.remetente?.id) return false;
+                if (servidor.tipo !== otimista.tipo) return false;
+                const diffTempo = Math.abs(
+                  new Date(servidor.enviado_em).getTime() - new Date(otimista.enviado_em).getTime()
+                );
+                if (diffTempo > 60000) return false;
+                if (otimista.tipo === "texto") return servidor.conteudo === otimista.conteudo;
+                return (
+                  servidor.midia_url === otimista.midia_url ||
+                  (diffTempo < 30000 && servidor.conteudo === otimista.conteudo)
+                );
+              });
+              return !jaChegou;
+            });
+
+            if (pendentes.length === 0) {
+              return json.data;
+            }
+
+            return [...json.data, ...pendentes];
           });
         }
       }
@@ -582,9 +615,16 @@ export default function ChatPage() {
         const json = await res.json();
         if (json.success && json.data) {
           // Substitui a mensagem temporária pela oficial retornada do banco
-          setMensagens((prev) =>
-            prev.map((m) => (m.id === tempId ? json.data : m))
-          );
+          setMensagens((prev) => {
+            const existeTemp = prev.some((m) => m.id === tempId);
+            if (existeTemp) {
+              return prev.map((m) => (m.id === tempId ? json.data : m));
+            }
+            if (!prev.some((m) => m.id === json.data.id)) {
+              return [...prev, json.data];
+            }
+            return prev;
+          });
         } else {
           throw new Error(json?.error || "Erro ao salvar mensagem.");
         }
