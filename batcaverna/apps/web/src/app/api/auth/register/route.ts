@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { aplicarLimite } from '@/lib/seguranca';
+import { aplicarLimite, aplicarLimiteAsync } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import {
   generateAccessToken,
@@ -31,12 +31,13 @@ function getSupabase() {
 // ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
-    // 5 cadastros a cada 10 min por IP: barra criacao de contas em massa.
-    const bloqueio = aplicarLimite(req, 'register', 5, 600);
-    if (bloqueio) return bloqueio;
-
     const body = await req.json();
     const { nome, apelido, email, senha, data_nascimento, concursos_interesse, aceite_termos } = body;
+
+    // 5 cadastros a cada 10 min por IP e e-mail: barra criação de contas em massa.
+    const emailNorm = email ? String(email).toLowerCase().trim() : undefined;
+    const bloqueio = await aplicarLimiteAsync(req, 'register', 5, 600, emailNorm);
+    if (bloqueio) return bloqueio;
 
     // ─── 1. Validações Blindadas ──────────────────────────────
     if (!nome?.trim() || !apelido?.trim() || !email?.trim() || !senha) {

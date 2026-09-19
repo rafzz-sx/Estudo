@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { limparTexto, uuidOuNulo } from '@/lib/seguranca';
+import { encriptarTexto, decriptarTexto } from '@/lib/cripto';
 
 /**
  * Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -77,7 +78,14 @@ export async function GET(
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data: mensagens || [] });
+    const formatadas = await Promise.all(
+      (mensagens || []).map(async (m: any) => ({
+        ...m,
+        conteudo: await decriptarTexto(m.conteudo),
+      }))
+    );
+
+    return NextResponse.json({ success: true, data: formatadas });
   } catch (error) {
     console.error('GET /api/tickets/[id]/mensagens error:', error);
     return NextResponse.json({ success: false, error: 'Erro ao buscar mensagens' }, { status: 500 });
@@ -118,14 +126,15 @@ export async function POST(
       );
     }
 
-    // Inserir mensagem
+    // Inserir mensagem criptografada em repouso
+    const textoCifrado = await encriptarTexto(texto);
     const { data: novaMsg, error: mErr } = await supabase
       .from('ticket_mensagens')
       .insert({
         ticket_id: ticketId,
         autor_id: user.id,
         autor_role: user.role === 'admin' ? 'admin' : 'usuario',
-        conteudo: texto,
+        conteudo: textoCifrado || texto,
       })
       .select('*')
       .single();
@@ -140,7 +149,13 @@ export async function POST(
         .eq('id', ticketId);
     }
 
-    return NextResponse.json({ success: true, data: novaMsg }, { status: 201 });
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...novaMsg,
+        conteudo: texto, // Devolve texto limpo para quem enviou
+      },
+    }, { status: 201 });
   } catch (error) {
     console.error('POST /api/tickets/[id]/mensagens error:', error);
     return NextResponse.json({ success: false, error: 'Erro ao enviar mensagem' }, { status: 500 });

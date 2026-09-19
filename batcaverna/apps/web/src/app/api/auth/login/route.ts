@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
-import { aplicarLimite } from '@/lib/seguranca';
+import { aplicarLimite, aplicarLimiteAsync } from '@/lib/seguranca';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -19,11 +19,6 @@ function getSupabase() {
 // ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
-    // 8 tentativas a cada 5 min por IP. Sem isso, dava para varrer
-    // senha por forca bruta na velocidade da rede.
-    const bloqueio = aplicarLimite(req, 'login', 8, 300);
-    if (bloqueio) return bloqueio;
-
     const body = await req.json();
     const { email, senha } = body;
 
@@ -34,23 +29,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 8 tentativas a cada 5 min por IP e e-mail (distribuído se Upstash configurado)
+    const emailNorm = email.toLowerCase().trim();
+    const bloqueio = await aplicarLimiteAsync(req, 'login', 8, 300, emailNorm);
+    if (bloqueio) return bloqueio;
+
     const supabase = getSupabase();
 
     // ─── Buscar usuário ───────────────────────────────────────
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email.toLowerCase().trim())
+      .eq('email', emailNorm)
       .single();
 
     if (error || !user) {
       // Log detalhado para diagnóstico (nunca exposto ao cliente)
       if (error) {
-        console.error('LOGIN DB ERROR for', email.toLowerCase().trim(), ':', error.code, error.message);
+        console.error('LOGIN DB ERROR for', emailNorm, ':', error.code, error.message);
       }
       return NextResponse.json(
         { success: false, error: 'E-mail ou senha incorretos' },
         { status: 401 }
+      );
+    }
+
+    // ─── Verificar se a conta está temporariamente bloqueada por força bruta ─
+    if (user.bloqueado_ate && new Date(user.bloqueado_ate) > new Date()) {
+      const msRestantes = new Date(user.bloqueado_ate).getTime() - Date.now();
+      const minRestantes = Math.max(1, Math.ceil(msRestantes / 60000));
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em ${minRestantes} minuto(s).`,
+        },
+        { status: 429 }
       );
     }
 
@@ -59,10 +72,36 @@ export async function POST(req: NextRequest) {
     // (PBKDF2 com sal). Comparação em tempo constante nos dois casos.
     const { ok, precisaRehash } = await verificarSenha(senha, user.senha_hash);
     if (!ok) {
+      // Registrar falha consecutiva no banco de dados para bloquear força bruta
+      try {
+        const novasFalhas = (user.tentativas_login_falhas || 0) + 1;
+        const updates: Record<string, any> = { tentativas_login_falhas: novasFalhas };
+        if (novasFalhas >= 5) {
+          // Bloqueia a conta por 15 minutos
+          updates.bloqueado_ate = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        }
+        await supabase.from('users').update(updates).eq('id', user.id);
+      } catch (e) {
+        // Se a coluna ainda não existir no banco, não quebra a resposta de erro
+        console.warn('Aviso ao registrar falha de login:', e);
+      }
+
       return NextResponse.json(
         { success: false, error: 'E-mail ou senha incorretos' },
         { status: 401 }
       );
+    }
+
+    // Login correto: limpar contador de falhas e desbloquear caso estivesse sujo
+    if (user.tentativas_login_falhas > 0 || user.bloqueado_ate) {
+      try {
+        await supabase
+          .from('users')
+          .update({ tentativas_login_falhas: 0, bloqueado_ate: null })
+          .eq('id', user.id);
+      } catch (e) {
+        console.warn('Aviso ao resetar falhas de login:', e);
+      }
     }
 
     // Migração transparente: quem entra com a senha certa sai daqui já no

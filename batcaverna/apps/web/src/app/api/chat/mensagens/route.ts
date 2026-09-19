@@ -15,6 +15,7 @@ import {
   trechoParaAlerta,
   type ResultadoModeracao,
 } from '@/lib/moderacao';
+import { encriptarTexto, decriptarTexto } from '@/lib/cripto';
 
 async function getUserFromRequest(
   req: NextRequest
@@ -221,23 +222,25 @@ export async function GET(req: NextRequest) {
     // Inverte para exibir em ordem cronológica as 50 mensagens mais recentes
     const ordenadas = (mensagens || []).reverse();
 
-    const formatadas = ordenadas.map((m: any) => ({
-      id: m.id,
-      conversa_id: m.conversa_id,
-      remetente_id: m.autor_id,
-      tipo: m.tipo,
-      conteudo: m.conteudo_texto,
-      midia_url: m.midia_url,
-      duracao_segundos: m.duracao_segundos,
-      enviado_em: m.enviado_em,
-      lida: m.lida,
-      sinalizada_para_revisao: m.sinalizada_para_revisao,
-      remetente: {
-        id: m.autor?.id,
-        apelido: m.autor?.apelido || 'Soldado',
-        avatar_url: m.autor?.avatar_url,
-      },
-    }));
+    const formatadas = await Promise.all(
+      ordenadas.map(async (m: any) => ({
+        id: m.id,
+        conversa_id: m.conversa_id,
+        remetente_id: m.autor_id,
+        tipo: m.tipo,
+        conteudo: await decriptarTexto(m.conteudo_texto),
+        midia_url: m.midia_url,
+        duracao_segundos: m.duracao_segundos,
+        enviado_em: m.enviado_em,
+        lida: m.lida,
+        sinalizada_para_revisao: m.sinalizada_para_revisao,
+        remetente: {
+          id: m.autor?.id,
+          apelido: m.autor?.apelido || 'Soldado',
+          avatar_url: m.autor?.avatar_url,
+        },
+      }))
+    );
 
     return NextResponse.json({
       success: true,
@@ -373,11 +376,14 @@ export async function POST(req: NextRequest) {
     let novaMsg: any = null;
     let mErr: any = null;
 
+    // Criptografa o texto da mensagem em repouso
+    const textoCifrado = textoFinal ? await encriptarTexto(textoFinal) : null;
+
     // Tentativa 1: Inserir com colunas estendidas de moderação
     const insertPayload: Record<string, any> = {
       conversa_id: conversaId,
       autor_id: user.id,
-      conteudo_texto: textoFinal,
+      conteudo_texto: textoCifrado,
       tipo,
       midia_url: midia_url || null,
       duracao_segundos: duracao,
@@ -408,7 +414,7 @@ export async function POST(req: NextRequest) {
           .insert({
             conversa_id: conversaId,
             autor_id: user.id,
-            conteudo_texto: textoFinal,
+            conteudo_texto: textoCifrado,
             tipo,
             midia_url: midia_url || null,
             duracao_segundos: duracao,
@@ -452,7 +458,7 @@ export async function POST(req: NextRequest) {
         conversa_id: novaMsg.conversa_id,
         remetente_id: novaMsg.autor_id,
         tipo: novaMsg.tipo,
-        conteudo: novaMsg.conteudo_texto,
+        conteudo: textoFinal, // O remetente recebe o texto original limpo
         midia_url: novaMsg.midia_url,
         duracao_segundos: novaMsg.duracao_segundos,
         enviado_em: novaMsg.enviado_em,

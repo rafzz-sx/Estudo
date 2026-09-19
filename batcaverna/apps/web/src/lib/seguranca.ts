@@ -149,9 +149,69 @@ export function ipDaRequisicao(req: Request): string {
 }
 
 /**
+ * Rate Limiting distribuído com suporte a Upstash Redis REST API
+ * e fallback transparente em memória local.
+ */
+export async function registrarTentativaDistribuida(
+  chave: string,
+  maxTentativas: number,
+  janelaSegundos: number
+): Promise<ResultadoLimite> {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+
+  // Se o Redis não estiver configurado, usa fallback em memória
+  if (!redisUrl || !redisToken) {
+    return registrarTentativa(chave, maxTentativas, janelaSegundos);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1200); // 1.2s timeout max
+
+    // Pipeline atômico: INCR + EXPIRE (se ainda não tem TTL)
+    const res = await fetch(`${redisUrl}/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${redisToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([
+        ['INCR', `rl:${chave}`],
+        ['EXPIRE', `rl:${chave}`, janelaSegundos, 'NX'],
+        ['TTL', `rl:${chave}`],
+      ]),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return registrarTentativa(chave, maxTentativas, janelaSegundos);
+    }
+
+    const data = await res.json();
+    // data = [{ result: contagem }, { result: 1 | 0 }, { result: ttl }]
+    const contagem = Number(data[0]?.result) || 1;
+    const ttl = Math.max(1, Number(data[2]?.result) || janelaSegundos);
+
+    const restantes = Math.max(0, maxTentativas - contagem);
+
+    return {
+      permitido: contagem <= maxTentativas,
+      restantes,
+      reiniciaEmSegundos: ttl,
+    };
+  } catch {
+    // Falhas de rede com o Redis nunca devem quebrar a aplicação
+    return registrarTentativa(chave, maxTentativas, janelaSegundos);
+  }
+}
+
+/**
  * Aplica o limite e devolve a resposta 429 pronta, ou null se pode seguir.
  *
- * Uso na rota:
+ * Uso síncrono na rota:
  *   const bloqueio = aplicarLimite(req, 'login', 8, 300);
  *   if (bloqueio) return bloqueio;
  */
@@ -159,10 +219,44 @@ export function aplicarLimite(
   req: Request,
   rotulo: string,
   maxTentativas: number,
-  janelaSegundos: number
+  janelaSegundos: number,
+  identificadorExtra?: string
 ): Response | null {
-  const chave = `${rotulo}:${ipDaRequisicao(req)}`;
+  const id = identificadorExtra ? `${ipDaRequisicao(req)}:${identificadorExtra}` : ipDaRequisicao(req);
+  const chave = `${rotulo}:${id}`;
   const r = registrarTentativa(chave, maxTentativas, janelaSegundos);
+
+  if (r.permitido) return null;
+
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: `Muitas tentativas. Tente de novo em ${r.reiniciaEmSegundos}s.`,
+    }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(r.reiniciaEmSegundos),
+        'X-RateLimit-Remaining': '0',
+      },
+    }
+  );
+}
+
+/**
+ * Versão assíncrona que prioriza Redis distribuído quando configurado
+ */
+export async function aplicarLimiteAsync(
+  req: Request,
+  rotulo: string,
+  maxTentativas: number,
+  janelaSegundos: number,
+  identificadorExtra?: string
+): Promise<Response | null> {
+  const id = identificadorExtra ? `${ipDaRequisicao(req)}:${identificadorExtra}` : ipDaRequisicao(req);
+  const chave = `${rotulo}:${id}`;
+  const r = await registrarTentativaDistribuida(chave, maxTentativas, janelaSegundos);
 
   if (r.permitido) return null;
 
