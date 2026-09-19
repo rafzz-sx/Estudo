@@ -11,8 +11,8 @@ android {
         applicationId 'br.com.batcaverna.app'
         minSdk 24
         targetSdk 34
-        versionCode 12
-        versionName "3.1.4"
+        versionCode 13
+        versionName "3.1.5"
     }
 
     signingConfigs {
@@ -43,6 +43,14 @@ android {
 
     kotlinOptions {
         jvmTarget = '17'
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            if (variant.buildType.name == 'debug') {
+                outputFileName = "batcaverna_${variant.versionName}.apk"
+            }
+        }
     }
 }
 

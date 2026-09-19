@@ -62,6 +62,7 @@ function AuthForm() {
   const user = useAuthStore((s) => s.user);
   const [tab, setTab] = useState<"login" | "cadastro">("login");
   const [mounted, setMounted] = useState(false);
+  const [mostrarSenhaLogin, setMostrarSenhaLogin] = useState(false);
 
   // Form login
   const [loginEmail, setLoginEmail] = useState("");
@@ -424,14 +425,29 @@ function AuthForm() {
             </div>
             <div>
               <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Senha</label>
-              <input
-                type="password"
-                value={loginSenha}
-                onChange={(e) => setLoginSenha(e.target.value)}
-                placeholder="••••••••"
-                className="input-field focus:!border-[#F5C518] focus:!ring-[#F5C518]/30"
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  type={mostrarSenhaLogin ? "text" : "password"}
+                  value={loginSenha}
+                  onChange={(e) => setLoginSenha(e.target.value)}
+                  placeholder="••••••••"
+                  className="input-field focus:!border-[#F5C518] focus:!ring-[#F5C518]/30 pr-11"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenhaLogin(!mostrarSenhaLogin)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-bat-text-muted hover:text-[#F5C518] transition-colors cursor-pointer p-0.5"
+                  tabIndex={-1}
+                  aria-label={mostrarSenhaLogin ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {mostrarSenhaLogin ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="text-right">
@@ -585,35 +601,55 @@ function AuthForm() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Senha</label>
-                <input
-                  type={mostrarSenha ? "text" : "password"}
-                  value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
-                  placeholder="••••••••"
-                  className="input-field"
-                />
+                <div className="relative">
+                  <input
+                    type={mostrarSenha ? "text" : "password"}
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    placeholder="••••••••"
+                    className="input-field pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSenha(!mostrarSenha)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-bat-text-muted hover:text-[#F5C518] transition-colors cursor-pointer p-0.5"
+                    tabIndex={-1}
+                    aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {mostrarSenha ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-bat-text-secondary text-sm mb-1.5 font-medium">Confirmar</label>
-                <input
-                  type={mostrarSenha ? "text" : "password"}
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                  placeholder="••••••••"
-                  className="input-field"
-                />
+                <div className="relative">
+                  <input
+                    type={mostrarSenha ? "text" : "password"}
+                    value={confirmarSenha}
+                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                    placeholder="••••••••"
+                    className="input-field pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSenha(!mostrarSenha)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-bat-text-muted hover:text-[#F5C518] transition-colors cursor-pointer p-0.5"
+                    tabIndex={-1}
+                    aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {mostrarSenha ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-
-            <label className="flex items-center gap-2 text-bat-text-muted text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={mostrarSenha}
-                onChange={() => setMostrarSenha(!mostrarSenha)}
-                className="accent-[#F5C518]"
-              />
-              Mostrar senhas
-            </label>
 
             {/* Seleção de concursos */}
             <div>
