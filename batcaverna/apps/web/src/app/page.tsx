@@ -249,6 +249,37 @@ export default function LandingPage() {
   const [depoimentos, setDepoimentos] = useState<any[]>([]);
   const [depoimentoAtual, setDepoimentoAtual] = useState(0);
 
+  // ─── Header sticky com fade profissional ─────────────────────
+  // O header some quando o logo "BatCaverna" do hero está visível
+  // e aparece suavemente ao rolar para baixo.
+  const heroBrandRef = useRef<HTMLDivElement>(null);
+  const [headerVisible, setHeaderVisible] = useState(false);
+  const [headerOpacity, setHeaderOpacity] = useState(0);
+
+  useEffect(() => {
+    const target = heroBrandRef.current;
+    if (!target) return;
+
+    // Usa threshold em múltiplos passos para calcular opacidade gradual
+    const thresholds = Array.from({ length: 21 }, (_, i) => i / 20);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // ratio = quanto do heroBrand está visível (1 = 100% visível)
+        const ratio = entry.intersectionRatio;
+        // Quando o brand está 100% visível, header opacity = 0
+        // Quando 0% visível, header opacity = 1
+        const opacity = 1 - ratio;
+        setHeaderOpacity(opacity);
+        setHeaderVisible(opacity > 0.05);
+      },
+      { threshold: thresholds }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [montado]);
+
   // Rota pública e landing page profissional: o visitante e o aluno sempre têm
   // acesso à página inicial. Se estiver autenticado, a interface destaca o acesso direto
   // ao Dashboard pelo Header e pelo Hero, sem nenhum redirecionamento forçado.
@@ -289,7 +320,14 @@ export default function LandingPage() {
       <SpotlightEffect />
 
       {/* ═══ HEADER / NAVBAR SUPERIOR PROFISSIONAL ═══ */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0B0B0F]/85 backdrop-blur-md border-b border-bat-border/60 transition-all duration-300">
+      <header
+        className="fixed top-0 left-0 right-0 z-50 bg-[#0B0B0F]/85 backdrop-blur-md border-b border-bat-border/60 transition-all duration-300"
+        style={{
+          opacity: headerOpacity,
+          pointerEvents: headerVisible ? "auto" : "none",
+          transform: `translateY(${headerVisible ? '0' : '-8px'})`,
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <Link href="/" className="no-underline flex items-center gap-2 hover:opacity-95 transition-opacity">
             <BatBrand iconSize={34} textSize="text-xl sm:text-2xl" />
@@ -299,7 +337,7 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-bat-text-secondary">
             <a href="#concursos" className="hover:text-bat-gold-400 transition-colors">Concursos</a>
             <a href="#bizus" className="hover:text-bat-gold-400 transition-colors">Bizus</a>
-            <a href="#metodologia" className="hover:text-bat-gold-400 transition-colors">Metodologia</a>
+            <a href="#depoimentos" className="hover:text-bat-gold-400 transition-colors">Depoimentos</a>
           </nav>
 
           {/* Ações / Status do Usuário */}
@@ -348,12 +386,14 @@ export default function LandingPage() {
             heroVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          {/* Logo + Nome (BatCaverna Oficial) */}
-          <BatBrand
-            iconSize={52}
-            textSize="text-3xl sm:text-5xl md:text-6xl"
-            className="mb-6 max-w-full"
-          />
+          {/* Logo + Nome (BatCaverna Oficial) — ref usado pelo IntersectionObserver */}
+          <div ref={heroBrandRef}>
+            <BatBrand
+              iconSize={52}
+              textSize="text-3xl sm:text-5xl md:text-6xl"
+              className="mb-6 max-w-full"
+            />
+          </div>
 
           {/* Slogan */}
           <p className="text-bat-text-secondary text-base sm:text-xl md:text-2xl max-w-2xl mx-auto mb-4 leading-relaxed px-2">
@@ -524,7 +564,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ SEÇÃO: DEPOIMENTOS / COMO A PLATAFORMA ENSINA ═══ */}
-      <section id="metodologia" className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
+      <section id="depoimentos" className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
           {depoimentos.length > 0 ? (
             <>
