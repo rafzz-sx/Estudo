@@ -9,6 +9,7 @@ import {
   ResolucaoGabarito,
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
+import { MathText } from "@/components/MathText";
 import { formatarCronometro } from "@batcaverna/utils";
 import {
   lerProvaSalva,
@@ -789,7 +790,7 @@ function Simulado() {
                 Texto base
               </p>
               <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                {q.texto_base}
+                <MathText>{q.texto_base}</MathText>
               </div>
             </div>
           )}
@@ -797,7 +798,7 @@ function Simulado() {
           <QuadroFigura descricao={q.figura_descricao} svg={q.figura_svg} />
 
           <p className="mb-6 whitespace-pre-line text-base leading-relaxed text-bat-text">
-            {q.enunciado}
+            <MathText>{q.enunciado}</MathText>
           </p>
 
           <div className="mb-6 space-y-3">
@@ -823,7 +824,7 @@ function Simulado() {
                   }`}
                 >
                   <span className="mt-px shrink-0 font-bold">{alt.letra})</span>
-                  <span className="whitespace-pre-line">{alt.texto}</span>
+                  <span className="whitespace-pre-line"><MathText>{alt.texto}</MathText></span>
                 </button>
               );
             })}
@@ -973,7 +974,7 @@ function Simulado() {
               <strong className="text-bat-gold-400">
                 Questão {revisando + 1}.
               </strong>{" "}
-              {resultado.detalhes[revisando].enunciado}
+              <MathText>{resultado.detalhes[revisando].enunciado}</MathText>
             </p>
             <ResolucaoGabarito
               respostaCorreta={resultado.detalhes[revisando].resposta_correta}

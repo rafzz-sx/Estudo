@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { QuadroFigura } from "./QuadroFigura";
 import { Distratores, type ExplicacaoAlternativa } from "./Distratores";
+import { MathText } from "@/components/MathText";
 
 export interface PassoResolucao {
   titulo: string;
@@ -123,11 +124,11 @@ export function ResolucaoGabarito({
                 {aberto && (
                   <div className="border-t border-bat-border/60 px-4 py-3 pl-14">
                     <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                      {passo.conteudo}
+                      <MathText>{passo.conteudo}</MathText>
                     </p>
                     {passo.formula && passo.formula !== passo.conteudo && (
                       <pre className="mt-3 overflow-x-auto rounded-lg border border-bat-gold-400/20 bg-black/40 px-3 py-2 font-mono text-sm text-bat-gold-400">
-                        {passo.formula}
+                        <MathText>{passo.formula}</MathText>
                       </pre>
                     )}
                   </div>
@@ -142,7 +143,7 @@ export function ResolucaoGabarito({
                 Ver o comentário oficial da banca
               </summary>
               <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                {explicacao}
+                <MathText>{explicacao}</MathText>
               </p>
             </details>
           )}
@@ -153,7 +154,7 @@ export function ResolucaoGabarito({
             Por que essa é a resposta
           </p>
           <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-            {explicacao}
+            <MathText>{explicacao}</MathText>
           </p>
         </div>
       ) : (

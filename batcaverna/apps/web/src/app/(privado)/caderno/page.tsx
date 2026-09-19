@@ -8,6 +8,7 @@ import {
   ResolucaoGabarito,
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
+import { MathText } from "@/components/MathText";
 
 interface QuestaoErrada {
   id: string;
@@ -248,7 +249,7 @@ export default function CadernoPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-2 text-sm text-bat-text-secondary">
-                            {q.enunciado}
+                            <MathText>{q.enunciado}</MathText>
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-bat-text-muted">
                             <span>
@@ -280,7 +281,7 @@ export default function CadernoPage() {
                                 Texto base
                               </p>
                               <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                                {q.texto_base}
+                                <MathText>{q.texto_base}</MathText>
                               </div>
                             </div>
                           )}
@@ -291,7 +292,7 @@ export default function CadernoPage() {
                           />
 
                           <p className="mb-4 whitespace-pre-line text-sm leading-relaxed text-bat-text">
-                            {q.enunciado}
+                            <MathText>{q.enunciado}</MathText>
                           </p>
 
                           <div className="mb-4 space-y-2">
@@ -306,7 +307,7 @@ export default function CadernoPage() {
                               >
                                 <span className="font-bold">{alt.letra})</span>
                                 <span className="whitespace-pre-line">
-                                  {alt.texto}
+                                  <MathText>{alt.texto}</MathText>
                                 </span>
                               </div>
                             ))}

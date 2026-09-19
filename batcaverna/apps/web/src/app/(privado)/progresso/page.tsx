@@ -11,6 +11,7 @@ import { calcularNivel } from "@batcaverna/utils";
 import { HistoricoSimulados } from "@/components/estudo/HistoricoSimulados";
 import { GraficoEvolucao } from "@/components/estudo/GraficoEvolucao";
 import { ComparacaoTurma } from "@/components/estudo/ComparacaoTurma";
+import { MathText } from "@/components/MathText";
 
 // ─── Barra de progresso XP ───────────────────────────────────
 function XpBar({ atual, proximo, nivel, titulo }: { atual: number; proximo: number; nivel: number; titulo: string }) {
@@ -356,7 +357,7 @@ export default function ProgressoPage() {
                 {questaoDoDia.assuntos?.nome ? ` · ${questaoDoDia.assuntos.nome}` : ""}
               </p>
               <p className="mb-4 line-clamp-4 text-sm leading-relaxed text-bat-text-secondary">
-                {questaoDoDia.enunciado}
+                <MathText>{questaoDoDia.enunciado}</MathText>
               </p>
               <Link
                 href={`/questoes?concurso=${questaoDoDia.concursos?.sigla ?? "todos"}`}

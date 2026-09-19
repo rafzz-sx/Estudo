@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/stores/auth-store";
 import { QuadroFigura } from "@/components/questoes/QuadroFigura";
+import { MathText } from "@/components/MathText";
 
 /**
  * Fila de contestações — onde os alunos dizem que a questão está errada.
@@ -266,7 +267,7 @@ export function PainelContestacoes() {
                       )}
                     </div>
                     <p className="line-clamp-2 text-sm text-bat-text">
-                      {g.questao.enunciado}
+                      <MathText>{g.questao.enunciado}</MathText>
                     </p>
                     <p className="mt-1 text-[11px] text-bat-text-muted">
                       gabarito atual <strong>{g.questao.resposta_correta}</strong>
@@ -306,7 +307,7 @@ export function PainelContestacoes() {
                                 : "text-bat-text-secondary"
                           }`}
                         >
-                          <strong>{a.letra})</strong> {a.texto}
+                          <strong>{a.letra})</strong> <MathText>{a.texto}</MathText>
                           {a.letra === g.questao.resposta_correta && " ← gabarito"}
                           {g.consenso &&
                             a.letra === g.consenso.letra &&

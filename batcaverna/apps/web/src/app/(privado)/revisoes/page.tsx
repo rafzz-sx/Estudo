@@ -8,6 +8,7 @@ import {
   ResolucaoGabarito,
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
+import { MathText } from "@/components/MathText";
 
 interface QuestaoRevisao {
   id: string;
@@ -235,7 +236,7 @@ export default function RevisoesPage() {
               Texto base
             </p>
             <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-              {questao.texto_base}
+              <MathText>{questao.texto_base}</MathText>
             </div>
           </div>
         )}
@@ -246,7 +247,7 @@ export default function RevisoesPage() {
         />
 
         <p className="mb-6 whitespace-pre-line text-base leading-relaxed text-bat-text">
-          {questao.enunciado}
+          <MathText>{questao.enunciado}</MathText>
         </p>
 
         <div className="mb-6 space-y-3">
@@ -276,7 +277,7 @@ export default function RevisoesPage() {
                 className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${estilo}`}
               >
                 <span className="mt-px shrink-0 font-bold">{alt.letra})</span>
-                <span className="whitespace-pre-line">{alt.texto}</span>
+                <span className="whitespace-pre-line"><MathText>{alt.texto}</MathText></span>
               </button>
             );
           })}

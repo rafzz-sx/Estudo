@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/stores/auth-store";
 import { QuadroFigura } from "@/components/questoes/QuadroFigura";
+import { MathText } from "@/components/MathText";
 
 /**
  * As duas filas de conteúdo de questão, no mesmo editor.
@@ -393,7 +394,7 @@ export function PainelResolucoes() {
                       )}
                     </div>
                     <p className="line-clamp-2 text-sm text-bat-text-secondary">
-                      {q.enunciado}
+                      <MathText>{q.enunciado}</MathText>
                     </p>
                   </div>
                   <span
@@ -412,7 +413,7 @@ export function PainelResolucoes() {
                     <div className="rounded-xl border border-bat-border bg-bat-bg-card p-4">
                       {q.texto_base && (
                         <div className="mb-3 max-h-40 overflow-y-auto border-l-2 border-bat-gold-400/40 pl-3 text-xs leading-relaxed text-bat-text-muted">
-                          {q.texto_base}
+                          <MathText>{q.texto_base}</MathText>
                         </div>
                       )}
                       <QuadroFigura
@@ -420,7 +421,7 @@ export function PainelResolucoes() {
                         svg={q.figura_svg}
                       />
                       <p className="mb-3 whitespace-pre-line text-sm text-bat-text">
-                        {q.enunciado}
+                        <MathText>{q.enunciado}</MathText>
                       </p>
                       <div className="space-y-1">
                         {q.alternativas?.map((a) => (
@@ -432,7 +433,7 @@ export function PainelResolucoes() {
                                 : "text-bat-text-secondary"
                             }`}
                           >
-                            <strong>{a.letra})</strong> {a.texto}
+                            <strong>{a.letra})</strong> <MathText>{a.texto}</MathText>
                             {a.letra === q.resposta_correta && " ✓ oficial"}
                           </p>
                         ))}

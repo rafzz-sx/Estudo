@@ -1,4 +1,5 @@
 "use client";
+import { MathText } from "@/components/MathText";
 
 /**
  * Explicação das alternativas erradas.
@@ -165,12 +166,12 @@ export function Distratores({
 
               {textoAlternativa && (
                 <p className="mb-1.5 text-xs italic text-bat-text-muted">
-                  "{textoAlternativa}"
+                  "<MathText>{textoAlternativa}</MathText>"
                 </p>
               )}
 
               <p className="text-sm leading-relaxed text-bat-text-secondary">
-                {info.texto}
+                <MathText>{info.texto}</MathText>
               </p>
             </div>
           );

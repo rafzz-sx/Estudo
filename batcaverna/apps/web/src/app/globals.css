@@ -324,11 +324,53 @@ body {
   color: #4A4A5A;
 }
 
-/* ─── Scrollbar invisível para esteiras horizontais ────────── */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ─── KaTeX — Adaptações pro tema escuro ───────────────────── */
+.katex {
+  color: inherit;
+  font-size: 1em;
+}
+
+.katex-display {
+  margin: 0.75em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+.katex-display > .katex {
+  text-align: center;
+}
+
+/* Fallback: expressões que não parsearam */
+.math-fallback-inline {
+  font-family: 'Courier New', monospace;
+  background: rgba(245, 197, 24, 0.1);
+  color: #F5C518;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.math-fallback-block {
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid rgba(245, 197, 24, 0.2);
+  border-radius: 8px;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.math-fallback-block code {
+  font-family: 'Courier New', monospace;
+  color: #F5C518;
+  font-size: 0.9em;
 }

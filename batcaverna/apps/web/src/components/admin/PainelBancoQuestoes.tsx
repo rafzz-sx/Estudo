@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/stores/auth-store";
 import { QuadroFigura } from "@/components/questoes/QuadroFigura";
+import { MathText } from "@/components/MathText";
 
 interface Alternativa {
   letra: string;
@@ -437,15 +438,17 @@ export function PainelBancoQuestoes() {
                     <span className="text-[10px] uppercase font-bold text-bat-gold-400 block mb-1">
                       Texto de Apoio:
                     </span>
-                    {q.texto_base}
+                    <MathText>{q.texto_base}</MathText>
                   </div>
                 )}
 
                 {/* Enunciado */}
                 <div className="text-xs sm:text-sm text-bat-text leading-relaxed font-sans">
-                  {expandida || q.enunciado.length <= 260
-                    ? q.enunciado
-                    : `${q.enunciado.slice(0, 260)}...`}
+                  <MathText>
+                    {expandida || q.enunciado.length <= 260
+                      ? q.enunciado
+                      : `${q.enunciado.slice(0, 260)}...`}
+                  </MathText>
                 </div>
 
                 {/* Imagem / Figura da Questão */}
@@ -481,7 +484,9 @@ export function PainelBancoQuestoes() {
                           >
                             {alt.letra}
                           </span>
-                          <span className="leading-snug">{alt.texto}</span>
+                          <span className="leading-snug">
+                            <MathText>{alt.texto}</MathText>
+                          </span>
                           {ehGabarito && (
                             <span className="ml-auto text-[10px] font-bold text-bat-gold-400 uppercase tracking-wider shrink-0">
                               ✓ Correta
@@ -500,7 +505,7 @@ export function PainelBancoQuestoes() {
                       <span>💡</span> Resolução & Gabarito Comentado:
                     </span>
                     <p className="text-bat-text leading-relaxed whitespace-pre-line">
-                      {q.explicacao}
+                      <MathText>{q.explicacao}</MathText>
                     </p>
                   </div>
                 )}
