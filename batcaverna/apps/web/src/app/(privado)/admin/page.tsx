@@ -15,6 +15,7 @@ import { PainelContestacoes } from "@/components/admin/PainelContestacoes";
 import { PainelContatos } from "@/components/admin/PainelContatos";
 import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
 import { PainelResetSenha } from "@/components/admin/PainelResetSenha";
+import { PainelBancoQuestoes } from "@/components/admin/PainelBancoQuestoes";
 
 /** Métricas da plataforma vindas de /api/admin/painel */
 interface MetricasPlataforma {
@@ -88,6 +89,7 @@ type AbaAdmin =
   | "moderacao"
   | "alertas"
   | "saude"
+  | "questoes"
   | "armazem"
   | "resolucoes"
   | "contestacoes"
@@ -110,6 +112,7 @@ interface ResumoFeedback {
 export default function AdminPage() {
   const { user } = useAuthStore();
   const [aba, setAba] = useState<AbaAdmin>("visao_geral");
+  const [categoriaDesktop, setCategoriaDesktop] = useState<"todas" | "monitoramento" | "soldados" | "seguranca" | "conteudo">("todas");
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
   const [resumoFeedback, setResumoFeedback] = useState<ResumoFeedback | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
@@ -448,6 +451,30 @@ export default function AdminPage() {
     return matchBusca && matchRole;
   });
 
+  if (user && user.role !== "admin") {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-bat-bg-card border border-bat-border rounded-3xl p-8 text-center space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="w-16 h-16 rounded-2xl bg-bat-error/10 border border-bat-error/30 text-3xl flex items-center justify-center mx-auto text-bat-error">
+            🦇
+          </div>
+          <h2 className="heading text-2xl text-bat-text">Acesso Restrito aos Guardiões</h2>
+          <p className="text-xs text-bat-text-secondary leading-relaxed">
+            Seu perfil militar está registrado como <strong>Soldado ({user.apelido})</strong>. Apenas membros do Alto Comando (Administradores) possuem acesso a esta central.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/dashboard"
+              className="btn-primary inline-flex py-2.5 px-6 text-xs font-bold"
+            >
+              Voltar à Central de Estudos
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ═══ CABEÇALHO ADMIN ═══ */}
@@ -509,6 +536,7 @@ export default function AdminPage() {
                aba === "alertas" ? "🚨" :
                aba === "contestacoes" ? "⚖️" :
                aba === "moderacao" ? "🛡️" :
+               aba === "questoes" ? "📚" :
                aba === "armazem" ? "📥" :
                aba === "resolucoes" ? "✍️" :
                aba === "teoria" ? "📝" :
@@ -533,6 +561,7 @@ export default function AdminPage() {
                  aba === "alertas" ? "Moderação & Denúncias" :
                  aba === "contestacoes" ? "Contestações de Questões" :
                  aba === "moderacao" ? "Chat & Palavras Ofensivas" :
+                 aba === "questoes" ? "Banco de Questões" :
                  aba === "armazem" ? "Importar Questões" :
                  aba === "resolucoes" ? "Resoluções Comentadas" :
                  aba === "teoria" ? "Lacunas de Teoria" :
@@ -786,6 +815,7 @@ export default function AdminPage() {
                 </p>
                 <div className="grid grid-cols-1 gap-2">
                   {[
+                    { key: "questoes", label: "Banco de Questões", icone: "📚", desc: "Pesquisa, filtros, edição e anulação" },
                     { key: "armazem", label: "Importar Questões", icone: "📥", desc: "Carga em lote e IA de questões" },
                     { key: "resolucoes", label: "Resoluções Comentadas", icone: "✍️", desc: "Gabaritos e comentários" },
                     { key: "teoria", label: "Lacunas de Teoria", icone: "📝", desc: "Resumos e tópicos de aula" },
@@ -834,50 +864,100 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Desktop: Grid/Flex de Abas Clássicas com Badges */}
-      <div className="hidden sm:block w-full">
-        <div className="flex flex-wrap gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-xl w-full">
+      {/* Desktop: Centro de Comando Categorizado com Alta Densidade */}
+      <div className="hidden sm:block w-full space-y-2">
+        {/* Barra Superior de Categorias Táticas */}
+        <div className="flex items-center gap-1.5 bg-bat-bg-card border border-bat-border p-1.5 rounded-2xl">
           {[
-            { key: "visao_geral", label: "📊 Visão Geral", badge: 0 },
-            { key: "online", label: "🟢 Online Agora", badge: metricas?.online_agora ?? 0 },
-            { key: "usuarios", label: "👥 Contas", badge: 0 },
-            { key: "tickets", label: "🎫 Tickets", badge: tickets.filter((t) => t.status === "aberto").length },
-            { key: "alertas", label: "🚨 Moderação", badge: contadoresAbas.moderacao_pendentes },
-            { key: "saude", label: "🩺 Diagnóstico", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0 },
-            { key: "moderacao", label: "🛡️ Chat", badge: 0 },
-            { key: "armazem", label: "📥 Importar", badge: 0 },
-            { key: "resolucoes", label: "✍️ Resolução", badge: 0 },
-            { key: "contestacoes", label: "⚖️ Contestações", badge: contadoresAbas.contestacoes_abertas },
-            { key: "teoria", label: "📝 Teoria", badge: 0 },
-            { key: "sessoes", label: "⏳ Sessões", badge: 0 },
-            { key: "avisos", label: "📢 Aviso", badge: 0 },
-            { key: "feedback", label: "💬 Feedback", badge: resumoFeedback?.nao_lidos ?? 0 },
-            { key: "contatos", label: "📨 Contato", badge: contadoresAbas.contatos_nao_lidos },
-            { key: "reset_senha", label: "🔑 Senhas", badge: contadoresAbas.reset_pendentes },
-            { key: "auditoria", label: "📝 Auditoria", badge: 0 },
-            { key: "banners", label: "🖼️ Banners", badge: 0 },
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => trocarAba(item.key as AbaAdmin)}
-              className={`relative px-3.5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
-                aba === item.key
-                  ? "bg-bat-gold-400 text-black shadow-[0_0_12px_rgba(245,197,24,0.3)]"
-                  : "text-bat-text-muted hover:text-bat-text hover:bg-bat-bg-elevated/50"
-              }`}
-            >
-              {item.label}
-              {item.badge > 0 && (
-                <span className={`absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-extrabold ${
+            { id: "todas", label: "⚡ Todas as Abas", icone: "⚡" },
+            { id: "monitoramento", label: "Monitoramento", icone: "📊", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0, badgeCor: "bg-bat-error" },
+            { id: "soldados", label: "Soldados & Suporte", icone: "👥", badge: tickets.filter((t) => t.status === "aberto").length + (resumoFeedback?.nao_lidos ?? 0) + contadoresAbas.contatos_nao_lidos + contadoresAbas.reset_pendentes },
+            { id: "seguranca", label: "Segurança & Moderação", icone: "🛡️", badge: contadoresAbas.moderacao_pendentes, badgeCor: "bg-bat-error" },
+            { id: "conteudo", label: "Conteúdo & Questões", icone: "📚", badge: contadoresAbas.contestacoes_abertas },
+          ].map((cat) => {
+            const ativa = categoriaDesktop === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setCategoriaDesktop(cat.id as any)}
+                className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  ativa
+                    ? "bg-bat-gold-400 text-black shadow-md shadow-bat-gold-400/20"
+                    : "text-bat-text-secondary hover:text-bat-text hover:bg-bat-bg-primary"
+                }`}
+              >
+                <span>{cat.icone}</span>
+                <span>{cat.label}</span>
+                {cat.badge && cat.badge > 0 ? (
+                  <span
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
+                      ativa ? "bg-black text-bat-gold-400" : cat.badgeCor || "bg-bat-gold-400/90 text-black"
+                    }`}
+                  >
+                    {cat.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sub-Abas Específicas da Categoria */}
+        <div className="flex flex-wrap gap-1.5 bg-bat-bg-primary/90 border border-bat-border/80 p-2 rounded-xl w-full shadow-inner">
+          {[
+            // Monitoramento
+            { key: "visao_geral", label: "📊 Visão Geral", cat: "monitoramento", badge: 0 },
+            { key: "online", label: "🟢 Online Agora", cat: "monitoramento", badge: metricas?.online_agora ?? 0 },
+            { key: "saude", label: "🩺 Diagnóstico", cat: "monitoramento", badge: resumoSaude && !resumoSaude.saudavel ? resumoSaude.problemas_criticos : 0, badgeCor: "bg-bat-error" },
+            { key: "sessoes", label: "⏳ Sessões de Estudo", cat: "monitoramento", badge: 0 },
+
+            // Soldados & Suporte
+            { key: "usuarios", label: "👥 Contas & Moderação", cat: "soldados", badge: 0 },
+            { key: "tickets", label: "🎫 Tickets de Alunos", cat: "soldados", badge: tickets.filter((t) => t.status === "aberto").length },
+            { key: "feedback", label: "💬 Feedback", cat: "soldados", badge: resumoFeedback?.nao_lidos ?? 0 },
+            { key: "contatos", label: "📨 Fale Conosco", cat: "soldados", badge: contadoresAbas.contatos_nao_lidos },
+            { key: "reset_senha", label: "🔑 Redefinição de Senha", cat: "soldados", badge: contadoresAbas.reset_pendentes },
+
+            // Segurança & Moderação
+            { key: "alertas", label: "🚨 Moderação & Denúncias", cat: "seguranca", badge: contadoresAbas.moderacao_pendentes, badgeCor: "bg-bat-error" },
+            { key: "moderacao", label: "🛡️ Chat & Ofensas", cat: "seguranca", badge: 0 },
+            { key: "auditoria", label: "📝 Auditoria & Logs", cat: "seguranca", badge: 0 },
+
+            // Conteúdo & Questões
+            { key: "questoes", label: "📚 Banco de Questões", cat: "conteudo", badge: 0 },
+            { key: "armazem", label: "📥 Importar Questões", cat: "conteudo", badge: 0 },
+            { key: "resolucoes", label: "✍️ Resoluções Comentadas", cat: "conteudo", badge: 0 },
+            { key: "contestacoes", label: "⚖️ Contestações", cat: "conteudo", badge: contadoresAbas.contestacoes_abertas },
+            { key: "teoria", label: "📝 Lacunas de Teoria", cat: "conteudo", badge: 0 },
+            { key: "avisos", label: "📢 Mural de Avisos", cat: "conteudo", badge: 0 },
+            { key: "banners", label: "🖼️ Banners", cat: "conteudo", badge: 0 },
+          ]
+            .filter((item) => categoriaDesktop === "todas" || item.cat === categoriaDesktop)
+            .map((item) => (
+              <button
+                key={item.key}
+                onClick={() => trocarAba(item.key as AbaAdmin)}
+                className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
                   aba === item.key
-                    ? "bg-black text-bat-gold-400"
-                    : "bg-bat-error text-white"
-                }`}>
-                  {item.badge > 99 ? "99+" : item.badge}
-                </span>
-              )}
-            </button>
-          ))}
+                    ? "bg-bat-gold-400 text-black shadow-[0_0_12px_rgba(245,197,24,0.35)]"
+                    : "text-bat-text-muted hover:text-bat-text hover:bg-bat-bg-elevated/60"
+                }`}
+              >
+                {item.label}
+                {item.badge > 0 && (
+                  <span
+                    className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
+                      aba === item.key
+                        ? "bg-black text-bat-gold-400"
+                        : (item as any).badgeCor || "bg-bat-error text-white"
+                    }`}
+                  >
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -933,6 +1013,117 @@ export default function AdminPage() {
                 {metricas ? metricas.tickets_abertos : tickets.filter((t) => t.status === "aberto").length}
               </p>
               <p className="text-bat-text-muted text-xs mt-1">Aguardando atendimento</p>
+            </div>
+          </div>
+
+          {/* ═══ CENTRO DE AÇÕES IMEDIATAS & PENDÊNCIAS ═══ */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-4 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="heading text-lg text-bat-text flex items-center gap-2">
+                  <span>⚡</span> Centro de Ações Imediatas
+                </h3>
+                <p className="text-xs text-bat-text-secondary">
+                  Demandas abertas que exigem tomada de decisão e resposta do Alto Comando.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono text-bat-gold-400 bg-bat-gold-400/10 px-2.5 py-1 rounded-lg border border-bat-gold-400/20">
+                Acesso Direto
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              {/* Tickets */}
+              <button
+                type="button"
+                onClick={() => trocarAba("tickets")}
+                className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary/70 hover:border-bat-gold-400/50 text-left transition-all cursor-pointer group hover:bg-bat-bg-elevated/40"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">🎫</span>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                    tickets.filter((t) => t.status === "aberto").length > 0
+                      ? "bg-bat-error text-white"
+                      : "bg-bat-success/20 text-bat-success"
+                  }`}>
+                    {tickets.filter((t) => t.status === "aberto").length} abertos
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  Tickets de Atendimento
+                </p>
+                <p className="text-[10px] text-bat-text-muted mt-0.5">
+                  Dúvidas e chamados de soldados
+                </p>
+              </button>
+
+              {/* Contestações */}
+              <button
+                type="button"
+                onClick={() => trocarAba("contestacoes")}
+                className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary/70 hover:border-bat-gold-400/50 text-left transition-all cursor-pointer group hover:bg-bat-bg-elevated/40"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">⚖️</span>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                    contadoresAbas.contestacoes_abertas > 0
+                      ? "bg-amber-500 text-black font-extrabold"
+                      : "bg-bat-success/20 text-bat-success"
+                  }`}>
+                    {contadoresAbas.contestacoes_abertas} abertas
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  Recursos de Questões
+                </p>
+                <p className="text-[10px] text-bat-text-muted mt-0.5">
+                  Contestações com consenso de erro
+                </p>
+              </button>
+
+              {/* Moderação */}
+              <button
+                type="button"
+                onClick={() => trocarAba("alertas")}
+                className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary/70 hover:border-bat-gold-400/50 text-left transition-all cursor-pointer group hover:bg-bat-bg-elevated/40"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">🚨</span>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                    contadoresAbas.moderacao_pendentes > 0
+                      ? "bg-bat-error text-white"
+                      : "bg-bat-success/20 text-bat-success"
+                  }`}>
+                    {contadoresAbas.moderacao_pendentes} alertas
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  Moderação & Denúncias
+                </p>
+                <p className="text-[10px] text-bat-text-muted mt-0.5">
+                  Alertas críticos e conduta
+                </p>
+              </button>
+
+              {/* Banco de Questões */}
+              <button
+                type="button"
+                onClick={() => trocarAba("questoes")}
+                className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary/70 hover:border-bat-gold-400/50 text-left transition-all cursor-pointer group hover:bg-bat-bg-elevated/40"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">📚</span>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30">
+                    {metricas ? metricas.total_questoes.toLocaleString("pt-BR") : "2.896"} ativas
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-bat-text group-hover:text-bat-gold-400 transition-colors">
+                  Banco de Questões
+                </p>
+                <p className="text-[10px] text-bat-text-muted mt-0.5">
+                  Pesquisar, auditar e anular
+                </p>
+              </button>
             </div>
           </div>
 
@@ -1548,6 +1739,9 @@ export default function AdminPage() {
           </p>
         </div>
       )}
+
+      {/* ═══ TAB: BANCO DE QUESTÕES (NOVO) ═══ */}
+      {aba === "questoes" && <PainelBancoQuestoes />}
 
       {/* ═══ TAB: SESSÕES & LOGINS ═══ */}
       {aba === "resolucoes" && <PainelResolucoes />}

@@ -72,6 +72,12 @@ def publicavel(q: dict) -> tuple[bool, str]:
     o aluno não tem como resolver é pior que questão ausente — ela quebra a
     confiança no banco inteiro.
     """
+    if q.get("anulada"):
+        return False, "questão anulada"
+
+    if "INCOMPLETA" in (q.get("enunciado") or "").upper():
+        return False, "questão incompleta"
+
     if not q.get("resposta_correta"):
         return False, "sem gabarito"
 
