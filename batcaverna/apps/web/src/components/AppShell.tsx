@@ -182,7 +182,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       await fetchWithAuth("/api/auth/logout", { method: "POST" });
     } catch {}
     logout();
-    router.push("/auth");
+    window.location.href = "/";
   };
 
   // Há faixa carregada no player? O <main> usa isto para abrir espaço.

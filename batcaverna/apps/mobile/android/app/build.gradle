@@ -11,8 +11,8 @@ android {
         applicationId 'br.com.batcaverna.app'
         minSdk 24
         targetSdk 34
-        versionCode 13
-        versionName "3.1.5"
+        versionCode 14
+        versionName "3.1.6"
     }
 
     signingConfigs {

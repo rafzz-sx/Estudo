@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { BatLogo, BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -250,17 +249,9 @@ export default function LandingPage() {
   const [depoimentos, setDepoimentos] = useState<any[]>([]);
   const [depoimentoAtual, setDepoimentoAtual] = useState(0);
 
-  const router = useRouter();
-
-  // Login persistente: se o aluno já está autenticado, vai direto para
-  // a plataforma — não precisa ver a landing de marketing.
-  useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
-      return;
-    }
-  }, [user, router]);
-
+  // Rota pública e landing page profissional: o visitante e o aluno sempre têm
+  // acesso à página inicial. Se estiver autenticado, a interface destaca o acesso direto
+  // ao Dashboard pelo Header e pelo Hero, sem nenhum redirecionamento forçado.
   useEffect(() => {
     setMontado(true);
     setTimeout(() => setHeroVisible(true), 100);
@@ -297,8 +288,57 @@ export default function LandingPage() {
     <main className="relative min-h-screen overflow-hidden">
       <SpotlightEffect />
 
+      {/* ═══ HEADER / NAVBAR SUPERIOR PROFISSIONAL ═══ */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0B0B0F]/85 backdrop-blur-md border-b border-bat-border/60 transition-all duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+          <Link href="/" className="no-underline flex items-center gap-2 hover:opacity-95 transition-opacity">
+            <BatBrand iconSize={34} textSize="text-xl sm:text-2xl" />
+          </Link>
+
+          {/* Links Centrais (Desktop) */}
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-bat-text-secondary">
+            <a href="#concursos" className="hover:text-bat-gold-400 transition-colors">Concursos</a>
+            <a href="#bizus" className="hover:text-bat-gold-400 transition-colors">Bizus</a>
+            <a href="#metodologia" className="hover:text-bat-gold-400 transition-colors">Metodologia</a>
+          </nav>
+
+          {/* Ações / Status do Usuário */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {estaLogado ? (
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden sm:inline-block text-xs font-semibold text-bat-text-muted">
+                  Soldado <span className="text-bat-gold-400 font-bold">{user?.apelido || user?.nome?.split(" ")[0]}</span>
+                </span>
+                <Link
+                  href="/dashboard"
+                  className="py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold text-black bg-gradient-to-r from-[#F5C518] via-[#FFD700] to-[#EAB308] rounded-xl hover:shadow-[0_0_20px_rgba(245,197,24,0.45)] transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <span>Painel</span>
+                  <span>⚡</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Link
+                  href="/auth"
+                  className="py-2 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-bat-text hover:text-bat-gold-400 transition-colors"
+                >
+                  Entrar
+                </Link>
+                <Link
+                  href="/auth?tab=cadastro"
+                  className="py-2 px-3.5 sm:px-5 text-xs sm:text-sm font-bold text-black bg-gradient-to-r from-[#F5C518] via-[#FFD700] to-[#EAB308] rounded-xl hover:shadow-[0_0_20px_rgba(245,197,24,0.4)] transition-all active:scale-95"
+                >
+                  Criar conta
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
       {/* ═══ HERO SECTION ═══ */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6">
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-24 sm:pt-28 pb-12">
         <ParticleBackground />
         <div className="fog-layer" />
 
@@ -334,12 +374,20 @@ export default function LandingPage() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             {estaLogado ? (
-              <Link
-                href="/dashboard"
-                className="btn-primary text-lg px-10 py-4 inline-block no-underline shadow-[0_0_20px_rgba(245,197,24,0.35)]"
-              >
-                Ir para a BatCaverna ⚡
-              </Link>
+              <>
+                <Link
+                  href="/dashboard"
+                  className="btn-primary text-lg px-10 py-4 inline-block no-underline shadow-[0_0_20px_rgba(245,197,24,0.35)]"
+                >
+                  Entrar na BatCaverna ⚡
+                </Link>
+                <a
+                  href="#concursos"
+                  className="btn-secondary text-lg px-8 py-4 inline-block no-underline"
+                >
+                  Explorar Concursos
+                </a>
+              </>
             ) : (
               <>
                 <Link href="/auth" className="btn-primary text-lg px-10 py-4 inline-block no-underline">
@@ -365,7 +413,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ SEÇÃO: CONCURSOS ATENDIDOS ═══ */}
-      <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
+      <section id="concursos" className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
             <span className="text-bat-gold-400">9 concursos</span> em uma só plataforma
@@ -446,7 +494,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ SEÇÃO: BIZUS EM DESTAQUE ═══ */}
-      <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6 bg-bat-bg-secondary/50">
+      <section id="bizus" className="relative z-10 py-20 sm:py-28 px-4 sm:px-6 bg-bat-bg-secondary/50">
         <div className="max-w-6xl mx-auto">
           <h2 className="heading text-3xl sm:text-4xl text-center mb-4">
             <span className="text-bat-gold-400">Bizus</span> em destaque
@@ -476,7 +524,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ SEÇÃO: DEPOIMENTOS / COMO A PLATAFORMA ENSINA ═══ */}
-      <section className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
+      <section id="metodologia" className="relative z-10 py-20 sm:py-28 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
           {depoimentos.length > 0 ? (
             <>
