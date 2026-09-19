@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { uuidOuNulo, limparTexto } from '@/lib/seguranca';
+import { decriptarTexto } from '@/lib/cripto';
 
 /**
  * Fila de moderação do chat.
@@ -61,10 +62,18 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    // Decripta conteúdo das mensagens cifradas (AES-256-GCM) para o moderador ler
+    const mensagensDecriptadas = await Promise.all(
+      (data ?? []).map(async (m: any) => ({
+        ...m,
+        conteudo_texto: await decriptarTexto(m.conteudo_texto),
+      }))
+    );
+
     // Ordena por gravidade no servidor: 'critica' < 'alta' em ordem
     // alfabética, então deixar isso para o banco colocaria "alta" na frente
     // de "crítica" — exatamente ao contrário.
-    const fila = (data ?? []).sort((a: any, b: any) => {
+    const fila = mensagensDecriptadas.sort((a: any, b: any) => {
       const peso = (PESO[b.gravidade_moderacao] ?? 0) - (PESO[a.gravidade_moderacao] ?? 0);
       if (peso !== 0) return peso;
       return new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime();

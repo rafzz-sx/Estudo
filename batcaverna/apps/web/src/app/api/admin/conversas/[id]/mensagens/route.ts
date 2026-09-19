@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { decriptarTexto } from '@/lib/cripto';
 
 async function getAdminFromRequest(req: NextRequest) {
   // Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -28,9 +29,16 @@ export async function GET(
 
     if (error) throw error;
 
+    const formatadas = await Promise.all(
+      (mensagens || []).map(async (m: any) => ({
+        ...m,
+        conteudo_texto: await decriptarTexto(m.conteudo_texto),
+      }))
+    );
+
     return NextResponse.json({
       success: true,
-      data: mensagens || [],
+      data: formatadas,
     });
   } catch (error) {
     console.error('GET /api/admin/conversas/[id]/mensagens error:', error);
