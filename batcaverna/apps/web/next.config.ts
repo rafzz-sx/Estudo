@@ -87,6 +87,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // Habilita compressão gzip/brotli automática para diminuir tamanho de transferência
+  compress: true,
+
   async headers() {
     return [
       {
@@ -95,13 +98,42 @@ const nextConfig: NextConfig = {
         headers: headersSeguranca,
       },
       {
-        // Resposta de API nunca deve ficar em cache de proxy: o conteúdo
-        // é por usuário e vazaria para o próximo visitante.
+        // Padrão de segurança: rotas de API são privadas e não cacheadas por padrão
         source: "/api/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "no-store, no-cache, must-revalidate, private",
+          },
+        ],
+      },
+      {
+        // Catálogo público de concursos: raramente muda. Cache no navegador por 5 min e Edge por 1 hora.
+        source: "/api/concursos",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        // Filtros de questões (matérias/anos): dados de catálogo públicos
+        source: "/api/questoes/filtros",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        ],
+      },
+      {
+        // Versão do aplicativo: cache leve de 60 segundos
+        source: "/api/app-info",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
           },
         ],
       },

@@ -1,0 +1,34 @@
+name: BatCaverna Anti-Pausa 24/7 Guardian
+
+on:
+  schedule:
+    # Executa a cada 3 dias às 08:00 UTC (05:00 Horário de Brasília)
+    # Impede com folga a janela de 7 dias de inatividade do plano gratuito
+    - cron: '0 8 */3 * *'
+  workflow_dispatch: # Permite disparo manual com 1 clique pelo GitHub
+
+jobs:
+  keepalive-ping:
+    name: Ping Database & Platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Executar Ping no Health Check da BatCaverna
+        run: |
+          echo "Disparando Guardião Anti-Pausa..."
+          RESPOSTA=$(curl -s -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}" "https://estudo-tan.vercel.app/api/health")
+          
+          CORPO=$(echo "$RESPOSTA" | grep -v -E "HTTP_STATUS|TIME_TOTAL")
+          STATUS=$(echo "$RESPOSTA" | grep "HTTP_STATUS" | cut -d':' -f2)
+          TEMPO=$(echo "$RESPOSTA" | grep "TIME_TOTAL" | cut -d':' -f2)
+          
+          echo "Status retornado: $STATUS (em ${TEMPO}s)"
+          echo "Resposta: $CORPO"
+          
+          if [ "$STATUS" -ne 200 ]; then
+            echo "ALERTA: O banco de dados retornou status $STATUS. Verifique a plataforma imediatamente."
+            exit 1
+          fi
+          
+          echo "Sucesso: O banco de dados da BatCaverna está ativo e o contador de inatividade foi zerado!"
