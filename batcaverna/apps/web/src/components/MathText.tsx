@@ -76,20 +76,37 @@ function isPureMathExpression(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
 
-  if (t.includes("$") || t.includes("\\")) return true;
+  // Se já tem delimitadores $, o tokenizer principal de renderMathText extrai o miolo para o KaTeX.
+  // Nunca deve ser tratado como expressão pura sem delimitador, pois causaria envio do $ ao KaTeX!
+  if (t.includes("$")) return false;
 
-  // Palavras comuns do português que denotam frase discursiva
+  // Palavras comuns do português que denotam frase discursiva/enunciado
   const hasPortugueseWords =
-    /\b(o|a|os|as|um|uma|de|do|da|dos|das|em|no|na|nos|nas|por|para|com|que|se|não|sim|é|são|foi|ser|estar|onde|como|mais|menos|sua|seu|dele|dela|qual|quando|quanto|valor|área|perímetro|triângulo|reta|ponto|plano|figura|resposta|opção|correta|incorreta|altura|base|lado|afirmar|apenas|ambos)\b/i.test(
+    /\b(o|a|os|as|um|uma|de|do|da|dos|das|em|no|na|nos|nas|por|para|com|que|se|não|sim|é|são|foi|ser|estar|onde|como|mais|menos|sua|seu|dele|dela|qual|quando|quanto|valor|área|perímetro|triângulo|reta|ponto|plano|figura|resposta|opção|correta|incorreta|altura|base|lado|afirmar|apenas|ambos|quadrilátero|afirmações|assinale|abaixo|sabendo|analise|sobre|mesmo|entre|outro|outra|está|navio|bloco|haste|partícula|esfera)\b/i.test(
       t
     );
+  if (hasPortugueseWords) return false;
 
+  // Frases com palavras consecutivas em português
+  if (/[a-zA-Zá-úÁ-Ú]{3,}\s+[a-zA-Zá-úÁ-Ú]{3,}\s+[a-zA-Zá-úÁ-Ú]{3,}/.test(t)) {
+    return false;
+  }
+
+  // Se começa com comando LaTeX puro sem delimitadores (ex: \frac{3}{4}, \sqrt{13})
+  if (t.startsWith("\\")) {
+    const firstCmd = t.replace(/^\\+/, "").split(/[^a-zA-Z]/)[0];
+    if (KNOWN_MATH_COMMANDS.has(firstCmd)) {
+      return true;
+    }
+  }
+
+  // Símbolos matemáticos ASCII (sem frases de texto)
   const hasMathSymbols = /[√∛π\^]|sqrt\(|root\(|\bpi\b|\*|\/|\=/.test(t);
-
-  if (hasMathSymbols && !hasPortugueseWords) {
+  if (hasMathSymbols) {
     return true;
   }
 
+  // Frações puras numéricas: 3/4, -1/2
   if (/^[+-]?\s*\d+\s*\/\s*\d+$/.test(t)) {
     return true;
   }

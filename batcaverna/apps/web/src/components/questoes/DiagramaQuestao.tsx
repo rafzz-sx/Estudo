@@ -17,6 +17,7 @@ type TipoDiagrama =
   | "geometria_terreno"
   | "geometria_torres_radio"
   | "geometria_circulo_inscrito"
+  | "geometria_paralelogramo_epcar"
   | "geometria_malha_blocos"
   | "geometria_tales_paralelas"
   | "geometria_retangulo"
@@ -47,6 +48,8 @@ export function DiagramaQuestao({ descricao, enunciado }: DiagramaQuestaoProps) 
       return <DiagramaTorresRadio descricao={descricao} />;
     case "geometria_circulo_inscrito":
       return <DiagramaCirculoInscrito descricao={descricao} />;
+    case "geometria_paralelogramo_epcar":
+      return <DiagramaParalelogramoEpcar descricao={descricao} />;
     case "geometria_malha_blocos":
       return <DiagramaMalhaBlocos descricao={descricao} />;
     case "geometria_tales_paralelas":
@@ -180,11 +183,19 @@ function detectarTipo(descricao: string, enunciado?: string | null): TipoDiagram
     return "circulos_concentricos";
   }
 
+  // Paralelogramo EPCA e quadrilátero ROCA (EPCAR 2025)
   if (
-    texto.includes("retângulo") ||
-    texto.includes("trapézio") ||
-    texto.includes("triângulo") ||
-    texto.includes("quadrado")
+    texto.includes("epca") ||
+    texto.includes("roca") ||
+    (texto.includes("paralelogramo") && (texto.includes("ponto médio") || texto.includes("roca") || texto.includes("eor") || texto.includes("opc")))
+  ) {
+    return "geometria_paralelogramo_epcar";
+  }
+
+  // Retângulo com ponto E formando trapézio com DE = x+2 (específico)
+  if (
+    (texto.includes("retângulo") || texto.includes("trapézio")) &&
+    (texto.includes("de = x") || texto.includes("base = 3x"))
   ) {
     return "geometria_retangulo";
   }
@@ -674,6 +685,127 @@ function DiagramaGeometriaRetangulo({ descricao }: { descricao: string }) {
           <text x="250" y="195" fill="#94a3b8" fontSize="11" textAnchor="middle" fontFamily="sans-serif">Base = 3x</text>
           <text x="150" y="42" fill="#38bdf8" fontSize="10.5" textAnchor="middle" fontFamily="sans-serif">DE = x+2</text>
         </svg>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 6.5 PARALELOGRAMO EPCA E QUADRILÁTERO ROCA (EPCAR 2025)
+// ─────────────────────────────────────────────────────────────
+function DiagramaParalelogramoEpcar({ descricao }: { descricao: string }) {
+  return (
+    <div className="flex flex-col items-center w-full">
+      <div className="relative w-full max-w-xl overflow-hidden rounded-xl border border-bat-gold-400/30 bg-[#090d16] p-4 shadow-xl">
+        <div className="flex items-center justify-between pb-3 border-b border-neutral-800 text-[11px] font-mono text-bat-text-muted">
+          <span className="flex items-center gap-1.5 text-bat-gold-400 font-bold">
+            <span>📐</span> PARALELOGRAMO EPCA (EPCAR)
+          </span>
+          <span className="rounded bg-bat-gold-400/10 px-2 py-0.5 text-bat-gold-300 font-mono text-[10px]">
+            Área(ROCA) = 10 cm²
+          </span>
+        </div>
+
+        <svg viewBox="0 0 520 270" className="w-full h-auto mt-2" style={{ maxHeight: "280px" }}>
+          <defs>
+            <pattern id="grid-epca" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" strokeWidth="0.8" />
+            </pattern>
+            <pattern id="hatch-roca" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="8" stroke="#facc15" strokeWidth="1.2" opacity="0.6" />
+            </pattern>
+          </defs>
+
+          {/* Grid de fundo */}
+          <rect width="520" height="270" fill="url(#grid-epca)" />
+
+          {/* Paralelogramo EPCA: E(100, 210), P(180, 60), C(440, 60), A(360, 210) */}
+          <polygon
+            points="100,210 180,60 440,60 360,210"
+            fill="#0f172a"
+            stroke="#64748b"
+            strokeWidth="2.5"
+          />
+
+          {/* Quadrilátero ROCA sombreado / destacado */}
+          {/* R(230, 210), O(300, 160), C(440, 60), A(360, 210) */}
+          <polygon
+            points="230,210 300,160 440,60 360,210"
+            fill="#eab308"
+            fillOpacity="0.22"
+            stroke="#facc15"
+            strokeWidth="2"
+          />
+          <polygon
+            points="230,210 300,160 440,60 360,210"
+            fill="url(#hatch-roca)"
+          />
+
+          {/* Segmento PA: de P(180, 60) a A(360, 210) */}
+          <line x1="180" y1="60" x2="360" y2="210" stroke="#38bdf8" strokeWidth="2.2" />
+
+          {/* Segmento CR: de C(440, 60) a R(230, 210) */}
+          <line x1="440" y1="60" x2="230" y2="210" stroke="#f43f5e" strokeWidth="2.2" />
+
+          {/* Segmento EO (linha auxiliar tracejada conectando E a O) */}
+          <line x1="100" y1="210" x2="300" y2="160" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 4" />
+
+          {/* Vértice E */}
+          <circle cx="100" cy="210" r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.5" />
+          <text x="82" y="224" fill="#38bdf8" fontSize="14" fontWeight="extrabold" fontFamily="sans-serif">E</text>
+
+          {/* Vértice P */}
+          <circle cx="180" cy="60" r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.5" />
+          <text x="175" y="45" fill="#38bdf8" fontSize="14" fontWeight="extrabold" textAnchor="middle" fontFamily="sans-serif">P</text>
+
+          {/* Vértice C */}
+          <circle cx="440" cy="60" r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.5" />
+          <text x="455" y="55" fill="#38bdf8" fontSize="14" fontWeight="extrabold" fontFamily="sans-serif">C</text>
+
+          {/* Vértice A */}
+          <circle cx="360" cy="210" r="4.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.5" />
+          <text x="375" y="224" fill="#38bdf8" fontSize="14" fontWeight="extrabold" fontFamily="sans-serif">A</text>
+
+          {/* Ponto R (ponto médio de EA) */}
+          <circle cx="230" cy="210" r="5" fill="#facc15" stroke="#ffffff" strokeWidth="2" />
+          <text x="230" y="235" fill="#facc15" fontSize="14" fontWeight="extrabold" textAnchor="middle" fontFamily="sans-serif">R</text>
+
+          {/* Ponto O (interseção PA com CR) */}
+          <circle cx="300" cy="160" r="5.5" fill="#ec4899" stroke="#ffffff" strokeWidth="2" />
+          <text x="312" y="152" fill="#f472b6" fontSize="14" fontWeight="extrabold" fontFamily="sans-serif">O</text>
+
+          {/* Rótulo da área ROCA */}
+          <rect x="305" y="105" width="105" height="26" fill="#1e1e28" rx="6" stroke="#facc15" strokeWidth="1" />
+          <text x="357" y="122" fill="#facc15" fontSize="11" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+            Área = 10 cm²
+          </text>
+
+          {/* Rótulos dos triângulos */}
+          <text x="195" y="135" fill="#94a3b8" fontSize="11" fontStyle="italic" textAnchor="middle" fontFamily="sans-serif">
+            ΔEPO
+          </text>
+          <text x="190" y="195" fill="#94a3b8" fontSize="11" fontStyle="italic" textAnchor="middle" fontFamily="sans-serif">
+            ΔEOR
+          </text>
+          <text x="310" y="85" fill="#94a3b8" fontSize="11" fontStyle="italic" textAnchor="middle" fontFamily="sans-serif">
+            ΔOPC
+          </text>
+        </svg>
+
+        <div className="mt-3 flex flex-wrap items-center justify-around gap-2 rounded-lg bg-neutral-900/80 p-2.5 text-xs text-neutral-300">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-yellow-400"></span>
+            <span>Quadrilátero ROCA: <strong className="text-yellow-400">10 cm² (Sombreado)</strong></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-pink-400"></span>
+            <span>Interseção: <strong className="text-white">Ponto O (PA ∩ CR)</strong></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-sky-400"></span>
+            <span>Ponto médio: <strong className="text-white">ER = RA</strong></span>
+          </div>
+        </div>
       </div>
     </div>
   );
