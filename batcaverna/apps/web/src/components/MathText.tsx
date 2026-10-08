@@ -52,8 +52,9 @@ export function MathText({
 
   if (!children) return null;
 
-  // Texto sem $ e sem \ → caminho rápido e direto sem dangerouslySetInnerHTML
-  if (!children.includes("$") && !children.includes("\\")) {
+  // Se não tem $ nem \ e nem símbolos/expressões matemáticas em texto puro,
+  // faz o caminho rápido seguro sem dangerouslySetInnerHTML
+  if (!children.includes("$") && !children.includes("\\") && !hasMathFeatures(children)) {
     return <span className={className}>{children}</span>;
   }
 
@@ -65,14 +66,114 @@ export function MathText({
   );
 }
 
+// ─── Lógica de detecção e conversão de matemática informal ───
+
+function hasMathFeatures(text: string): boolean {
+  return isPureMathExpression(text) || /[√∛π\^]|sqrt\(|root\(|\bpi\b|\d+\s*\/\s*\d+/.test(text);
+}
+
+function isPureMathExpression(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+
+  if (t.includes("$") || t.includes("\\")) return true;
+
+  // Palavras comuns do português que denotam frase discursiva
+  const hasPortugueseWords =
+    /\b(o|a|os|as|um|uma|de|do|da|dos|das|em|no|na|nos|nas|por|para|com|que|se|não|sim|é|são|foi|ser|estar|onde|como|mais|menos|sua|seu|dele|dela|qual|quando|quanto|valor|área|perímetro|triângulo|reta|ponto|plano|figura|resposta|opção|correta|incorreta|altura|base|lado|afirmar|apenas|ambos)\b/i.test(
+      t
+    );
+
+  const hasMathSymbols = /[√∛π\^]|sqrt\(|root\(|\bpi\b|\*|\/|\=/.test(t);
+
+  if (hasMathSymbols && !hasPortugueseWords) {
+    return true;
+  }
+
+  if (/^[+-]?\s*\d+\s*\/\s*\d+$/.test(t)) {
+    return true;
+  }
+
+  return false;
+}
+
+function convertPlainMathToLatex(expr: string): string {
+  let s = expr.trim();
+
+  // 1. Unicodes e raízes
+  s = s.replace(/∛\s*([0-9a-zA-Z]+|\([^\)]+\))/g, "\\sqrt[3]{$1}");
+  s = s.replace(/√\s*([0-9a-zA-Z]+|\([^\)]+\))/g, "\\sqrt{$1}");
+  s = s.replace(/root\((\d+)\)\(([^)]+)\)/g, "\\sqrt[$1]{$2}");
+  s = s.replace(/sqrt\(([^()]+(?:\([^()]*\)[^()]*)*)\)/g, "\\sqrt{$1}");
+
+  // 2. Letras gregas em texto ASCII
+  s = s.replace(
+    /\b(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|tau|phi|omega)\b/gi,
+    (m) => `\\${m.toLowerCase()}`
+  );
+
+  // 3. Potências
+  s = s.replace(/\^([a-zA-Z0-9]+)/g, "^{$1}");
+  s = s.replace(/²|\^2/g, "^{2}");
+  s = s.replace(/³|\^3/g, "^{3}");
+
+  // 3.5 Expressões com raiz e fração: a*sqrt(b) / c -> \frac{a\sqrt{b}}{c}
+  s = s.replace(
+    /([0-9a-zA-Z]+)\s*(?:\*|\s*)\s*(\\sqrt\{[^}]+\})\s*\/\s*([0-9a-zA-Z]+)/g,
+    "\\frac{$1$2}{$3}"
+  );
+
+  // 4. Multiplicação * -> \cdot
+  s = s.replace(/(\d+)\s*\*\s*\\pi/g, "$1\\pi");
+  s = s.replace(/\s*\*\s*/g, " \\cdot ");
+
+  // 5. Frações puras entre parênteses: (9/2), (9\pi/4)
+  s = s.replace(
+    /\(([a-zA-Z0-9_\\\s\cdot]+)\s*\/\s*([a-zA-Z0-9_\\\s\cdot]+)\)/g,
+    "\\frac{$1}{$2}"
+  );
+
+  // 6. Frações simples sem parênteses: 9/2, 1/512, \pi/2, \sqrt{3}/2
+  s = s.replace(
+    /((?:\\sqrt\{[^{}]+\}|\\sqrt\[[^{}]*\]\{[^{}]*\}|\\pi|[0-9a-zA-Z]+))\s*\/\s*([0-9a-zA-Z]+)/g,
+    "\\frac{$1}{$2}"
+  );
+
+  // 7. Frações com parênteses: (m + M) / (2g)
+  s = s.replace(/\(([^()]+)\)\s*\/\s*\(([^()]+)\)/g, "\\frac{$1}{$2}");
+  s = s.replace(/\(([^()]+)\)\s*\/\s*([a-zA-Z0-9]+)/g, "\\frac{$1}{$2}");
+
+  // 8. Ajusta parênteses para \left( e \right) quando contêm frações
+  s = s.replace(/\(([^()]*\\frac[^()]*)\)/g, "\\left($1\\right)");
+
+  return s;
+}
+
+function preprocessPlainTextMath(text: string): string {
+  return text.replace(
+    /(\(?[a-zA-Z0-9_\*]+\s*\*\s*(?:sqrt\([^)]+\)|√\d+)\)?\s*\/\s*\d+|\([a-zA-Z0-9_\*]+\s*\/\s*[a-zA-Z0-9_\*]+\))/g,
+    (m) => `$${convertPlainMathToLatex(m)}$`
+  );
+}
+
 // ─── Lógica de parsing e tokenização ─────────────────────────
 
 function renderMathText(text: string): string {
   if (!text) return "";
-  if (!text.includes("$") && !text.includes("\\")) return escapeHtml(text);
+
+  // Se for uma expressão matemática pura em texto informal, renderiza diretamente
+  if (isPureMathExpression(text)) {
+    const lat = convertPlainMathToLatex(text);
+    return renderKatex(lat, false);
+  }
+
+  // Preprocessa trechos matemáticos informais isolados no texto
+  const processed = preprocessPlainTextMath(text);
+
+  if (!processed.includes("$") && !processed.includes("\\")) return escapeHtml(processed);
 
   const tokens: string[] = [];
-  let remaining = text;
+  let remaining = processed;
 
   while (remaining.length > 0) {
     const idxDouble = remaining.indexOf("$$");

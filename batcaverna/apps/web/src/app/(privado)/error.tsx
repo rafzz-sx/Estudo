@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 export default function PrivadoErrorBoundary({
@@ -12,9 +11,12 @@ export default function PrivadoErrorBoundary({
   reset: () => void;
 }) {
   const router = useRouter();
+  const [tentando, setTentando] = useState(false);
+  const [, startTransition] = useTransition();
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    // Log técnico discreto
+    isMountedRef.current = true;
     console.warn("[BatCaverna] Transição de rota interceptada pelo ErrorBoundary:", error?.message);
 
     // Se o erro foi cancelamento de requisição (troca rápida de página / AbortError),
@@ -33,7 +35,28 @@ export default function PrivadoErrorBoundary({
       }, 100);
       return () => clearTimeout(timer);
     }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [error, reset]);
+
+  const handleRetry = () => {
+    setTentando(true);
+    try {
+      reset();
+    } catch {}
+    try {
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {}
+
+    // Garantia absoluta de recarregar a tela em 150ms mesmo se o Next.js falhar em recuperar a rota cancelada
+    setTimeout(() => {
+      window.location.reload();
+    }, 150);
+  };
 
   return (
     <div className="flex min-h-[65vh] flex-col items-center justify-center p-6 text-center">
@@ -52,17 +75,12 @@ export default function PrivadoErrorBoundary({
       <div className="flex flex-wrap items-center justify-center gap-3">
         <button
           type="button"
-          onClick={() => {
-            try {
-              reset();
-            } catch {
-              window.location.reload();
-            }
-          }}
-          className="flex items-center gap-2 rounded-xl bg-bat-gold-400 px-5 py-2.5 text-xs sm:text-sm font-bold text-black transition-all hover:bg-bat-gold-300 active:scale-95 shadow-md shadow-bat-gold-400/20"
+          disabled={tentando}
+          onClick={handleRetry}
+          className="flex items-center gap-2 rounded-xl bg-bat-gold-400 px-5 py-2.5 text-xs sm:text-sm font-bold text-black transition-all hover:bg-bat-gold-300 active:scale-95 shadow-md shadow-bat-gold-400/20 disabled:opacity-80"
         >
-          <span>🔄</span>
-          <span>Tentar Novamente</span>
+          <span className={tentando ? "animate-spin" : ""}>🔄</span>
+          <span>{tentando ? "Recarregando..." : "Tentar Novamente"}</span>
         </button>
 
         <button
@@ -78,3 +96,4 @@ export default function PrivadoErrorBoundary({
     </div>
   );
 }
+

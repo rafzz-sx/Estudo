@@ -97,8 +97,12 @@ export async function GET(req: NextRequest) {
       .select(
         `
         id, concurso_id, materia_id, assunto_id,
-        enunciado, alternativas,
-        ano, banca, dificuldade, explicacao, criado_em,
+        texto_base, enunciado, alternativas,
+        ano, banca, dificuldade, dia_prova,
+        numero_ordem, numero_original,
+        figura_descricao, figura_svg,
+        precisa_resolucao, anulada,
+        explicacao, criado_em,
         concursos (id, sigla, nome),
         materias  (id, nome, icone_emoji),
         assuntos  (id, nome)

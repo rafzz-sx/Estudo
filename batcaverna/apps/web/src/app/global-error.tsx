@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export default function GlobalError({
   error,
   reset,
@@ -7,6 +9,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [tentando, setTentando] = useState(false);
+
+  const handleRetry = () => {
+    setTentando(true);
+    try {
+      reset();
+    } catch {}
+    setTimeout(() => {
+      window.location.reload();
+    }, 250);
+  };
+
   return (
     <html lang="pt-BR">
       <body className="flex min-h-screen items-center justify-center bg-[#07090e] p-6 text-center text-white font-sans">
@@ -20,10 +34,12 @@ export default function GlobalError({
           </p>
           <div className="flex justify-center gap-3">
             <button
-              onClick={() => reset()}
-              className="rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition-all hover:bg-yellow-300"
+              onClick={handleRetry}
+              disabled={tentando}
+              className="flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-sm font-bold text-black transition-all hover:bg-yellow-300 disabled:opacity-80"
             >
-              Recarregar
+              <span className={tentando ? "animate-spin" : ""}>🔄</span>
+              <span>{tentando ? "Recarregando..." : "Recarregar"}</span>
             </button>
             <button
               onClick={() => {
@@ -39,3 +55,4 @@ export default function GlobalError({
     </html>
   );
 }
+
