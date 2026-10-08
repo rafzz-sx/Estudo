@@ -25,12 +25,13 @@ const KNOWN_MATH_COMMANDS = new Set([
   "infty", "partial", "nabla", "circ", "degree",
   "in", "notin", "subset", "subseteq", "supset", "supseteq",
   "cap", "cup", "setminus", "forall", "exists", "nexists",
-  "text", "operatorname", "mathbf", "mathbb", "mathcal", "mathrm",
+  "text", "operatorname", "mathbf", "mathbb", "mathcal", "mathrm", "mathit", "textbf", "textit", "bm",
   "left", "right", "overline", "underline", "hat", "vec", "bar",
+  "tilde", "dot", "ddot", "overrightarrow",
 ]);
 
-// Regex para detectar comandos LaTeX fora de delimitadores
-const NAKED_MATH_REGEX = /\\+(frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|sqrt(?:\[[^{}]*\])?\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|(?:operatorname|text|mathbb|mathbf|mathcal|overline)\{[^{}]*\}|[a-zA-Z]+(?:\^[\\{]?[a-zA-Z0-9^\circ]+[\\}]?|_\{?[a-zA-Z0-9]+\}?)?)/g;
+// Regex para detectar comandos LaTeX fora de delimitadores (incluindo comandos com argumentos entre chaves como \vec{V}, \frac{a}{b}, \sqrt{x})
+const NAKED_MATH_REGEX = /\\+(frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|sqrt(?:\[[^{}]*\])?\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|(?:operatorname|text|textbf|textit|mathrm|mathbf|mathbb|mathcal|mathit|bm|overline|underline|vec|hat|bar|tilde|dot|ddot|overrightarrow)\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\^[\\{]?[a-zA-Z0-9^\circ]+[\\}]?|_\{?[a-zA-Z0-9]+\}?)?|[a-zA-Z]+(?:\^[\\{]?[a-zA-Z0-9^\circ]+[\\}]?|_\{?[a-zA-Z0-9]+\}?)?)/g;
 
 /**
  * Renderiza texto que pode conter expressões LaTeX:
@@ -136,9 +137,16 @@ function renderSegmentWithNakedMath(text: string): string {
     return escapeHtml(text);
   }
 
+  // Normaliza comandos de vetor/acento sem chaves (ex: \vec V -> \vec{V}, \hat i -> \hat{i})
+  const normalizedText = text
+    .replace(/\\vec\s+([a-zA-Z])/g, (_m, p1) => `\\vec{${p1}}`)
+    .replace(/\\hat\s+([a-zA-Z])/g, (_m, p1) => `\\hat{${p1}}`)
+    .replace(/\\bar\s+([a-zA-Z])/g, (_m, p1) => `\\bar{${p1}}`)
+    .replace(/\\dot\s+([a-zA-Z])/g, (_m, p1) => `\\dot{${p1}}`);
+
   // Se o trecho inteiro começa com \ e é uma expressão matemática pura sem frases
   // Ex: "\frac{7!}{5!} \cdot \frac{5!}{3!}"
-  const trimmed = text.trim();
+  const trimmed = normalizedText.trim();
   if (trimmed.startsWith("\\") && !/[a-zA-Z]{5,}\s+[a-zA-Z]{5,}/.test(trimmed)) {
     const firstWord = trimmed.replace(/^\\+/, "").split(/[^a-zA-Z]/)[0];
     if (KNOWN_MATH_COMMANDS.has(firstWord)) {
@@ -151,7 +159,7 @@ function renderSegmentWithNakedMath(text: string): string {
   let match: RegExpExecArray | null;
 
   NAKED_MATH_REGEX.lastIndex = 0;
-  while ((match = NAKED_MATH_REGEX.exec(text)) !== null) {
+  while ((match = NAKED_MATH_REGEX.exec(normalizedText)) !== null) {
     const fullMatch = match[0];
     const matchStart = match.index;
     const cmdName = match[1].split(/[^a-zA-Z]/)[0];
@@ -163,7 +171,7 @@ function renderSegmentWithNakedMath(text: string): string {
 
     // Adiciona o texto puro anterior
     if (matchStart > lastIndex) {
-      parts.push(escapeHtml(text.slice(lastIndex, matchStart)));
+      parts.push(escapeHtml(normalizedText.slice(lastIndex, matchStart)));
     }
 
     // Renderiza o comando ou expressão LaTeX
@@ -172,8 +180,8 @@ function renderSegmentWithNakedMath(text: string): string {
     lastIndex = matchStart + fullMatch.length;
   }
 
-  if (lastIndex < text.length) {
-    parts.push(escapeHtml(text.slice(lastIndex)));
+  if (lastIndex < normalizedText.length) {
+    parts.push(escapeHtml(normalizedText.slice(lastIndex)));
   }
 
   return parts.join("");

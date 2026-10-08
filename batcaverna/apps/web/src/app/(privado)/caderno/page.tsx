@@ -9,6 +9,7 @@ import {
   type PassoResolucao,
 } from "@/components/questoes/ResolucaoGabarito";
 import { MathText } from "@/components/MathText";
+import { tratarTextoBaseEFigura } from "@/lib/questoes-figura";
 
 interface QuestaoErrada {
   id: string;
@@ -275,21 +276,31 @@ export default function CadernoPage() {
 
                       {expandida && (
                         <div className="border-t border-bat-border/40 bg-bat-bg-secondary/20 px-5 py-4">
-                          {q.texto_base && (
-                            <div className="mb-4 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3">
-                              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
-                                Texto base
-                              </p>
-                              <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                                <MathText>{q.texto_base}</MathText>
-                              </div>
-                            </div>
-                          )}
+                          {(() => {
+                            const { textoBaseFinal, figuraDescricaoFinal } = tratarTextoBaseEFigura(
+                              q.texto_base,
+                              q.figura_descricao
+                            );
+                            return (
+                              <>
+                                {textoBaseFinal && (
+                                  <div className="mb-4 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3">
+                                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
+                                      Texto base
+                                    </p>
+                                    <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
+                                      <MathText>{textoBaseFinal}</MathText>
+                                    </div>
+                                  </div>
+                                )}
 
-                          <QuadroFigura
-                            descricao={q.figura_descricao}
-                            svg={q.figura_svg}
-                          />
+                                <QuadroFigura
+                                  descricao={figuraDescricaoFinal}
+                                  svg={q.figura_svg}
+                                />
+                              </>
+                            );
+                          })()}
 
                           <p className="mb-4 whitespace-pre-line text-sm leading-relaxed text-bat-text">
                             <MathText>{q.enunciado}</MathText>

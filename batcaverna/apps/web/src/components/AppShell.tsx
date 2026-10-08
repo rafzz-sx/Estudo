@@ -124,6 +124,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [currentTab, setCurrentTab] = useState<string>("");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const revisoesPendentes = useRevisoesPendentes();
+  const lastNavTimeRef = useRef(0);
+
+  const handleNavClick = (
+    e: React.MouseEvent,
+    isActive: boolean,
+    callback?: () => void
+  ) => {
+    if (isActive) {
+      e.preventDefault();
+      callback?.();
+      return;
+    }
+    const now = Date.now();
+    // Previne disparo de requisições concorrentes caso o usuário clique múltiplas vezes rápido (< 250ms)
+    if (now - lastNavTimeRef.current < 250) {
+      e.preventDefault();
+      return;
+    }
+    lastNavTimeRef.current = now;
+    callback?.();
+  };
 
   // Sincronizar tab ativa da URL para destacar Perfil vs Configurações
   useEffect(() => {
@@ -204,10 +225,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={link.href}
               href={link.href}
-              onClick={() => {
-                if (isConfig) setCurrentTab("config");
-                else if (isPerfil) setCurrentTab("");
-                if (onNavigate) onNavigate();
+              prefetch={false}
+              onClick={(e) => {
+                handleNavClick(e, isActive, () => {
+                  if (isConfig) setCurrentTab("config");
+                  else if (isPerfil) setCurrentTab("");
+                  if (onNavigate) onNavigate();
+                });
               }}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium no-underline transition-all duration-200 ${
                 isActive
@@ -467,9 +491,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => {
-                  if (isConfig) setCurrentTab("config");
-                  else if (isPerfil) setCurrentTab("");
+                prefetch={false}
+                onClick={(e) => {
+                  handleNavClick(e, isActive, () => {
+                    if (isConfig) setCurrentTab("config");
+                    else if (isPerfil) setCurrentTab("");
+                  });
                 }}
                 className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-colors min-h-[48px] min-w-[66px] shrink-0 relative select-none ${
                   isActive

@@ -12,6 +12,7 @@ import {
 import { ComboBanner, ComboCompacto } from "@/components/questoes/ComboBadge";
 import { ContestarGabarito } from "@/components/questoes/ContestarGabarito";
 import { MathText } from "@/components/MathText";
+import { tratarTextoBaseEFigura } from "@/lib/questoes-figura";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface Alternativa {
@@ -541,23 +542,32 @@ function BancoDeQuestoes() {
               </div>
             )}
 
-            {/* ─── Texto base ─── */}
-            {questao.texto_base && (
-              <div className="mb-5 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3.5">
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
-                  Texto base
-                </p>
-                <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                  <MathText>{questao.texto_base}</MathText>
-                </div>
-              </div>
-            )}
+            {/* ─── Texto base & Figura ─── */}
+            {(() => {
+              const { textoBaseFinal, figuraDescricaoFinal } = tratarTextoBaseEFigura(
+                questao.texto_base,
+                questao.figura_descricao
+              );
+              return (
+                <>
+                  {textoBaseFinal && (
+                    <div className="mb-5 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3.5">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
+                        Texto base
+                      </p>
+                      <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
+                        <MathText>{textoBaseFinal}</MathText>
+                      </div>
+                    </div>
+                  )}
 
-            {/* ─── Figura ─── */}
-            <QuadroFigura
-              descricao={questao.figura_descricao}
-              svg={questao.figura_svg}
-            />
+                  <QuadroFigura
+                    descricao={figuraDescricaoFinal}
+                    svg={questao.figura_svg}
+                  />
+                </>
+              );
+            })()}
 
             {/* ─── Enunciado ─── */}
             <div className="mb-6 whitespace-pre-line text-base leading-relaxed text-bat-text">
