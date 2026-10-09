@@ -1,6 +1,6 @@
 {
   "name": "batcaverna",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -17,6 +17,7 @@
     "dev:api": "turbo run dev --filter=@batcaverna/api",
     "build:apk": "cd apps/mobile/android && .\\gradlew.bat assembleRelease",
     "build:apk:debug": "cd apps/mobile/android && .\\gradlew.bat assembleDebug",
+    "admin:rescue": "node scripts/admin-rescue.js",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
   },
   "devDependencies": {

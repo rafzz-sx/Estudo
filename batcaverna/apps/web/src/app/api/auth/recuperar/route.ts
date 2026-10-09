@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { aplicarLimite } from '@/lib/seguranca';
+import { aplicarLimiteAsync } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import {
   hashToken,
   hashSenha,
   getResetTokenExpiry,
+  generatePasswordResetTokens,
   MINUTOS_DO_CODIGO,
 } from '@/lib/auth';
 import {
   enviarEmail,
-  modeloCodigoDeSenha,
+  modeloResetSenhaLinkECodigo,
+  modeloConfirmacaoSenhaAlterada,
   temProvedorDeEmail,
 } from '@/lib/email';
 import { isStrongPassword } from '@/lib/validators';
@@ -23,137 +25,152 @@ function getSupabase() {
 // ═══════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
-    // 4 pedidos a cada 15 min: recuperacao de senha e o alvo classico
-    // de quem quer descobrir quais e-mails existem na base.
-    const bloqueio = aplicarLimite(req, 'recuperar', 4, 900);
-    if (bloqueio) return bloqueio;
+    const body = await req.json().catch(() => ({}));
+    const email = String(body?.email ?? '').toLowerCase().trim();
 
-    const body = await req.json();
-    const { email } = body;
-
-    if (!email?.trim()) {
+    if (!email) {
       return NextResponse.json(
         { success: false, error: 'E-mail é obrigatório' },
         { status: 400 }
       );
     }
 
+    // Rate-limiting duplo: por IP e por conta de e-mail (4 pedidos / 15 min)
+    const bloqueio = await aplicarLimiteAsync(req, 'recuperar', 4, 900, email);
+    if (bloqueio) return bloqueio;
+
     const supabase = getSupabase();
 
     // Buscar usuário pelo e-mail
     const { data: user } = await supabase
       .from('users')
-      .select('id, nome, email')
-      .eq('email', email.toLowerCase().trim())
+      .select('id, nome, email, role')
+      .eq('email', email)
       .single();
 
-    // Sempre retorna sucesso por segurança (evita enumerar e-mails)
+    // Sempre retorna mensagem genérica por segurança (evita enumeração de e-mails)
     if (!user) {
       return NextResponse.json({
         success: true,
-        message: 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.',
+        codigo_enviado: true,
+        message: 'Se o e-mail estiver cadastrado, as instruções e o link de recuperação foram enviados.',
       });
     }
 
-    // Gerar código de 6 dígitos
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Gerar token de link (64 hex chars) e código numérico (6 dígitos) seguros
+    const { token, code } = generatePasswordResetTokens();
+    const tokenHash = await hashToken(token);
     const codeHash = await hashToken(code);
+    const expiraEm = getResetTokenExpiry().toISOString();
 
-    // Pedir um código novo invalida os anteriores.
-    //
-    // Antes, cada pedido só INSERIA. Com o limite de 4 pedidos a cada 15
-    // minutos e a validade de 24 h que este código herdava da verificação de
-    // e-mail, uma conta podia acumular dezenas de códigos válidos ao mesmo
-    // tempo — cada um deles abrindo a conta. Quem pede um código novo está
-    // dizendo que o anterior não serve mais.
-    await supabase
-      .from('email_verification_tokens')
-      .update({ usado: true })
-      .eq('user_id', user.id)
-      .eq('usado', false)
-      .like('token', 'reset_%');
+    // ─── 1. Invalida tokens anteriores pendentes do usuário ───
+    try {
+      await supabase
+        .from('password_reset_tokens')
+        .update({ usado: true })
+        .eq('user_id', user.id)
+        .eq('usado', false);
+    } catch {
+      // Ignora se tabela ainda não existir
+    }
 
-    // Salvar token de recuperação na tabela email_verification_tokens
-    // Reutilizamos a tabela existente com um prefixo para distinguir
-    await supabase.from('email_verification_tokens').insert({
-      user_id: user.id,
-      token: `reset_${codeHash}`,
-      // 30 minutos, não as 24 h da verificação de e-mail: este código troca
-      // a senha, aquele só confirma um endereço.
-      expira_em: getResetTokenExpiry().toISOString(),
-      usado: false,
-    });
+    try {
+      await supabase
+        .from('email_verification_tokens')
+        .update({ usado: true })
+        .eq('user_id', user.id)
+        .eq('usado', false)
+        .like('token', 'reset_%');
+    } catch {
+      // Ignora
+    }
 
-    // ─── Entrega do código ────────────────────────────────────
-    //
-    // ATENÇÃO: este endpoint devolvia `_dev_code` com o código de
-    // redefinição DENTRO DA RESPOSTA, para qualquer um que chamasse. Bastava
-    // saber o e-mail de alguém para pedir a recuperação, ler o código na
-    // resposta e trocar a senha da conta alheia — tomada de conta completa,
-    // sem nenhuma barreira.
-    //
-    // O código agora só sai da API fora de produção, e mesmo assim apenas
-    // quando não há provedor de e-mail configurado. Havendo provedor, ele vai
-    // por e-mail e mais nada — o log só recebe o código quando o envio falha,
-    // para o administrador conseguir socorrer quem pediu.
+    // ─── 2. Salvar novos tokens (tabela dedicada com fallback resiliente) ─
+    let salvouNaTabelaDedicada = false;
+    try {
+      const { error: insErr } = await supabase.from('password_reset_tokens').insert([
+        {
+          user_id: user.id,
+          token_hash: tokenHash,
+          tipo: 'link',
+          expira_em: expiraEm,
+          usado: false,
+        },
+        {
+          user_id: user.id,
+          token_hash: codeHash,
+          tipo: 'codigo',
+          expira_em: expiraEm,
+          usado: false,
+        },
+      ]);
+      if (!insErr) {
+        salvouNaTabelaDedicada = true;
+      }
+    } catch {
+      salvouNaTabelaDedicada = false;
+    }
+
+    // Fallback: se a tabela password_reset_tokens ainda não estiver migrada
+    if (!salvouNaTabelaDedicada) {
+      await supabase.from('email_verification_tokens').insert([
+        {
+          user_id: user.id,
+          token: `reset_${tokenHash}`,
+          expira_em: expiraEm,
+          usado: false,
+        },
+        {
+          user_id: user.id,
+          token: `reset_${codeHash}`,
+          expira_em: expiraEm,
+          usado: false,
+        },
+      ]);
+    }
+
+    // ─── 3. Disparo do E-mail ──────────────────────────────────
     const emProducao = process.env.NODE_ENV === 'production';
     const temProvedor = temProvedorDeEmail();
     let entregue = false;
 
     if (temProvedor) {
-      const modelo = modeloCodigoDeSenha(code, MINUTOS_DO_CODIGO);
+      const modelo = modeloResetSenhaLinkECodigo({
+        token,
+        codigo: code,
+        minutos: MINUTOS_DO_CODIGO,
+        email: user.email,
+      });
+
       const envio = await enviarEmail({
         para: user.email,
         assunto: modelo.assunto,
         html: modelo.html,
         texto: modelo.texto,
       });
+
       entregue = envio.ok;
 
       if (!envio.ok) {
-        // Provedor configurado mas o envio falhou (cota, domínio que deixou
-        // de estar verificado, rede). O código continua no log para o
-        // administrador conseguir socorrer quem pediu, e a tela NÃO avança:
-        // mandar a pessoa digitar um código que não saiu daqui é o mesmo
-        // beco sem saída de quando não havia provedor nenhum.
-        console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
+        console.error(`[RECUPERAÇÃO] Falha ao enviar e-mail para ${email}: ${envio.erro}`);
       }
     } else {
-      // Sem provedor: o código fica no log do servidor, ao qual só o
-      // administrador tem acesso.
-      console.log(`[RECUPERAÇÃO] Código para ${email}: ${code}`);
+      console.warn(`[RECUPERAÇÃO] Nenhum serviço de e-mail ativo (SMTP/Resend/Brevo) para ${email}.`);
     }
 
-    // `codigo_enviado` diz à tela se existe um código A CAMINHO das mãos de
-    // quem pediu: em produção, só se o e-mail saiu; fora dela, sempre, porque
-    // o código volta na própria resposta.
-    //
-    // Sem este campo a tela não tinha como saber, e avançava sempre para o
-    // passo do código. Em produção sem provedor, o resultado era o pior tipo
-    // de erro: "recuperação por e-mail ainda não está ativa" aparecia com ✓
-    // verde de sucesso, logo acima de um formulário pedindo "o código de 6
-    // dígitos enviado para seu e-mail". A pessoa ficava presa num campo que
-    // nunca ia aceitar nada.
     const codigoEnviado = entregue || !emProducao;
 
     return NextResponse.json({
       success: true,
       codigo_enviado: codigoEnviado,
       message: codigoEnviado
-        ? 'Se o e-mail estiver cadastrado, você receberá um código de recuperação.'
+        ? 'Se o e-mail estiver cadastrado, as instruções e o link de recuperação foram enviados.'
         : temProvedor
-          ? 'Não consegui enviar o e-mail agora. Tente de novo em alguns ' +
-            'minutos ou fale com a gente pela página de Contato.'
-          : 'Recuperação por e-mail ainda não está ativa nesta instalação. ' +
-            'Fale com a gente pela página de Contato para redefinir sua senha. ' +
-            // /contato, e não /tickets: quem esqueceu a senha não consegue
-            // entrar, e a tela de chamados fica atrás do login.
-            'A página de contato não exige login.',
-      // Só em desenvolvimento, e só quando não há como enviar o e-mail.
-      ...(!emProducao && !temProvedor ? { _dev_code: code } : {}),
+          ? 'Não foi possível enviar o e-mail agora. Verifique as configurações de SMTP ou tente novamente.'
+          : 'O serviço de envio de e-mail ainda não está configurado. O administrador pode redefinir o acesso via terminal (npm run admin:rescue).',
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Recovery error:', error);
     return NextResponse.json(
       { success: false, error: 'Erro interno do servidor' },
@@ -163,31 +180,30 @@ export async function POST(req: NextRequest) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PUT /api/auth/recuperar — Redefinir senha com código
+// PUT /api/auth/recuperar — Redefinir senha com token, código ou recovery code
 // ═══════════════════════════════════════════════════════════════
 export async function PUT(req: NextRequest) {
   try {
-    // O codigo tem 6 digitos: sao so 1 milhao de combinacoes. Sem
-    // limite, um script acerta em minutos e troca a senha de qualquer
-    // conta. 10 tentativas a cada 15 min por IP fecha essa porta.
-    const bloqueio = aplicarLimite(req, 'redefinir-senha', 10, 900);
+    // 10 tentativas a cada 15 min por IP para evitar força bruta
+    const bloqueio = await aplicarLimiteAsync(req, 'redefinir-senha', 10, 900);
     if (bloqueio) return bloqueio;
 
-    const body = await req.json();
-    const { email, code, nova_senha } = body;
+    const body = await req.json().catch(() => ({}));
+    const email = String(body?.email ?? '').toLowerCase().trim();
+    const tokenInformado = String(body?.token ?? '').trim();
+    const codeInformado = String(body?.code ?? '').trim();
+    const recoveryCodeInformado = String(body?.recovery_code ?? '').trim().toUpperCase();
+    const novaSenha = String(body?.nova_senha ?? '');
 
-    if (!email?.trim() || !code?.trim() || !nova_senha) {
+    if (!email || (!tokenInformado && !codeInformado && !recoveryCodeInformado) || !novaSenha) {
       return NextResponse.json(
-        { success: false, error: 'E-mail, código e nova senha são obrigatórios' },
+        { success: false, error: 'E-mail, credencial de recuperação e nova senha são obrigatórios' },
         { status: 400 }
       );
     }
 
-    // Validar nova senha. A regra sai de `@batcaverna/utils`, a mesma que o
-    // cadastro usa — estas quatro condições estavam reescritas aqui à mão, e
-    // uma senha aceita no cadastro podia ser recusada na recuperação (ou o
-    // contrário) no dia em que alguém mexesse só num dos lados.
-    const forca = isStrongPassword(nova_senha);
+    // Validar força da nova senha
+    const forca = isStrongPassword(novaSenha);
     if (!forca.valid) {
       return NextResponse.json(
         { success: false, error: `A nova senha precisa de: ${forca.errors.join(', ')}` },
@@ -200,76 +216,189 @@ export async function PUT(req: NextRequest) {
     // Buscar usuário
     const { data: user } = await supabase
       .from('users')
-      .select('id')
-      .eq('email', email.toLowerCase().trim())
+      .select('id, email, role')
+      .eq('email', email)
       .single();
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Código inválido ou expirado' },
+        { success: false, error: 'Código ou token inválido ou expirado' },
         { status: 400 }
       );
     }
 
-    // Verificar código
-    const codeHash = await hashToken(code.trim());
-    const { data: token } = await supabase
-      .from('email_verification_tokens')
-      .select('id, expira_em, usado')
-      .eq('user_id', user.id)
-      .eq('token', `reset_${codeHash}`)
-      .eq('usado', false)
-      .single();
+    let tokenValidoId: string | null = null;
+    let tabelaTokenUsada: 'password_reset_tokens' | 'email_verification_tokens' | 'admin_recovery_codes' | null = null;
 
-    if (!token) {
+    // ─── 1. Fluxo de Código de Contingência do Admin (Break-Glass) ─
+    if (recoveryCodeInformado) {
+      // Regra de segurança: Apenas administradores podem usar recovery codes
+      if (user.role !== 'admin') {
+        return NextResponse.json(
+          { success: false, error: 'Acesso negado: Código de contingência exclusivo para administradores.' },
+          { status: 403 }
+        );
+      }
+
+      const recHash = await hashToken(recoveryCodeInformado);
+
+      const { data: recCode } = await supabase
+        .from('admin_recovery_codes')
+        .select('id, usado')
+        .eq('admin_id', user.id)
+        .eq('codigo_hash', recHash)
+        .eq('usado', false)
+        .single();
+
+      if (!recCode) {
+        return NextResponse.json(
+          { success: false, error: 'Código de contingência inválido ou já utilizado.' },
+          { status: 400 }
+        );
+      }
+
+      tokenValidoId = recCode.id;
+      tabelaTokenUsada = 'admin_recovery_codes';
+    } else {
+      // ─── 2. Fluxo Normal: Token de Link (64 chars) ou Código (6 dígitos) ──
+      const valorBruto = tokenInformado || codeInformado;
+      const hashEsperado = await hashToken(valorBruto);
+
+      // Tenta primeiro na tabela dedicada
+      try {
+        const { data: tokenDedicado } = await supabase
+          .from('password_reset_tokens')
+          .select('id, expira_em, usado')
+          .eq('user_id', user.id)
+          .eq('token_hash', hashEsperado)
+          .eq('usado', false)
+          .single();
+
+        if (tokenDedicado) {
+          if (new Date(tokenDedicado.expira_em) < new Date()) {
+            return NextResponse.json(
+              { success: false, error: 'Link ou código expirado. Solicite uma nova recuperação.' },
+              { status: 400 }
+            );
+          }
+          tokenValidoId = tokenDedicado.id;
+          tabelaTokenUsada = 'password_reset_tokens';
+        }
+      } catch {
+        // Ignora caso tabela não exista
+      }
+
+      // Se não encontrou, tenta fallback na tabela email_verification_tokens
+      if (!tokenValidoId) {
+        const { data: tokenFallback } = await supabase
+          .from('email_verification_tokens')
+          .select('id, expira_em, usado')
+          .eq('user_id', user.id)
+          .eq('token', `reset_${hashEsperado}`)
+          .eq('usado', false)
+          .single();
+
+        if (tokenFallback) {
+          if (new Date(tokenFallback.expira_em) < new Date()) {
+            return NextResponse.json(
+              { success: false, error: 'Link ou código expirado. Solicite uma nova recuperação.' },
+              { status: 400 }
+            );
+          }
+          tokenValidoId = tokenFallback.id;
+          tabelaTokenUsada = 'email_verification_tokens';
+        }
+      }
+    }
+
+    if (!tokenValidoId || !tabelaTokenUsada) {
       return NextResponse.json(
-        { success: false, error: 'Código inválido ou expirado' },
+        { success: false, error: 'Link, código ou credencial inválida ou já utilizada.' },
         { status: 400 }
       );
     }
 
-    // Verificar expiração
-    if (new Date(token.expira_em) < new Date()) {
-      return NextResponse.json(
-        { success: false, error: 'Código expirado. Solicite um novo.' },
-        { status: 400 }
-      );
-    }
-
-    // Atualizar senha — sempre no formato novo (PBKDF2 com sal).
-    // `hashToken` continua sendo usado neste arquivo para o código de
-    // recuperação, que é aleatório e descartável: ali SHA-256 basta.
-    const novaSenhaHash = await hashSenha(nova_senha);
+    // ─── 3. Atualizar Senha com PBKDF2 e Desbloquear Conta ───
+    const novaSenhaHash = await hashSenha(novaSenha);
     const { error: updateError } = await supabase
       .from('users')
-      .update({ senha_hash: novaSenhaHash })
+      .update({
+        senha_hash: novaSenhaHash,
+        tentativas_login_falhas: 0,
+        bloqueado_ate: null,
+      })
       .eq('id', user.id);
 
     if (updateError) {
+      console.error('Erro ao atualizar senha no banco:', updateError);
       return NextResponse.json(
-        { success: false, error: 'Erro ao atualizar senha' },
+        { success: false, error: 'Erro ao salvar nova senha' },
         { status: 500 }
       );
     }
 
-    // Marcar token como usado
-    await supabase
-      .from('email_verification_tokens')
-      .update({ usado: true })
-      .eq('id', token.id);
+    // ─── 4. Marcar o Token / Código como Usado ───────────────
+    if (tabelaTokenUsada === 'admin_recovery_codes') {
+      await supabase
+        .from('admin_recovery_codes')
+        .update({ usado: true, usado_em: new Date().toISOString() })
+        .eq('id', tokenValidoId);
 
-    // Invalidar todos os refresh tokens do usuário (forçar re-login)
+      // Registrar na trilha de auditoria
+      try {
+        await supabase.from('admin_audit_log').insert({
+          admin_id: user.id,
+          acao: 'recuperacao_admin_via_codigo_contingencia',
+          entidade_afetada: 'users',
+          entidade_id: user.id,
+          detalhes: { data: new Date().toISOString() },
+        });
+      } catch (auditErr) {
+        console.warn('Aviso: falha ao registrar log de auditoria:', auditErr);
+      }
+    } else if (tabelaTokenUsada === 'password_reset_tokens') {
+      await supabase
+        .from('password_reset_tokens')
+        .update({ usado: true, usado_em: new Date().toISOString() })
+        .eq('id', tokenValidoId);
+    } else {
+      await supabase
+        .from('email_verification_tokens')
+        .update({ usado: true })
+        .eq('id', tokenValidoId);
+    }
+
+    // ─── 5. Invalidar Todas as Sessões Ativas (Revogação) ─────
     await supabase
       .from('refresh_tokens')
       .delete()
       .eq('user_id', user.id);
 
-    return NextResponse.json({
+    // ─── 6. Enviar Notificação Transacional de Segurança ──────
+    if (temProvedorDeEmail()) {
+      const modelo = modeloConfirmacaoSenhaAlterada(user.email);
+      enviarEmail({
+        para: user.email,
+        assunto: modelo.assunto,
+        html: modelo.html,
+        texto: modelo.texto,
+      }).catch((emailErr) => {
+        console.warn('Aviso: falha ao enviar e-mail de confirmação de senha:', emailErr);
+      });
+    }
+
+    // ─── 7. Resposta e Limpeza de Cookies ─────────────────────
+    const response = NextResponse.json({
       success: true,
       message: 'Senha redefinida com sucesso! Faça login com sua nova senha.',
     });
 
-  } catch (error: any) {
+    response.cookies.delete('bat_access_token');
+    response.cookies.delete('bat_refresh_token');
+
+    return response;
+
+  } catch (error: unknown) {
     console.error('Reset password error:', error);
     return NextResponse.json(
       { success: false, error: 'Erro interno do servidor' },

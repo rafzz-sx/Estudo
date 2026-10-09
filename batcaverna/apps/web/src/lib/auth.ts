@@ -221,6 +221,48 @@ export function getResetTokenExpiry(): Date {
 }
 
 /**
+ * Gera tokens de recuperação de senha criptograficamente seguros (Web Crypto).
+ * Retorna:
+ * - token: string de 64 caracteres hex (32 bytes de alta entropia para links)
+ * - code: código numérico de 6 dígitos (para digitação manual)
+ */
+export function generatePasswordResetTokens(): { token: string; code: string } {
+  // Token de 64 caracteres hex
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  const token = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+
+  // Código numérico de 6 dígitos
+  const codeBuf = new Uint32Array(1);
+  crypto.getRandomValues(codeBuf);
+  const code = (100000 + (codeBuf[0] % 900000)).toString();
+
+  return { token, code };
+}
+
+/**
+ * Gera um lote de 8 códigos de contingência (Recovery Codes) para o Administrador.
+ * Formato legível: BAT-XXXX-XXXX (ex: BAT-4B8F-9C12)
+ */
+export function gerarCodigosRecuperacaoAdmin(quantidade = 8): string[] {
+  const codigos: string[] = [];
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 legível (sem 0, 1, O, I para evitar confusão)
+
+  for (let i = 0; i < quantidade; i++) {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    let parte1 = '';
+    let parte2 = '';
+    for (let j = 0; j < 4; j++) parte1 += chars[bytes[j] % chars.length];
+    for (let j = 4; j < 8; j++) parte2 += chars[bytes[j] % chars.length];
+    codigos.push(`BAT-${parte1}-${parte2}`);
+  }
+
+  return codigos;
+}
+
+
+/**
  * Extrai e valida o usuário autenticado da requisição
  * Suporta tanto o header Authorization: Bearer <token> quanto o cookie bat_access_token
  */

@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.3.1';
+export const CURRENT_APP_VERSION = '3.3.2';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,42 @@ export const CURRENT_APP_VERSION = '3.3.1';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.3.2',
+    dataLancamento: '2026-10-09T17:40:00-03:00',
+    titulo: 'Blindagem de Acesso & Recuperação Tática de Credenciais',
+    resumo:
+      'Novo fluxo seguro de recuperação de conta para os alunos, entrega instantânea de tokens e códigos de autorização via e-mail oficial com layout temático da BatCaverna e melhorias na visibilidade de senhas.',
+    destaque: true,
+    impacto: 'patch',
+    classificacao: 'atualizacao',
+    alteracoes: [
+      {
+        id: 'recuperacao-senha-alunos',
+        tipo: 'novo',
+        titulo: 'Recuperação Tática de Conta e Senha',
+        descricao:
+          'Os alunos agora podem redefinir suas credenciais de forma rápida e segura: basta informar o e-mail cadastrado para receber um link de uso único e um código numérico de 6 dígitos de alta segurança.',
+        tag: 'Segurança',
+      },
+      {
+        id: 'emails-oficiais-batcaverna',
+        tipo: 'melhoria',
+        titulo: 'Notificações e E-mails Militares Tematizados',
+        descricao:
+          'E-mails transacionais com o brasão oficial da BatCaverna, modo escuro tático, botões de ação com destaque e avisos automáticos de segurança sempre que uma credencial for atualizada.',
+        tag: 'Comunicação',
+      },
+      {
+        id: 'alternancia-olho-senha',
+        tipo: 'melhoria',
+        titulo: 'Alternância de Visibilidade de Senha',
+        descricao:
+          'Botão integrado de exibir/ocultar senha com ícone tático em todas as telas de autenticação e redefinição para total precisão na digitação.',
+        tag: 'Interface / UX',
+      },
+    ],
+  },
   {
     versao: '3.3.1',
     dataLancamento: '2026-10-08T21:40:00-03:00',

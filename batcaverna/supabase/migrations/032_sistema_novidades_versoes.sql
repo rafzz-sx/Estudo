@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS app_info (
   notas_versao TEXT
 );
 
+-- Garante que a coluna notas_versao exista caso a tabela já existisse previamente
+ALTER TABLE app_info ADD COLUMN IF NOT EXISTS notas_versao TEXT;
+
 ALTER TABLE IF EXISTS app_info ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Permitir leitura publica de app_info" ON app_info;
 CREATE POLICY "Permitir leitura publica de app_info" ON app_info FOR SELECT USING (true);

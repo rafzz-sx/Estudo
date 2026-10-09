@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { BatLogo, BatBrand } from "@/components/BatLogo";
 import { useAuthStore } from "@/stores/auth-store";
+import { CURRENT_APP_VERSION } from "@/data/changelog";
 
 // ─── Dados dos 9 concursos com suporte a fotos reais de banner ────────
 const concursos = [
@@ -783,13 +784,13 @@ export default function LandingPage() {
                     <li><Link href="/questoes" className="hover:text-bat-gold-400 transition-colors">Banco de Questões</Link></li>
                     <li><Link href="/simulado" className="hover:text-bat-gold-400 transition-colors">Simulados</Link></li>
                     <li><Link href="/ranking" className="hover:text-bat-gold-400 transition-colors">Ranking</Link></li>
-                    <li><Link href="/novidades" className="hover:text-bat-gold-400 transition-colors flex items-center gap-1">Novidades <span className="text-[10px] font-mono font-bold text-bat-gold-400">v3.3.1</span></Link></li>
+                    <li><Link href="/novidades" className="hover:text-bat-gold-400 transition-colors flex items-center gap-1">Novidades <span className="text-[10px] font-mono font-bold text-bat-gold-400">v{CURRENT_APP_VERSION}</span></Link></li>
                   </>
                 ) : (
                   <>
                     <li><Link href="/auth" className="hover:text-bat-gold-400 transition-colors">Entrar</Link></li>
                     <li><Link href="/auth?tab=cadastro" className="hover:text-bat-gold-400 transition-colors">Criar conta</Link></li>
-                    <li><Link href="/novidades" className="hover:text-bat-gold-400 transition-colors flex items-center gap-1">Novidades <span className="text-[10px] font-mono font-bold text-bat-gold-400">v3.3.1</span></Link></li>
+                    <li><Link href="/novidades" className="hover:text-bat-gold-400 transition-colors flex items-center gap-1">Novidades <span className="text-[10px] font-mono font-bold text-bat-gold-400">v{CURRENT_APP_VERSION}</span></Link></li>
                   </>
                 )}
               </ul>
