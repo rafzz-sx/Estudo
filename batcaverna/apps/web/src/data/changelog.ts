@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.3.2';
+export const CURRENT_APP_VERSION = '3.4.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -18,12 +18,56 @@ export const CURRENT_APP_VERSION = '3.3.2';
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
   {
+    versao: '3.4.0',
+    dataLancamento: '2026-10-09T20:30:00-03:00',
+    titulo: 'Trilha Sonora Tática, Chat Datado & Blindagem de Segurança',
+    resumo:
+      'Integração musical completa com importação de playlists do Spotify e busca no YouTube, novo chat militar com histórico datado, fluxo de recuperação visual de conta e blindagem total de segurança.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'trilha-sonora-spotify-youtube',
+        tipo: 'novo',
+        titulo: 'Arsenal Musical: Importação do Spotify e Busca no YouTube',
+        descricao:
+          'Agora você pode importar suas playlists públicas do Spotify ou pesquisar qualquer música no YouTube diretamente pelo app e adicionar à sua playlist pessoal da BatCaverna.',
+        tag: 'Música & Foco',
+      },
+      {
+        id: 'chat-militar-datado',
+        tipo: 'melhoria',
+        titulo: 'Chat Militar com Mensagens Datadas',
+        descricao:
+          'Novo agrupamento cronológico de mensagens com separadores de data e horário refinados para facilitar o acompanhamento dos estudos com seus colegas de esquadrão.',
+        tag: 'Chat & Squad',
+      },
+      {
+        id: 'recuperacao-senha-aprimorada',
+        tipo: 'melhoria',
+        titulo: 'Recuperação Visual de Senha com Alerta Anti-Spam',
+        descricao:
+          'Interface aprimorada com logotipo oficial da BatCaverna, orientações claras de entrega na caixa de Spam e envio seguro de códigos numéricos de 6 dígitos sem expor dados no título.',
+        tag: 'Acesso & Segurança',
+      },
+      {
+        id: 'blindagem-appsec-sessao',
+        tipo: 'melhoria',
+        titulo: 'Blindagem de Sessão e Hardening Mobile',
+        descricao:
+          'Rotação contínua de refresh tokens (RFC 6749) com detecção de reuso, comunicação restrita a conexões criptografadas e isolamento de navegação no aplicativo.',
+        tag: 'Segurança Tática',
+      },
+    ],
+  },
+  {
     versao: '3.3.2',
     dataLancamento: '2026-10-09T17:40:00-03:00',
     titulo: 'Blindagem de Acesso & Recuperação Tática de Credenciais',
     resumo:
       'Novo fluxo seguro de recuperação de conta para os alunos, entrega instantânea de tokens e códigos de autorização via e-mail oficial com layout temático da BatCaverna e melhorias na visibilidade de senhas.',
-    destaque: true,
+    destaque: false,
     impacto: 'patch',
     classificacao: 'atualizacao',
     alteracoes: [
