@@ -3,14 +3,22 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { CHANGELOG_HISTORY, CURRENT_APP_VERSION } from "@/data/changelog";
-import type { ChangeType, ReleaseItem } from "@batcaverna/types";
-import { formatReleaseDateTime } from "@batcaverna/utils";
+import type { ChangeType, ReleaseClassificacao, ReleaseItem } from "@batcaverna/types";
+import {
+  formatReleaseDateTime,
+  determinarClassificacao,
+  getClassificacaoInfo,
+} from "@batcaverna/utils";
 
 const STORAGE_LAST_SEEN_KEY = "batcaverna_last_seen_version";
 
 export function NovidadesView() {
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<ChangeType | "todos">("todos");
+  const [filtroClassificacao, setFiltroClassificacao] = useState<
+    ReleaseClassificacao | "todas"
+  >("todas");
+  const [guiaAberto, setGuiaAberto] = useState(false);
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
 
   // Ao visitar a página de novidades, marca a versão atual como vista
@@ -36,6 +44,10 @@ export function NovidadesView() {
     const termo = busca.trim().toLowerCase();
 
     return CHANGELOG_HISTORY.map((rel) => {
+      const classif = determinarClassificacao(rel);
+      const matchesClassificacao =
+        filtroClassificacao === "todas" || classif === filtroClassificacao;
+
       const correspondeVersaoOuTitulo =
         rel.versao.toLowerCase().includes(termo) ||
         rel.titulo.toLowerCase().includes(termo) ||
@@ -55,11 +67,15 @@ export function NovidadesView() {
 
       return {
         ...rel,
+        classificacaoCalculada: classif,
         alteracoes: alteracoesFiltradas,
-        visivel: alteracoesFiltradas.length > 0 || (filtroTipo === "todos" && correspondeVersaoOuTitulo),
+        visivel:
+          matchesClassificacao &&
+          (alteracoesFiltradas.length > 0 ||
+            (filtroTipo === "todos" && correspondeVersaoOuTitulo)),
       };
     }).filter((rel) => rel.visivel);
-  }, [busca, filtroTipo]);
+  }, [busca, filtroTipo, filtroClassificacao]);
 
   const copiarLinkVersao = (versao: string) => {
     const url = `${window.location.origin}/novidades#v${versao.replace(/\./g, "-")}`;
@@ -74,28 +90,24 @@ export function NovidadesView() {
         return {
           label: "NOVO RECURSO",
           badgeClass: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-          dotClass: "bg-emerald-400",
           icon: "✨",
         };
       case "melhoria":
         return {
           label: "MELHORIA",
           badgeClass: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-          dotClass: "bg-blue-400",
           icon: "⚡",
         };
       case "correcao":
         return {
           label: "CORREÇÃO",
           badgeClass: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-          dotClass: "bg-amber-400",
           icon: "🛠️",
         };
       case "removido":
         return {
           label: "MODIFICADO",
           badgeClass: "bg-red-500/15 text-red-400 border-red-500/30",
-          dotClass: "bg-red-400",
           icon: "⚠️",
         };
     }
@@ -165,79 +177,239 @@ export function NovidadesView() {
             </span>
           </div>
         </div>
+
+        {/* ═══ GUIA DA TAXONOMIA DE VERSÕES (INTERATIVO) ═══ */}
+        <div className="mt-6 pt-5 border-t border-bat-border/60">
+          <button
+            type="button"
+            onClick={() => setGuiaAberto(!guiaAberto)}
+            className="w-full flex items-center justify-between p-3 rounded-2xl bg-bat-bg-elevated/30 hover:bg-bat-bg-elevated/60 border border-bat-border/60 text-left transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">🏷️</span>
+              <div>
+                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-bat-gold-400 transition-colors">
+                  Como funciona a classificação das nossas versões?
+                </span>
+                <span className="text-[11px] text-bat-text-muted block sm:inline sm:ml-2">
+                  (Exemplo: v3.5.4 · Maior, Grande, Atualização e Pequena)
+                </span>
+              </div>
+            </div>
+            <span
+              className={`text-xs text-bat-gold-400 transition-transform duration-200 ${
+                guiaAberto ? "rotate-180" : "rotate-0"
+              }`}
+            >
+              ▼
+            </span>
+          </button>
+
+          {guiaAberto && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              {/* Maior Atualização */}
+              <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/50 border border-yellow-500/30 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300 mb-1">
+                    <span>⭐</span> MAIOR ATUALIZAÇÃO
+                  </div>
+                  <div className="font-mono text-sm text-bat-gold-400 font-bold mb-1">
+                    v<span className="text-yellow-300 underline font-black">X</span>.0.0
+                  </div>
+                  <p className="text-[11px] text-bat-text-secondary leading-relaxed">
+                    Muda apenas o <strong>1º número da esquerda</strong>. Representa um salto de geração da plataforma ou mega atualização estrutural.
+                  </p>
+                </div>
+              </div>
+
+              {/* Grande Atualização */}
+              <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/50 border border-indigo-500/30 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300 mb-1">
+                    <span>🚀</span> GRANDE ATUALIZAÇÃO
+                  </div>
+                  <div className="font-mono text-sm text-indigo-300 font-bold mb-1">
+                    v3.<span className="text-indigo-300 underline font-black">X</span>.0
+                  </div>
+                  <p className="text-[11px] text-bat-text-secondary leading-relaxed">
+                    Muda o <strong>número do meio</strong>. Lançamento de grandes módulos, novos arsenais completos ou sistemas inéditos.
+                  </p>
+                </div>
+              </div>
+
+              {/* Atualização */}
+              <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/50 border border-cyan-500/30 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300 mb-1">
+                    <span>⚡</span> ATUALIZAÇÃO
+                  </div>
+                  <div className="font-mono text-sm text-cyan-300 font-bold mb-1">
+                    v3.5.<span className="text-cyan-300 underline font-black">X</span>
+                  </div>
+                  <p className="text-[11px] text-bat-text-secondary leading-relaxed">
+                    Muda o <strong>3º número</strong> trazendo novos recursos notáveis, melhorias expressivas ou expansão de ferramentas.
+                  </p>
+                </div>
+              </div>
+
+              {/* Pequena Atualização */}
+              <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/50 border border-slate-500/30 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 mb-1">
+                    <span>🛠️</span> PEQUENA ATUALIZAÇÃO
+                  </div>
+                  <div className="font-mono text-sm text-slate-300 font-bold mb-1">
+                    v3.5.<span className="text-slate-300 underline font-black">X</span>
+                  </div>
+                  <p className="text-[11px] text-bat-text-secondary leading-relaxed">
+                    Muda o <strong>3º número</strong> focando em pequenos ajustes rápidos, otimizações de performance, design e hotfixes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═══ FILTROS & BUSCA ═══ */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-bat-bg-card/70 border border-bat-border rounded-2xl p-4 backdrop-blur-sm sticky top-16 lg:top-4 z-20 shadow-lg">
-        {/* Input de Busca */}
-        <div className="relative flex-1">
+      <div className="space-y-3 bg-bat-bg-card/85 border border-bat-border rounded-2xl p-4 backdrop-blur-md sticky top-16 lg:top-4 z-20 shadow-lg">
+        {/* Linha 1: Input de Busca */}
+        <div className="relative w-full">
           <svg
             className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-bat-text-muted pointer-events-none"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
           </svg>
           <input
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por recurso, correção ou palavra-chave..."
-            className="w-full bg-bat-bg-elevated border border-bat-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-bat-text-muted focus:outline-none focus:border-bat-gold-400/70 transition-colors"
+            placeholder="Buscar por recurso, versão ou palavra-chave..."
+            className="w-full bg-bat-bg-elevated border border-bat-border rounded-xl pl-10 pr-16 py-2.5 text-sm text-white placeholder-bat-text-muted focus:outline-none focus:border-bat-gold-400/70 transition-colors"
           />
           {busca && (
             <button
               onClick={() => setBusca("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-bat-text-muted hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-bat-text-muted hover:text-white cursor-pointer"
             >
               Limpar
             </button>
           )}
         </div>
 
-        {/* Filtros por Categoria */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          <button
-            onClick={() => setFiltroTipo("todos")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              filtroTipo === "todos"
-                ? "bg-bat-gold-400 text-black font-extrabold shadow-[0_0_15px_rgba(245,197,24,0.3)]"
-                : "bg-bat-bg-elevated text-bat-text-secondary hover:text-white border border-bat-border"
-            }`}
-          >
-            Todas
-          </button>
-          <button
-            onClick={() => setFiltroTipo("novo")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              filtroTipo === "novo"
-                ? "bg-emerald-500 text-black font-extrabold shadow-[0_0_15px_rgba(34,197,94,0.3)]"
-                : "bg-bat-bg-elevated text-emerald-400 hover:text-emerald-300 border border-bat-border"
-            }`}
-          >
-            ✨ Novos
-          </button>
-          <button
-            onClick={() => setFiltroTipo("melhoria")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              filtroTipo === "melhoria"
-                ? "bg-blue-500 text-white font-extrabold shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-                : "bg-bat-bg-elevated text-blue-400 hover:text-blue-300 border border-bat-border"
-            }`}
-          >
-            ⚡ Melhorias
-          </button>
-          <button
-            onClick={() => setFiltroTipo("correcao")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              filtroTipo === "correcao"
-                ? "bg-amber-500 text-black font-extrabold shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-                : "bg-bat-bg-elevated text-amber-400 hover:text-amber-300 border border-bat-border"
-            }`}
-          >
-            🛠️ Correções
-          </button>
+        {/* Linha 2: Filtros por Porte da Versão e Tipo de Mudança */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+          {/* Porte da Atualização */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <span className="text-[10px] font-bold text-bat-text-muted uppercase tracking-wider mr-1 shrink-0">
+              Porte:
+            </span>
+            <button
+              onClick={() => setFiltroClassificacao("todas")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroClassificacao === "todas"
+                  ? "bg-bat-gold-400 text-black font-extrabold shadow-[0_0_12px_rgba(245,197,24,0.3)]"
+                  : "bg-bat-bg-elevated text-bat-text-secondary hover:text-white border border-bat-border"
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setFiltroClassificacao("maior")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroClassificacao === "maior"
+                  ? "bg-yellow-400 text-black font-extrabold shadow-[0_0_12px_rgba(250,204,21,0.3)]"
+                  : "bg-bat-bg-elevated text-yellow-300 hover:text-yellow-200 border border-bat-border"
+              }`}
+            >
+              ⭐ Maiores
+            </button>
+            <button
+              onClick={() => setFiltroClassificacao("grande")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroClassificacao === "grande"
+                  ? "bg-indigo-500 text-white font-extrabold shadow-[0_0_12px_rgba(99,102,241,0.3)]"
+                  : "bg-bat-bg-elevated text-indigo-300 hover:text-indigo-200 border border-bat-border"
+              }`}
+            >
+              🚀 Grandes
+            </button>
+            <button
+              onClick={() => setFiltroClassificacao("atualizacao")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroClassificacao === "atualizacao"
+                  ? "bg-cyan-500 text-black font-extrabold shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                  : "bg-bat-bg-elevated text-cyan-300 hover:text-cyan-200 border border-bat-border"
+              }`}
+            >
+              ⚡ Atualizações
+            </button>
+            <button
+              onClick={() => setFiltroClassificacao("pequena")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroClassificacao === "pequena"
+                  ? "bg-slate-400 text-black font-extrabold"
+                  : "bg-bat-bg-elevated text-slate-300 hover:text-white border border-bat-border"
+              }`}
+            >
+              🛠️ Pequenas
+            </button>
+          </div>
+
+          {/* Tipo de Mudança */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none sm:justify-end">
+            <span className="text-[10px] font-bold text-bat-text-muted uppercase tracking-wider mr-1 shrink-0">
+              Tipo:
+            </span>
+            <button
+              onClick={() => setFiltroTipo("todos")}
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroTipo === "todos"
+                  ? "bg-bat-bg-card text-white border border-bat-gold-400/50"
+                  : "text-bat-text-muted hover:text-white"
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setFiltroTipo("novo")}
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroTipo === "novo"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50"
+                  : "text-bat-text-muted hover:text-emerald-300"
+              }`}
+            >
+              ✨ Novos
+            </button>
+            <button
+              onClick={() => setFiltroTipo("melhoria")}
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroTipo === "melhoria"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/50"
+                  : "text-bat-text-muted hover:text-blue-300"
+              }`}
+            >
+              ⚡ Melhorias
+            </button>
+            <button
+              onClick={() => setFiltroTipo("correcao")}
+              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
+                filtroTipo === "correcao"
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/50"
+                  : "text-bat-text-muted hover:text-amber-300"
+              }`}
+            >
+              🛠️ Fixes
+            </button>
+          </div>
         </div>
       </div>
 
@@ -247,12 +419,13 @@ export function NovidadesView() {
           <div className="text-4xl mb-3">🔍</div>
           <h3 className="text-lg font-bold text-white">Nenhuma atualização encontrada</h3>
           <p className="text-bat-text-muted text-sm mt-1 max-w-md mx-auto">
-            Não encontramos nenhum registro correspondente ao termo "{busca}" com o filtro selecionado.
+            Não encontramos nenhum registro correspondente ao termo "{busca}" com os filtros selecionados.
           </p>
           <button
             onClick={() => {
               setBusca("");
               setFiltroTipo("todos");
+              setFiltroClassificacao("todas");
             }}
             className="mt-4 px-4 py-2 rounded-xl bg-bat-bg-elevated text-bat-gold-400 text-xs font-bold border border-bat-gold-400/30 hover:border-bat-gold-400 transition-colors cursor-pointer"
           >
@@ -261,10 +434,13 @@ export function NovidadesView() {
         </div>
       ) : (
         <div className="relative pl-4 sm:pl-6 space-y-8 before:content-[''] before:absolute before:left-[11px] sm:before:left-[15px] before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-bat-gold-400/40 before:via-bat-border before:to-transparent">
-          {releasesFiltradas.map((rel, index) => {
-            const { dataFormatada, horaFormatada, tempoRelativo } = formatReleaseDateTime(rel.dataLancamento);
+          {releasesFiltradas.map((rel) => {
+            const { dataFormatada, horaFormatada, tempoRelativo } = formatReleaseDateTime(
+              rel.dataLancamento
+            );
             const isLatest = rel.versao === CURRENT_APP_VERSION;
             const anchorId = `v${rel.versao.replace(/\./g, "-")}`;
+            const classInfo = getClassificacaoInfo(rel.classificacaoCalculada);
 
             return (
               <div
@@ -298,20 +474,25 @@ export function NovidadesView() {
                   {/* Cabeçalho do Card */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-bat-border/60">
                     <div className="flex flex-wrap items-center gap-2.5">
+                      {/* Número da Versão */}
                       <span className="font-mono font-bold text-base sm:text-lg text-bat-gold-400 bg-bat-gold-400/10 px-3 py-1 rounded-xl border border-bat-gold-400/25">
                         v{rel.versao}
                       </span>
 
+                      {/* Selo Oficial de Classificação (Maior, Grande, Atualização, Pequena) */}
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide border flex items-center gap-1.5 ${classInfo.badgeClass}`}
+                        title={classInfo.descricao}
+                      >
+                        <span>{classInfo.icon}</span>
+                        <span>{classInfo.rotulo}</span>
+                      </span>
+
+                      {/* Badge Versão Atual */}
                       {isLatest && (
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           Versão Atual
-                        </span>
-                      )}
-
-                      {rel.destaque && !isLatest && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30 uppercase tracking-wide">
-                          ⭐ Lançamento Maior
                         </span>
                       )}
                     </div>
@@ -323,14 +504,19 @@ export function NovidadesView() {
                       </span>
                       <button
                         onClick={() => copiarLinkVersao(rel.versao)}
-                        className="p-1 rounded-md hover:bg-bat-bg-elevated text-bat-text-muted hover:text-bat-gold-400 transition-colors ml-1"
+                        className="p-1 rounded-md hover:bg-bat-bg-elevated text-bat-text-muted hover:text-bat-gold-400 transition-colors ml-1 cursor-pointer"
                         title="Copiar link desta versão"
                       >
                         {copiadoId === rel.versao ? (
                           <span className="text-[11px] text-emerald-400 font-bold">Copiado!</span>
                         ) : (
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                            />
                           </svg>
                         )}
                       </button>

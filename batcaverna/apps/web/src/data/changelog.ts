@@ -4,13 +4,47 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.3.0';
+export const CURRENT_APP_VERSION = '3.3.1';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
  * Organizado estritamente em ordem decrescente (da versão mais recente para a mais antiga).
+ *
+ * Taxonomia de Classificação:
+ * - 'maior': Muda o 1º número da esquerda (vX.0.0) -> ⭐ Maior Atualização (Salto de geração)
+ * - 'grande': Muda o número do meio (v3.X.0) -> 🚀 Grande Atualização (Grandes módulos e arsenais)
+ * - 'atualizacao': Muda o 3º número da direita (v3.5.X) -> ⚡ Atualização (Novos recursos notáveis)
+ * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.3.1',
+    dataLancamento: '2026-10-08T21:40:00-03:00',
+    titulo: 'Sistema de Classificação Tática de Lançamentos',
+    resumo:
+      'Padronização de insígnias para cada porte de atualização: Maior Atualização (vX.0.0), Grande Atualização (v3.X.0), Atualização e Pequena Atualização (v3.5.X), com guia explicativo integrado.',
+    destaque: false,
+    impacto: 'patch',
+    classificacao: 'pequena',
+    alteracoes: [
+      {
+        id: 'taxonomia-lancamentos',
+        tipo: 'novo',
+        titulo: 'Selos de Classificação de Lançamento',
+        descricao:
+          'Cada versão agora conta com identificação clara de porte: Maior Atualização (exclusivo para mudanças de geração no 1º número), Grande Atualização (número central), Atualização e Pequena Atualização (último dígito).',
+        tag: 'Design / UX',
+      },
+      {
+        id: 'guia-taxonomia-versoes',
+        tipo: 'melhoria',
+        titulo: 'Guia Interativo de Versões',
+        descricao:
+          'Painel informativo demonstrando a hierarquia das versões (v3.5.4) para os alunos acompanharem a evolução do sistema.',
+        tag: 'Plataforma',
+      },
+    ],
+  },
   {
     versao: '3.3.0',
     dataLancamento: '2026-10-08T21:00:00-03:00',
@@ -19,6 +53,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Lançamento da página oficial de Novidades, detecção automática de melhorias perdidas para soldados que retornam à base e unificação global do controle de versões.',
     destaque: true,
     impacto: 'minor',
+    classificacao: 'grande',
     alteracoes: [
       {
         id: 'novidades-page',
@@ -62,6 +97,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Renderização de figuras geométricas fiéis para EPCAR e Colégio Naval, suporte completo a KaTeX nas alternativas e blindagem contra erros de navegação rápida.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'atualizacao',
     alteracoes: [
       {
         id: 'diagramas-geometricos',
@@ -105,6 +141,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Migração das rotas de borda para o datacenter de São Paulo (gru1), reduzindo a latência para estudantes de todo o Brasil.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'pequena',
     alteracoes: [
       {
         id: 'infra-edge-gru1',
@@ -140,6 +177,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Criação de índices compostos no PostgreSQL para filtros instantâneos no banco de questões e no caderno de erros.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'pequena',
     alteracoes: [
       {
         id: 'sql-indices-banco',
@@ -167,6 +205,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Padronização de alta fidelidade visual do ícone do morcego dourado no app Android, telas de início e abas dos navegadores.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'pequena',
     alteracoes: [
       {
         id: 'mobile-icons-hd',
@@ -194,6 +233,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Implementação de segurança máxima nas conversas dos esquadrões com criptografia AES-256-GCM e inspeção contra abusos.',
     destaque: true,
     impacto: 'minor',
+    classificacao: 'grande',
     alteracoes: [
       {
         id: 'chat-encryption',
@@ -229,6 +269,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Inclusão obrigatória de botão de alternância de visibilidade de senha em todos os formulários da plataforma.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'atualizacao',
     alteracoes: [
       {
         id: 'auth-eye-toggle',
@@ -248,6 +289,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Transformação dos enunciados e bizus para leitura de fórmulas matemáticas em alta fidelidade tipográfica.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'atualizacao',
     alteracoes: [
       {
         id: 'katex-engine',
@@ -275,6 +317,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Navegação mobile reconstruída com drag-to-scroll suave e acesso imediato a todas as ferramentas.',
     destaque: false,
     impacto: 'patch',
+    classificacao: 'pequena',
     alteracoes: [
       {
         id: 'bottom-bar-drag',
@@ -302,6 +345,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Aceleração no carregamento das faixas musicais, suporte a redação multi-banca e cronograma calibrado.',
     destaque: false,
     impacto: 'minor',
+    classificacao: 'grande',
     alteracoes: [
       {
         id: 'music-player-fast',
@@ -329,6 +373,7 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       'Salto de geração da plataforma com Sincronia de Esquadrão, Radar de Soldados ao Vivo e novas conquistas.',
     destaque: true,
     impacto: 'major',
+    classificacao: 'maior',
     alteracoes: [
       {
         id: 'squad-sync-xp',

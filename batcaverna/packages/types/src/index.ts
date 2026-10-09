@@ -357,6 +357,8 @@ export interface ImportacaoLog {
 
 export type ChangeType = 'novo' | 'melhoria' | 'correcao' | 'removido';
 
+export type ReleaseClassificacao = 'maior' | 'grande' | 'atualizacao' | 'pequena';
+
 export interface ChangelogItem {
   id: string;
   tipo: ChangeType;
@@ -372,6 +374,7 @@ export interface ReleaseItem {
   resumo: string;
   destaque?: boolean;
   impacto?: 'major' | 'minor' | 'patch';
+  classificacao?: ReleaseClassificacao;
   alteracoes: ChangelogItem[];
 }
 

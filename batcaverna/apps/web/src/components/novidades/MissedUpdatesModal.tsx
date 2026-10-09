@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { CHANGELOG_HISTORY, CURRENT_APP_VERSION } from "@/data/changelog";
-import { getMissedReleases, compareSemver } from "@batcaverna/utils";
+import { getMissedReleases, compareSemver, determinarClassificacao, getClassificacaoInfo } from "@batcaverna/utils";
 import type { ReleaseItem } from "@batcaverna/types";
 
 const STORAGE_LAST_SEEN_KEY = "batcaverna_last_seen_version";
@@ -64,6 +64,7 @@ export function MissedUpdatesModal() {
 
   const totalVersoesPerdidas = releasesPerdidas.length;
   const maisRecente = releasesPerdidas[0];
+  const classInfo = maisRecente ? getClassificacaoInfo(determinarClassificacao(maisRecente)) : null;
 
   // Coleta as top 4 principais alterações para destacar no modal compacto
   const destaques = releasesPerdidas
@@ -98,9 +99,19 @@ export function MissedUpdatesModal() {
             🦇
           </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/30 text-[11px] font-mono font-bold text-bat-gold-400 uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-bat-gold-400 animate-ping" />
-              Atualização BatCaverna v{CURRENT_APP_VERSION}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-bat-gold-400/15 border border-bat-gold-400/30 text-[11px] font-mono font-bold text-bat-gold-400 uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-bat-gold-400 animate-ping" />
+                v{CURRENT_APP_VERSION}
+              </div>
+              {classInfo && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border flex items-center gap-1 ${classInfo.badgeClass}`}
+                >
+                  <span>{classInfo.icon}</span>
+                  <span>{classInfo.rotulo}</span>
+                </span>
+              )}
             </div>
             <h2 id="titulo-novidades" className="heading text-xl sm:text-2xl font-bold text-white mt-1">
               {totalVersoesPerdidas > 1

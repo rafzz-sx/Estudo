@@ -2,7 +2,7 @@
 // @batcaverna/utils — Utilitários de Semver & Changelog
 // ============================================================
 
-import type { ReleaseItem } from '@batcaverna/types';
+import type { ReleaseItem, ReleaseClassificacao } from '@batcaverna/types';
 
 export interface ParsedSemver {
   major: number;
@@ -175,5 +175,96 @@ export function formatReleaseDateTime(isoDate: string): {
       horaFormatada: '--:--',
       tempoRelativo: 'Recentemente',
     };
+  }
+}
+
+export interface ClassificacaoInfo {
+  tipo: ReleaseClassificacao;
+  rotulo: string;
+  icon: string;
+  badgeClass: string;
+  dotClass: string;
+  descricao: string;
+}
+
+/**
+ * Determina a classificação da versão seguindo a taxonomia militar da BatCaverna:
+ * - Maior Atualização: Muda o 1º número da esquerda (Major: X.0.0, ex: v3.0.0, v4.0.0).
+ * - Grande Atualização: Muda o número do meio (Minor: 3.X.0, ex: v3.1.0, v3.2.0, v3.3.0).
+ * - Atualização: Muda o 3º número da direita com recursos novos (Patch com novidades: 3.5.X).
+ * - Pequena Atualização: Muda o 3º número da direita com refinamentos/hotfixes/correções rápidas.
+ */
+export function determinarClassificacao(rel: ReleaseItem): ReleaseClassificacao {
+  if (rel.classificacao) {
+    return rel.classificacao;
+  }
+
+  const { major, minor, patch } = parseSemver(rel.versao);
+
+  // Maior: X.0.0
+  if (major > 0 && minor === 0 && patch === 0) {
+    return 'maior';
+  }
+
+  // Grande: X.Y.0
+  if (patch === 0) {
+    return 'grande';
+  }
+
+  // Atualização ou Pequena Atualização: X.Y.Z
+  const temRecursoNovo = rel.alteracoes?.some((a) => a.tipo === 'novo');
+  if (temRecursoNovo) {
+    return 'atualizacao';
+  }
+
+  return 'pequena';
+}
+
+/**
+ * Retorna os metadados visuais (rótulo, badge classes, ícone) para a classificação.
+ */
+export function getClassificacaoInfo(classificacao: ReleaseClassificacao): ClassificacaoInfo {
+  switch (classificacao) {
+    case 'maior':
+      return {
+        tipo: 'maior',
+        rotulo: 'MAIOR ATUALIZAÇÃO',
+        icon: '⭐',
+        badgeClass:
+          'bg-gradient-to-r from-amber-500/20 via-yellow-400/25 to-amber-500/20 text-yellow-300 border-yellow-400/50 shadow-[0_0_15px_rgba(250,204,21,0.25)]',
+        dotClass: 'bg-yellow-400',
+        descricao: 'Salto de geração da plataforma (muda o 1º número da esquerda)',
+      };
+    case 'grande':
+      return {
+        tipo: 'grande',
+        rotulo: 'GRANDE ATUALIZAÇÃO',
+        icon: '🚀',
+        badgeClass:
+          'bg-indigo-500/15 text-indigo-300 border-indigo-500/40 shadow-[0_0_12px_rgba(99,102,241,0.2)]',
+        dotClass: 'bg-indigo-400',
+        descricao: 'Novos arsenais e grandes módulos (muda o número do meio)',
+      };
+    case 'atualizacao':
+      return {
+        tipo: 'atualizacao',
+        rotulo: 'ATUALIZAÇÃO',
+        icon: '⚡',
+        badgeClass:
+          'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+        dotClass: 'bg-cyan-400',
+        descricao: 'Recursos notáveis e melhorias expressivas (muda o 3º número)',
+      };
+    case 'pequena':
+    default:
+      return {
+        tipo: 'pequena',
+        rotulo: 'PEQUENA ATUALIZAÇÃO',
+        icon: '🛠️',
+        badgeClass:
+          'bg-slate-500/15 text-slate-300 border-slate-500/30',
+        dotClass: 'bg-slate-400',
+        descricao: 'Ajustes finos, performance e correções rápidas (muda o 3º número)',
+      };
   }
 }
