@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from('musicas')
       .select(
-        'id, titulo, artista, album, capa_url, audio_url, duracao_segundos, cor_primaria, cor_secundaria, genero'
+        'id, titulo, artista, album, capa_url, audio_url, duracao_segundos, cor_primaria, cor_secundaria, genero, fonte, fonte_id'
       )
       .eq('ativa', true);
 
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { titulo, artista, album, capa_url, audio_url, duracao_segundos, genero } = body;
+    const { titulo, artista, album, capa_url, audio_url, duracao_segundos, genero, fonte, fonte_id } = body;
 
     if (!titulo || !audio_url) {
       return NextResponse.json(
@@ -123,7 +123,8 @@ export async function POST(req: NextRequest) {
         audio_url: url.toString(),
         duracao_segundos: Number(duracao_segundos) || 0,
         genero: genero ? String(genero).slice(0, 60) : null,
-        fonte: 'url',
+        fonte: fonte ? String(fonte).slice(0, 24) : 'url',
+        fonte_id: fonte_id ? String(fonte_id).slice(0, 120) : null,
       })
       .select()
       .single();

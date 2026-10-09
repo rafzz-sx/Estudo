@@ -18,6 +18,7 @@ interface Mensagem {
   midia_url?: string | null;
   duracao_segundos?: number | null;
   enviado_em: string;
+  lida?: boolean;
   sinalizada_para_revisao?: boolean;
   remetente?: {
     id: string;
@@ -70,6 +71,60 @@ function textoPresenca(iso: string | null): string {
   if (dias === 1) return "Visto ontem";
   if (dias < 30) return `Visto há ${dias} dias`;
   return "Sem entrar há mais de um mês";
+}
+
+/**
+ * Converte data ISO para divisor de data amigável estilo WhatsApp:
+ * "Hoje", "Ontem", dia da semana ("Quinta-feira") ou data ("08/10/2026")
+ */
+function formatarDataWhatsApp(dataIso: string): string {
+  if (!dataIso) return "";
+  const data = new Date(dataIso);
+  const hoje = new Date();
+
+  const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+  const inicioData = new Date(data.getFullYear(), data.getMonth(), data.getDate()).getTime();
+  const diffDias = Math.round((inicioHoje - inicioData) / (1000 * 60 * 60 * 24));
+
+  if (diffDias === 0) return "Hoje";
+  if (diffDias === 1) return "Ontem";
+  if (diffDias > 1 && diffDias < 7) {
+    const dias = [
+      "Domingo",
+      "Segunda-feira",
+      "Terça-feira",
+      "Quarta-feira",
+      "Quinta-feira",
+      "Sexta-feira",
+      "Sábado",
+    ];
+    return dias[data.getDay()];
+  }
+
+  return data.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function ehMesmoDia(d1Iso: string, d2Iso: string): boolean {
+  if (!d1Iso || !d2Iso) return false;
+  const d1 = new Date(d1Iso);
+  const d2 = new Date(d2Iso);
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
+
+function formatarPreviaMensagem(msg?: string): string {
+  if (!msg) return "Inicie a conversa...";
+  if (msg.startsWith("aes256gcm$") || msg.startsWith("aes256")) {
+    return "💬 Mensagem de texto";
+  }
+  return msg;
 }
 
 export default function ChatPage() {
@@ -897,7 +952,7 @@ export default function ChatPage() {
                         ) : null}
                       </div>
                       <p className="text-xs text-bat-text-muted truncate">
-                        {conv.ultima_mensagem || "Inicie a conversa..."}
+                        {formatarPreviaMensagem(conv.ultima_mensagem)}
                       </p>
                     </div>
 
@@ -1005,94 +1060,117 @@ export default function ChatPage() {
                     Envie a primeira mensagem, foto ou áudio para {conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || '...'}!
                   </div>
                 ) : (
-                  mensagens.map((msg) => {
+                  mensagens.map((msg, index) => {
                     const souEu = msg.remetente_id === user?.id;
+                    const msgAnterior = index > 0 ? mensagens[index - 1] : null;
+                    const mudouDia = !msgAnterior || !ehMesmoDia(msgAnterior.enviado_em, msg.enviado_em);
+
                     return (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${souEu ? "items-end" : "items-start"}`}
-                      >
-                        <div className="flex items-end gap-2 max-w-[85%]">
-                          {!souEu && (
-                            <div className="w-7 h-7 rounded-lg bg-bat-bg-tertiary border border-bat-border flex items-center justify-center text-xs font-bold text-bat-gold-400 flex-shrink-0 overflow-hidden">
-                              {msg.remetente?.avatar_url ? (
-                                <img
-                                  src={msg.remetente.avatar_url}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                msg.remetente?.apelido[0]?.toUpperCase() || "S"
-                              )}
-                            </div>
-                          )}
+                      <div key={msg.id} className="w-full">
+                        {/* Divisor de Data Centralizado estilo WhatsApp */}
+                        {mudouDia && (
+                          <div className="flex justify-center my-4 sticky top-1 z-10 select-none">
+                            <span className="text-[11px] font-semibold tracking-wide text-bat-text-muted bg-bat-bg-card/95 border border-bat-border/70 px-3.5 py-1 rounded-full shadow-md backdrop-blur-md">
+                              {formatarDataWhatsApp(msg.enviado_em)}
+                            </span>
+                          </div>
+                        )}
 
-                          <div
-                            className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
-                              souEu
-                                ? "bg-bat-gold-400 text-black font-medium rounded-br-none shadow-lg shadow-bat-gold-400/10"
-                                : "bg-bat-bg-card border border-bat-border text-bat-text rounded-bl-none"
-                            }`}
-                          >
+                        <div className={`flex flex-col my-1.5 ${souEu ? "items-end" : "items-start"}`}>
+                          <div className="flex items-end gap-2 max-w-[88%] sm:max-w-[78%]">
                             {!souEu && (
-                              <p className="text-[10px] font-bold text-bat-gold-400 mb-1">
-                                {msg.remetente?.apelido}
-                              </p>
-                            )}
-
-                            {/* Conteúdo de Texto */}
-                            {msg.tipo === "texto" && <p>{msg.conteudo}</p>}
-
-                            {/* Conteúdo de Áudio */}
-                            {msg.tipo === "audio" && msg.midia_url && (
-                              <AudioMensagemPlayer
-                                src={msg.midia_url}
-                                duracao={msg.duracao_segundos}
-                                souEu={souEu}
-                              />
-                            )}
-
-                            {/* Conteúdo de Imagem */}
-                            {msg.tipo === "imagem" && msg.midia_url && (
-                              <div className="space-y-1.5">
-                                <img
-                                  src={msg.midia_url}
-                                  alt="Foto anexada"
-                                  onClick={() => setLightboxUrl(msg.midia_url || null)}
-                                  className="max-h-56 rounded-xl object-cover cursor-zoom-in hover:opacity-95 transition-opacity"
-                                />
-                                {msg.conteudo && msg.conteudo !== "Foto enviada" && (
-                                  <p className="mt-1">{msg.conteudo}</p>
+                              <div className="w-7 h-7 rounded-lg bg-bat-bg-tertiary border border-bat-border flex items-center justify-center text-xs font-bold text-bat-gold-400 flex-shrink-0 overflow-hidden mb-0.5">
+                                {msg.remetente?.avatar_url ? (
+                                  <img
+                                    src={msg.remetente.avatar_url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  msg.remetente?.apelido[0]?.toUpperCase() || "S"
                                 )}
                               </div>
                             )}
 
-                            {msg.sinalizada_para_revisao && (
-                              <span className="text-[9px] block text-red-500 font-bold mt-1">
-                                ⚠️ Conteúdo em moderação
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                            <div
+                              className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed max-w-full shadow-sm ${
+                                souEu
+                                  ? "bg-bat-gold-400 text-black font-medium rounded-br-xs shadow-bat-gold-400/10"
+                                  : "bg-bat-bg-card border border-bat-border text-bat-text rounded-bl-xs"
+                              }`}
+                            >
+                              {!souEu && conversaAtiva.tipo === 'grupo' && (
+                                <p className="text-[10px] font-bold text-bat-gold-400 mb-1">
+                                  {msg.remetente?.apelido || 'Soldado'}
+                                </p>
+                              )}
 
-                        <div className="flex items-center gap-1.5 text-[10px] text-bat-text-muted mt-1 px-1">
-                          {msg._otimista ? (
-                            <span className="flex items-center gap-1 text-bat-gold-400 font-medium">
-                              <span className="inline-block w-2 h-2 rounded-full border border-bat-gold-400 border-t-transparent animate-spin" />
-                              Enviando...
-                            </span>
-                          ) : msg._erroEnvio ? (
-                            <span className="text-red-400 font-medium flex items-center gap-1">
-                              ⚠️ Não enviada
-                            </span>
-                          ) : (
-                            <span>
-                              {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          )}
+                              {/* Conteúdo de Texto */}
+                              {msg.tipo === "texto" && (
+                                <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                              )}
+
+                              {/* Conteúdo de Áudio */}
+                              {msg.tipo === "audio" && msg.midia_url && (
+                                <AudioMensagemPlayer
+                                  src={msg.midia_url}
+                                  duracao={msg.duracao_segundos}
+                                  souEu={souEu}
+                                />
+                              )}
+
+                              {/* Conteúdo de Imagem */}
+                              {msg.tipo === "imagem" && msg.midia_url && (
+                                <div className="space-y-1.5">
+                                  <img
+                                    src={msg.midia_url}
+                                    alt="Foto anexada"
+                                    onClick={() => setLightboxUrl(msg.midia_url || null)}
+                                    className="max-h-60 rounded-xl object-cover cursor-zoom-in hover:opacity-95 transition-opacity"
+                                  />
+                                  {msg.conteudo && msg.conteudo !== "Foto enviada" && (
+                                    <p className="mt-1 whitespace-pre-wrap break-words">{msg.conteudo}</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {msg.sinalizada_para_revisao && (
+                                <span className="text-[9px] block text-red-500 font-bold mt-1">
+                                  ⚠️ Conteúdo em moderação
+                                </span>
+                              )}
+
+                              {/* Rodapé Interno do Balão (Horário + Confirmação de Envio estilo WhatsApp) */}
+                              <div
+                                className={`flex items-center justify-end gap-1 mt-1 text-[10px] font-mono select-none ${
+                                  souEu ? "text-black/60" : "text-bat-text-muted"
+                                }`}
+                              >
+                                <span>
+                                  {new Date(msg.enviado_em).toLocaleTimeString("pt-BR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                                {souEu && (
+                                  <>
+                                    {msg._otimista ? (
+                                      <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/40 border-t-transparent animate-spin ml-0.5" />
+                                    ) : msg._erroEnvio ? (
+                                      <span className="text-red-700 font-bold ml-0.5" title="Não enviada">⚠️</span>
+                                    ) : (
+                                      <span
+                                        className={`font-bold ml-0.5 ${msg.lida ? "text-blue-700" : "text-black/70"}`}
+                                        title={msg.lida ? "Lida" : "Entregue"}
+                                      >
+                                        {msg.lida ? "✓✓" : "✓"}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );

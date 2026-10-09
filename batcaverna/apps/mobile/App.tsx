@@ -128,12 +128,12 @@ function BatCavernaApp() {
     }
   };
 
-  // Trata links externos como whatsapp, tel, mailto, etc.
+  // Trata links externos e protocolos nativos com segurança
   const handleShouldStartLoadWithRequest = (request: WebViewNavigation) => {
     const { url } = request;
     if (!url) return false;
 
-    // Se for URL externa de terceiros ou protocolos nativos
+    // Protocolos nativos de comunicação
     if (
       url.startsWith("tel:") ||
       url.startsWith("mailto:") ||
@@ -149,6 +149,33 @@ function BatCavernaApp() {
         })
         .catch(() => {});
       return false;
+    }
+
+    // Se for URL web externa (fora dos domínios oficiais da plataforma), abre no navegador nativo
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      const allowedHosts = [
+        "estudo-tan.vercel.app",
+        "batcaverna.app",
+        "www.batcaverna.app",
+        "localhost",
+        "127.0.0.1",
+      ];
+
+      try {
+        // Extrai o host de forma segura
+        const match = url.match(/^https?:\/\/([^/?#]+)/i);
+        const host = match ? match[1].toLowerCase() : "";
+        const isInternal = allowedHosts.some(
+          (allowed) => host === allowed || host.endsWith(".supabase.co")
+        );
+
+        if (!isInternal) {
+          Linking.openURL(url).catch(() => {});
+          return false;
+        }
+      } catch {
+        return false;
+      }
     }
 
     return true;
@@ -200,8 +227,8 @@ function BatCavernaApp() {
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
           allowsFullscreenVideo={true}
-          mixedContentMode="always"
-          originWhitelist={["*"]}
+          mixedContentMode="never"
+          originWhitelist={["https://*", "http://localhost:*"]}
           cacheEnabled={true}
           cacheMode="LOAD_DEFAULT"
           setSupportMultipleWindows={false}

@@ -1,6 +1,6 @@
 {
   "name": "@batcaverna/mobile",
-  "version": "3.3.2",
+  "version": "3.4.0",
   "main": "index.js",
   "scripts": {
     "dev": "react-native start",

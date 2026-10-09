@@ -35,13 +35,22 @@ async function obterChaveCriptografia(): Promise<CryptoKey> {
 
   const segredo =
     process.env.ENCRYPTION_KEY?.trim() ||
-    process.env.JWT_SECRET?.trim() ||
-    'batcaverna-secure-master-key-default-salt-2026';
+    process.env.JWT_SECRET?.trim();
+
+  if (!segredo) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[SEGURANÇA CRÍTICA] ENCRYPTION_KEY ou JWT_SECRET não configurado na produção para criptografia de dados.'
+      );
+    }
+  }
+
+  const chaveMestra = segredo || 'batcaverna-secure-master-key-default-salt-2026';
 
   // Deriva 256 bits seguros via SHA-256 do segredo
   const hashKey = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(segredo + ':batcaverna:data-encryption')
+    new TextEncoder().encode(chaveMestra + ':batcaverna:data-encryption')
   );
 
   chaveCache = await crypto.subtle.importKey(

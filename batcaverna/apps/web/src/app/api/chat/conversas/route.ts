@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { decriptarTexto } from '@/lib/cripto';
 
 /**
  * Aceita cookie (navegador) e header Bearer (app/mobile).
@@ -66,51 +67,60 @@ export async function GET(req: NextRequest) {
     }
 
     // Formatar conversas diretas
-    const formatadas = (diretas || [])
-      .filter((c: any) => c.tipo !== 'grupo')
-      .map((c: any) => {
-        const outro = c.user_id_a === user.id ? c.userB : c.userA;
-        const msgs = (c.mensagens || []).sort(
-          (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
-        );
-        const ultimaMsg = msgs[0];
-        const naoLidas = msgs.filter((m: any) => !m.lida && m.autor_id !== user.id).length;
+    const formatadas = await Promise.all(
+      (diretas || [])
+        .filter((c: any) => c.tipo !== 'grupo')
+        .map(async (c: any) => {
+          const outro = c.user_id_a === user.id ? c.userB : c.userA;
+          const msgs = (c.mensagens || []).sort(
+            (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
+          );
+          const ultimaMsg = msgs[0];
+          const naoLidas = msgs.filter((m: any) => !m.lida && m.autor_id !== user.id).length;
 
-        return {
-          id: c.id,
-          tipo: 'direta',
-          amizade_id: c.amizade_id,
-          user_1_id: c.user_id_a,
-          user_2_id: c.user_id_b,
-          atualizado_em: c.ultima_mensagem_em || c.criada_em,
-          outro_usuario: {
-            id: outro?.id,
-            nome: outro?.nome,
-            apelido: outro?.apelido,
-            avatar_url: outro?.avatar_url,
-            nivel_atual: outro?.nivel_atual || 1,
-            ultimo_login_em: outro?.ultimo_login_em ?? null,
-            concurso:
-              outro?.user_concurso_favoritos?.[0]?.concursos?.sigla ?? null,
-          },
-          ultima_mensagem: ultimaMsg
-            ? ultimaMsg.tipo === 'audio'
-              ? '🎤 Mensagem de voz'
-              : ultimaMsg.tipo === 'imagem'
-              ? '📷 Foto'
-              : ultimaMsg.conteudo_texto
-            : 'Conversa iniciada',
-          nao_lidas: naoLidas,
-        };
-      });
+          let textoUltima = 'Conversa iniciada';
+          if (ultimaMsg) {
+            if (ultimaMsg.tipo === 'audio') textoUltima = '🎤 Mensagem de voz';
+            else if (ultimaMsg.tipo === 'imagem') textoUltima = '📷 Foto';
+            else if (ultimaMsg.conteudo_texto) {
+              textoUltima = await decriptarTexto(ultimaMsg.conteudo_texto);
+            }
+          }
+
+          return {
+            id: c.id,
+            tipo: 'direta',
+            amizade_id: c.amizade_id,
+            user_1_id: c.user_id_a,
+            user_2_id: c.user_id_b,
+            atualizado_em: c.ultima_mensagem_em || c.criada_em,
+            outro_usuario: {
+              id: outro?.id,
+              nome: outro?.nome,
+              apelido: outro?.apelido,
+              avatar_url: outro?.avatar_url,
+              nivel_atual: outro?.nivel_atual || 1,
+              ultimo_login_em: outro?.ultimo_login_em ?? null,
+              concurso:
+                outro?.user_concurso_favoritos?.[0]?.concursos?.sigla ?? null,
+            },
+            ultima_mensagem: textoUltima,
+            nao_lidas: naoLidas,
+          };
+        })
+    );
 
     // Formatar conversas diretas que são grupo (vieram na query principal)
-    const gruposDaQueryDireta = (diretas || [])
-      .filter((c: any) => c.tipo === 'grupo')
-      .map((c: any) => formatarGrupo(c, user.id));
+    const gruposDaQueryDireta = await Promise.all(
+      (diretas || [])
+        .filter((c: any) => c.tipo === 'grupo')
+        .map((c: any) => formatarGrupo(c, user.id))
+    );
 
     // Formatar grupos da query separada
-    const gruposFormatados = grupos.map((c: any) => formatarGrupo(c, user.id));
+    const gruposFormatados = await Promise.all(
+      grupos.map((c: any) => formatarGrupo(c, user.id))
+    );
 
     const todasConversas = [...formatadas, ...gruposDaQueryDireta, ...gruposFormatados]
       .sort((a, b) => new Date(b.atualizado_em).getTime() - new Date(a.atualizado_em).getTime());
@@ -125,12 +135,21 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function formatarGrupo(c: any, userId: string) {
+async function formatarGrupo(c: any, userId: string) {
   const msgs = (c.mensagens || []).sort(
     (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
   );
   const ultimaMsg = msgs[0];
   const naoLidas = msgs.filter((m: any) => !m.lida && m.autor_id !== userId).length;
+
+  let textoUltima = '📢 Grupo criado';
+  if (ultimaMsg) {
+    if (ultimaMsg.tipo === 'audio') textoUltima = '🎤 Mensagem de voz';
+    else if (ultimaMsg.tipo === 'imagem') textoUltima = '📷 Foto';
+    else if (ultimaMsg.conteudo_texto) {
+      textoUltima = await decriptarTexto(ultimaMsg.conteudo_texto);
+    }
+  }
 
   return {
     id: c.id,
@@ -138,13 +157,7 @@ function formatarGrupo(c: any, userId: string) {
     nome_grupo: c.nome_grupo || 'Grupo sem nome',
     atualizado_em: c.ultima_mensagem_em || c.criada_em,
     outro_usuario: null,
-    ultima_mensagem: ultimaMsg
-      ? ultimaMsg.tipo === 'audio'
-        ? '🎤 Mensagem de voz'
-        : ultimaMsg.tipo === 'imagem'
-        ? '📷 Foto'
-        : ultimaMsg.conteudo_texto
-      : '📢 Grupo criado',
+    ultima_mensagem: textoUltima,
     nao_lidas: naoLidas,
   };
 }

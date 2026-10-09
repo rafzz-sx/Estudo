@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { limparTermoBusca } from '@/lib/seguranca';
+import { limparTermoBusca, uuidOuNulo } from '@/lib/seguranca';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
@@ -107,11 +107,12 @@ export async function GET(req: NextRequest) {
     // exatamente a mesma lista do card "Bizus da EPCAR". Agora, quando
     // existe um macete próprio daquela banca, ele entra; e um bizu de
     // crase, que vale para todo mundo, continua aparecendo em todos.
-    if (concursoId) {
+    if (concursoId && uuidOuNulo(concursoId)) {
       query = query.or(`concurso_id.eq.${concursoId},concurso_id.is.null`);
     }
 
-    const assuntoId = searchParams.get('assunto_id');
+    const assuntoParam = searchParams.get('assunto_id');
+    const assuntoId = uuidOuNulo(assuntoParam);
     if (assuntoId) query = query.eq('assunto_id', assuntoId);
 
     const impacto = searchParams.get('impacto');

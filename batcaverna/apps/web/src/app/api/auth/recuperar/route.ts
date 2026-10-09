@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         codigo_enviado: true,
-        message: 'Se o e-mail estiver cadastrado, as instruções e o link de recuperação foram enviados.',
+        message: 'Se o e-mail estiver cadastrado, as instruções e o código foram enviados. Não se esqueça de verificar também a pasta de Spam ou Lixo Eletrônico.',
       });
     }
 
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       success: true,
       codigo_enviado: codigoEnviado,
       message: codigoEnviado
-        ? 'Se o e-mail estiver cadastrado, as instruções e o link de recuperação foram enviados.'
+        ? 'Se o e-mail estiver cadastrado, as instruções e o código foram enviados. Não se esqueça de verificar também a pasta de Spam ou Lixo Eletrônico.'
         : temProvedor
           ? 'Não foi possível enviar o e-mail agora. Verifique as configurações de SMTP ou tente novamente.'
           : 'O serviço de envio de e-mail ainda não está configurado. O administrador pode redefinir o acesso via terminal (npm run admin:rescue).',

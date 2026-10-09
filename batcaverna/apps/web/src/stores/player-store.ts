@@ -20,6 +20,32 @@ export interface Musica {
   duracao_segundos: number;
   cor_primaria: string | null;
   cor_secundaria: string | null;
+  fonte?: string | null;
+  fonte_id?: string | null;
+}
+
+/** Extrai videoId de links do YouTube ou valida ID existente */
+export function extrairVideoIdYouTube(urlOuId?: string | null): string | null {
+  if (!urlOuId) return null;
+  const str = urlOuId.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  const match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : null;
+}
+
+export interface ControladorYouTubeBridge {
+  tocar: (videoId: string, volume: number, posicao?: number) => void;
+  pausar: () => void;
+  retomar: () => void;
+  buscar: (segundos: number) => void;
+  definirVolume: (volume: number) => void;
+  estaPronto: () => boolean;
+}
+
+let controladorYT: ControladorYouTubeBridge | null = null;
+
+export function registrarControladorYouTube(controlador: ControladorYouTubeBridge | null) {
+  controladorYT = controlador;
 }
 
 interface PlayerState {
@@ -127,6 +153,29 @@ function atualizarMediaSession(musica: Musica) {
 }
 
 function carregarEtocar(musica: Musica, volume: number) {
+  const ytId =
+    musica.fonte === 'youtube' && musica.fonte_id
+      ? musica.fonte_id
+      : extrairVideoIdYouTube(musica.audio_url);
+
+  if (ytId) {
+    // É YouTube: desliga o áudio padrão HTML5 para evitar conflitos
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+    }
+    if (controladorYT) {
+      controladorYT.tocar(ytId, volume, 0);
+    }
+    atualizarMediaSession(musica);
+    return;
+  }
+
+  // É arquivo de áudio direto: desliga o player do YouTube
+  if (controladorYT) {
+    controladorYT.pausar();
+  }
+
   const el = obterAudio();
   if (!el) return;
   el.src = musica.audio_url;
@@ -169,10 +218,29 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       alternarPlay: () => {
-        const el = obterAudio();
-        if (!el || !get().fila.length) return;
+        const { fila, indice, tocando } = get();
+        if (!fila.length) return;
+        const musica = fila[indice];
+        const ytId =
+          musica?.fonte === 'youtube' && musica.fonte_id
+            ? musica.fonte_id
+            : extrairVideoIdYouTube(musica?.audio_url);
 
-        if (get().tocando) {
+        if (ytId) {
+          if (tocando) {
+            controladorYT?.pausar();
+            set({ tocando: false });
+          } else {
+            controladorYT?.retomar();
+            set({ tocando: true });
+          }
+          return;
+        }
+
+        const el = obterAudio();
+        if (!el) return;
+
+        if (tocando) {
           el.pause();
           set({ tocando: false });
         } else {
@@ -196,6 +264,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (proximo >= fila.length) {
             if (repetir !== 'todas') {
               set({ tocando: false });
+              controladorYT?.pausar();
               obterAudio()?.pause();
               return;
             }
@@ -218,11 +287,21 @@ export const usePlayerStore = create<PlayerState>()(
         const { fila, indice, posicao, volume } = get();
         if (!fila.length) return;
 
-        const el = obterAudio();
+        const musicaAtual = fila[indice];
+        const ytIdAtual =
+          musicaAtual?.fonte === 'youtube' && musicaAtual.fonte_id
+            ? musicaAtual.fonte_id
+            : extrairVideoIdYouTube(musicaAtual?.audio_url);
+
         // Convenção universal de player: nos primeiros 3 segundos, "anterior"
         // volta para a faixa de trás; depois, reinicia a atual.
-        if (posicao > 3 && el) {
-          el.currentTime = 0;
+        if (posicao > 3) {
+          if (ytIdAtual) {
+            controladorYT?.buscar(0);
+          } else {
+            const el = obterAudio();
+            if (el) el.currentTime = 0;
+          }
           set({ posicao: 0 });
           return;
         }
@@ -240,6 +319,19 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       irPara: (segundos) => {
+        const { fila, indice } = get();
+        const musica = fila[indice];
+        const ytId =
+          musica?.fonte === 'youtube' && musica.fonte_id
+            ? musica.fonte_id
+            : extrairVideoIdYouTube(musica?.audio_url);
+
+        if (ytId) {
+          controladorYT?.buscar(segundos);
+          set({ posicao: segundos });
+          return;
+        }
+
         const el = obterAudio();
         if (!el) return;
         el.currentTime = segundos;
@@ -247,6 +339,7 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       definirVolume: (v) => {
+        controladorYT?.definirVolume(v);
         const el = obterAudio();
         if (el) el.volume = v;
         set({ volume: v });
@@ -282,6 +375,7 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       fechar: () => {
+        controladorYT?.pausar();
         const el = obterAudio();
         if (el) {
           el.pause();

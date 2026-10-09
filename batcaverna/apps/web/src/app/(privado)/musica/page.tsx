@@ -35,6 +35,11 @@ export default function MusicaPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [mostrarAjuda, setMostrarAjuda] = useState(true);
+
+  // Modal com abas inteligentes
+  type AbaModal = "youtube" | "spotify" | "manual";
+  const [abaModal, setAbaModal] = useState<AbaModal>("youtube");
 
   const [modalNova, setModalNova] = useState(false);
   const [novaFaixa, setNovaFaixa] = useState({
@@ -43,6 +48,26 @@ export default function MusicaPage() {
     audio_url: "",
     capa_url: "",
   });
+
+  // Busca no YouTube
+  const [ytBusca, setYtBusca] = useState("");
+  const [ytResultados, setYtResultados] = useState<
+    Array<{
+      videoId: string;
+      titulo: string;
+      artista: string;
+      duracao_segundos: number;
+      duracao_formatada: string;
+      capa_url: string;
+    }>
+  >([]);
+  const [ytBuscando, setYtBuscando] = useState(false);
+  const [adicionadasYt, setAdicionadasYt] = useState<Record<string, boolean>>({});
+
+  // Importador Spotify
+  const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [spotifyImportando, setSpotifyImportando] = useState(false);
+  const [spotifyProgresso, setSpotifyProgresso] = useState<string | null>(null);
 
   const [novaPlaylist, setNovaPlaylist] = useState("");
   /** Faixa cujo menu "adicionar à playlist" está aberto. */
@@ -119,6 +144,106 @@ export default function MusicaPage() {
     await fetchWithAuth(`/api/musicas/${m.id}/favoritar`, {
       method: "POST",
     }).catch(() => undefined);
+  };
+
+  const buscarYouTube = async () => {
+    if (!ytBusca.trim() || ytBusca.trim().length < 2) return;
+    setYtBuscando(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/musicas/youtube/buscar?q=${encodeURIComponent(ytBusca.trim())}`
+      );
+      const json = await res.json();
+      if (json.success) {
+        setYtResultados(json.data || []);
+      } else {
+        setAviso(json.error || "Erro ao buscar vídeos no YouTube.");
+      }
+    } catch {
+      setAviso("Falha ao comunicar com o buscador do YouTube.");
+    } finally {
+      setYtBuscando(false);
+    }
+  };
+
+  const adicionarDoYouTube = async (
+    item: {
+      videoId: string;
+      titulo: string;
+      artista: string;
+      duracao_segundos: number;
+      capa_url: string;
+    },
+    playlistIdDestino?: string
+  ) => {
+    setAdicionadasYt((prev) => ({ ...prev, [item.videoId]: true }));
+    try {
+      const res = await fetchWithAuth("/api/musicas", {
+        method: "POST",
+        body: JSON.stringify({
+          titulo: item.titulo,
+          artista: item.artista,
+          audio_url: `https://www.youtube.com/watch?v=${item.videoId}`,
+          capa_url: item.capa_url,
+          duracao_segundos: item.duracao_segundos,
+          fonte: "youtube",
+          fonte_id: item.videoId,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        const musicaCriada = json.data;
+        if (playlistIdDestino && musicaCriada?.id) {
+          await fetchWithAuth(`/api/playlists/${playlistIdDestino}`, {
+            method: "POST",
+            body: JSON.stringify({
+              musica_id: musicaCriada.id,
+              acao: "adicionar",
+            }),
+          }).catch(() => undefined);
+          await carregarPlaylists();
+        }
+        setAviso(`✅ "${item.titulo}" adicionada com sucesso!`);
+        carregar();
+      } else {
+        setAviso(json.error || "Não consegui adicionar a faixa.");
+      }
+    } catch {
+      setAviso("Erro ao adicionar faixa do YouTube.");
+    }
+  };
+
+  const importarDoSpotify = async () => {
+    if (!spotifyUrl.trim()) {
+      setAviso("Cole o link da playlist do Spotify.");
+      return;
+    }
+    setSpotifyImportando(true);
+    setSpotifyProgresso("Extraindo faixas e metadados da playlist pública...");
+    try {
+      const res = await fetchWithAuth("/api/musicas/spotify/importar", {
+        method: "POST",
+        body: JSON.stringify({ url: spotifyUrl.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        const qtd = json.data?.total_importadas || 0;
+        const nome = json.data?.playlist?.nome || "do Spotify";
+        setAviso(`✅ Playlist "${nome}" importada com sucesso (${qtd} faixas)!`);
+        setSpotifyUrl("");
+        setModalNova(false);
+        await carregarPlaylists();
+        await carregar();
+        setAba("playlists");
+      } else {
+        setAviso(json.error || "Não consegui importar a playlist do Spotify.");
+      }
+    } catch {
+      setAviso("Erro de conexão ao importar do Spotify.");
+    } finally {
+      setSpotifyImportando(false);
+      setSpotifyProgresso(null);
+    }
   };
 
   const adicionarFaixa = async () => {
@@ -234,6 +359,68 @@ export default function MusicaPage() {
         </p>
       </header>
 
+      {/* ═══ LEGENDA DIDÁTICA: COMO FUNCIONA A TRILHA SONORA ═══ */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-bat-gold-400/25 bg-bat-bg-card/90 p-4 shadow-xl backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3 border-b border-bat-border/50 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-bat-gold-400/20 text-sm">
+              ℹ️
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-bat-text">
+                Central da Trilha Sonora — Como Funciona?
+              </h3>
+              <p className="text-xs text-bat-text-muted">
+                Foco profundo com trilha contínua e integração multiplataforma
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setMostrarAjuda((v) => !v)}
+            className="cursor-pointer text-xs font-semibold text-bat-gold-400 transition-colors hover:text-bat-gold-300"
+          >
+            {mostrarAjuda ? "Recolher manual ▴" : "Ver guia rápido ▾"}
+          </button>
+        </div>
+
+        {mostrarAjuda && (
+          <div className="mt-3 grid grid-cols-1 gap-3 pt-1 text-xs text-bat-text-secondary sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
+              <p className="mb-1 flex items-center gap-1.5 font-bold text-bat-gold-400">
+                <span>🎧</span> Player Contínuo
+              </p>
+              <p className="leading-relaxed text-bat-text-muted">
+                A música nunca para. Você pode resolver questões, simulados, ler resumos e usar o chat sem o áudio recomeçar.
+              </p>
+            </div>
+            <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
+              <p className="mb-1 flex items-center gap-1.5 font-bold text-red-400">
+                <span>▶️</span> Busca no YouTube
+              </p>
+              <p className="leading-relaxed text-bat-text-muted">
+                Pesquise qualquer música ou artista pelo nome. Veja miniatura, canal e duração antes de adicionar ao acervo ou playlists.
+              </p>
+            </div>
+            <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
+              <p className="mb-1 flex items-center gap-1.5 font-bold text-emerald-400">
+                <span>🟢</span> Importador Spotify
+              </p>
+              <p className="leading-relaxed text-bat-text-muted">
+                Cole o link de uma playlist pública do Spotify para importar as faixas e criar sua playlist automaticamente na BatCaverna.
+              </p>
+            </div>
+            <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
+              <p className="mb-1 flex items-center gap-1.5 font-bold text-cyan-400">
+                <span>🧠</span> Dica de Foco
+              </p>
+              <p className="leading-relaxed text-bat-text-muted">
+                Trilhas instrumentais, lo-fi e clássicas potencializam a concentração sem disputar atenção verbal durante a leitura das questões.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ═══ ABAS ═══ */}
       <div className="mb-5 flex flex-wrap gap-2">
         {(
@@ -334,14 +521,26 @@ export default function MusicaPage() {
                       }
                       className="min-w-0 flex-1 cursor-pointer text-left"
                     >
-                      <p
-                        className={`truncate text-sm font-medium ${
-                          ehAtual ? "text-bat-gold-400" : "text-bat-text"
-                        }`}
-                      >
-                        {ehAtual && tocando ? "▶ " : ""}
-                        {m.titulo}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p
+                          className={`truncate text-sm font-medium ${
+                            ehAtual ? "text-bat-gold-400" : "text-bat-text"
+                          }`}
+                        >
+                          {ehAtual && tocando ? "▶ " : ""}
+                          {m.titulo}
+                        </p>
+                        {m.fonte === "youtube" && (
+                          <span className="shrink-0 rounded bg-red-600/20 border border-red-500/30 px-1 py-0.2 text-[9px] font-bold text-red-400">
+                            YT
+                          </span>
+                        )}
+                        {m.fonte === "spotify" && (
+                          <span className="shrink-0 rounded bg-emerald-600/20 border border-emerald-500/30 px-1 py-0.2 text-[9px] font-bold text-emerald-400">
+                            Spotify
+                          </span>
+                        )}
+                      </div>
                       <p className="truncate text-xs text-bat-text-muted">
                         {m.artista ?? "Desconhecido"}
                         {m.album ? ` · ${m.album}` : ""}
@@ -546,69 +745,228 @@ export default function MusicaPage() {
         </>
       )}
 
-      {/* ═══ MODAL: ADICIONAR FAIXA ═══ */}
+      {/* ═══ MODAL INTELIGENTE: ADICIONAR MÚSICA / IMPORTAR PLAYLIST ═══ */}
       {modalNova && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
           onClick={() => setModalNova(false)}
         >
           <div
-            className="w-full max-w-md rounded-3xl border border-bat-gold-400/30 bg-bat-bg-card p-6"
+            className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-bat-gold-400/30 bg-bat-bg-card p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="heading mb-1 text-lg font-bold text-bat-text">
-              Adicionar faixa ao acervo
-            </h2>
-            <p className="mb-4 text-xs leading-relaxed text-bat-text-muted">
-              Informe o link direto de um arquivo de áudio (.mp3, .ogg, .m4a) ao
-              qual você tem direito de acesso. A plataforma não hospeda nem
-              distribui catálogo licenciado.
-            </p>
-
-            <div className="space-y-3">
-              <input
-                value={novaFaixa.titulo}
-                onChange={(e) =>
-                  setNovaFaixa({ ...novaFaixa, titulo: e.target.value })
-                }
-                placeholder="Título *"
-                className="input-field"
-              />
-              <input
-                value={novaFaixa.artista}
-                onChange={(e) =>
-                  setNovaFaixa({ ...novaFaixa, artista: e.target.value })
-                }
-                placeholder="Artista"
-                className="input-field"
-              />
-              <input
-                value={novaFaixa.audio_url}
-                onChange={(e) =>
-                  setNovaFaixa({ ...novaFaixa, audio_url: e.target.value })
-                }
-                placeholder="URL do áudio (https://...) *"
-                className="input-field"
-              />
-              <input
-                value={novaFaixa.capa_url}
-                onChange={(e) =>
-                  setNovaFaixa({ ...novaFaixa, capa_url: e.target.value })
-                }
-                placeholder="URL da capa (opcional — define as cores do player)"
-                className="input-field"
-              />
-            </div>
-
-            <div className="mt-5 flex gap-3">
-              <button onClick={adicionarFaixa} className="btn-primary flex-1 py-2.5">
-                Adicionar
-              </button>
+            <div className="flex items-center justify-between pb-3 border-b border-bat-border/60">
+              <h2 className="heading text-lg font-bold text-bat-text flex items-center gap-2">
+                <span>⚡</span> Adicionar Música & Playlists
+              </h2>
               <button
                 onClick={() => setModalNova(false)}
-                className="btn-secondary px-5 py-2.5"
+                className="cursor-pointer text-sm text-bat-text-muted hover:text-white"
               >
-                Cancelar
+                ✕
+              </button>
+            </div>
+
+            {/* SELETOR DE ABAS DO MODAL */}
+            <div className="mt-4 mb-5 flex flex-wrap gap-2 border-b border-bat-border/50 pb-3">
+              <button
+                onClick={() => setAbaModal("youtube")}
+                className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  abaModal === "youtube"
+                    ? "bg-red-600/20 text-red-400 border border-red-500/40"
+                    : "text-bat-text-muted hover:text-bat-text"
+                }`}
+              >
+                <span>▶️</span> Buscar no YouTube
+              </button>
+              <button
+                onClick={() => setAbaModal("spotify")}
+                className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  abaModal === "spotify"
+                    ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/40"
+                    : "text-bat-text-muted hover:text-bat-text"
+                }`}
+              >
+                <span>🟢</span> Importar do Spotify
+              </button>
+              <button
+                onClick={() => setAbaModal("manual")}
+                className={`cursor-pointer rounded-xl px-3.5 py-2 text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  abaModal === "manual"
+                    ? "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40"
+                    : "text-bat-text-muted hover:text-bat-text"
+                }`}
+              >
+                <span>🔗</span> Link Direto / MP3
+              </button>
+            </div>
+
+            {/* ABA 1: YOUTUBE */}
+            {abaModal === "youtube" && (
+              <div className="space-y-4">
+                <p className="text-xs text-bat-text-muted leading-relaxed">
+                  Digite o nome da música ou artista. O sistema pesquisa no YouTube com miniatura, canal e duração para você adicionar diretamente ao seu acervo ou playlist.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={ytBusca}
+                    onChange={(e) => setYtBusca(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && buscarYouTube()}
+                    placeholder="Ex: Interstellar Theme, Lofi Girl, Batman Soundtrack..."
+                    className="input-field flex-1 text-sm"
+                  />
+                  <button
+                    onClick={buscarYouTube}
+                    disabled={ytBuscando || ytBusca.trim().length < 2}
+                    className="btn-primary shrink-0 px-4 py-2 text-xs font-bold disabled:opacity-50"
+                  >
+                    {ytBuscando ? "Buscando..." : "🔍 Buscar"}
+                  </button>
+                </div>
+
+                {ytBuscando && (
+                  <div className="space-y-2 py-4">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="skeleton h-14 rounded-xl" />
+                    ))}
+                  </div>
+                )}
+
+                {!ytBuscando && ytResultados.length > 0 && (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {ytResultados.map((item) => {
+                      const jaAdd = adicionadasYt[item.videoId];
+                      return (
+                        <div
+                          key={item.videoId}
+                          className="flex items-center gap-3 rounded-xl border border-bat-border/60 bg-bat-bg-secondary/40 p-2.5 transition-colors hover:border-bat-gold-400/30"
+                        >
+                          <img
+                            src={item.capa_url}
+                            alt=""
+                            className="h-12 w-16 shrink-0 rounded-lg object-cover"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-bat-text" title={item.titulo}>
+                              {item.titulo}
+                            </p>
+                            <p className="truncate text-[11px] text-bat-text-muted">
+                              {item.artista} • {item.duracao_formatada}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => adicionarDoYouTube(item)}
+                              disabled={jaAdd}
+                              className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                                jaAdd
+                                  ? "bg-bat-success/20 text-bat-success border border-bat-success/30"
+                                  : "bg-bat-gold-400/20 text-bat-gold-400 hover:bg-bat-gold-400/30 border border-bat-gold-400/40"
+                              }`}
+                            >
+                              {jaAdd ? "✓ Adicionada" : "+ Acervo"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ABA 2: SPOTIFY */}
+            {abaModal === "spotify" && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 text-xs text-emerald-300">
+                  <p className="font-bold flex items-center gap-1.5 mb-1 text-sm">
+                    <span>🟢</span> Como importar sua playlist do Spotify:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-emerald-200/80 text-[11px]">
+                    <li>Abra sua playlist pública no Spotify.</li>
+                    <li>Clique nos 3 pontos (...) &gt; Compartilhar &gt; <strong>Copiar link da playlist</strong>.</li>
+                    <li>Cole o link abaixo e clique no botão de importar.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-bat-text-secondary">
+                    URL da Playlist do Spotify
+                  </label>
+                  <input
+                    value={spotifyUrl}
+                    onChange={(e) => setSpotifyUrl(e.target.value)}
+                    placeholder="https://open.spotify.com/playlist/..."
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                {spotifyProgresso && (
+                  <p className="text-xs font-medium text-bat-gold-400 animate-pulse">
+                    ⏳ {spotifyProgresso}
+                  </p>
+                )}
+
+                <button
+                  onClick={importarDoSpotify}
+                  disabled={spotifyImportando || !spotifyUrl.trim()}
+                  className="btn-primary w-full py-2.5 text-xs font-bold disabled:opacity-40"
+                >
+                  {spotifyImportando ? "Importando..." : "Importar Playlist para a BatCaverna"}
+                </button>
+              </div>
+            )}
+
+            {/* ABA 3: MANUAL */}
+            {abaModal === "manual" && (
+              <div className="space-y-3">
+                <p className="text-xs text-bat-text-muted leading-relaxed">
+                  Informe o link direto de um arquivo de áudio (.mp3, .ogg, .m4a) ao qual você tem direito de acesso.
+                </p>
+                <input
+                  value={novaFaixa.titulo}
+                  onChange={(e) =>
+                    setNovaFaixa({ ...novaFaixa, titulo: e.target.value })
+                  }
+                  placeholder="Título *"
+                  className="input-field text-sm"
+                />
+                <input
+                  value={novaFaixa.artista}
+                  onChange={(e) =>
+                    setNovaFaixa({ ...novaFaixa, artista: e.target.value })
+                  }
+                  placeholder="Artista"
+                  className="input-field text-sm"
+                />
+                <input
+                  value={novaFaixa.audio_url}
+                  onChange={(e) =>
+                    setNovaFaixa({ ...novaFaixa, audio_url: e.target.value })
+                  }
+                  placeholder="URL do áudio (https://...mp3) *"
+                  className="input-field text-sm"
+                />
+                <input
+                  value={novaFaixa.capa_url}
+                  onChange={(e) =>
+                    setNovaFaixa({ ...novaFaixa, capa_url: e.target.value })
+                  }
+                  placeholder="URL da capa (opcional)"
+                  className="input-field text-sm"
+                />
+                <button onClick={adicionarFaixa} className="btn-primary w-full py-2.5 text-xs font-bold mt-2">
+                  Adicionar ao Acervo
+                </button>
+              </div>
+            )}
+
+            <div className="mt-5 border-t border-bat-border/40 pt-3 flex justify-end">
+              <button
+                onClick={() => setModalNova(false)}
+                className="btn-secondary px-5 py-2 text-xs"
+              >
+                Fechar
               </button>
             </div>
           </div>

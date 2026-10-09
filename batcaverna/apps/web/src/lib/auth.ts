@@ -1,15 +1,13 @@
 import { SignJWT, jwtVerify } from 'jose';
 
-// O fallback 'dev-secret-change-me' está neste repositório, que é público:
-// com ele qualquer pessoa assina um token de administrador. A remoção do
-// fallback fica para quando JWT_SECRET estiver confirmado na Vercel (ver
-// SEGURANCA-ACOES-MANUAIS.txt, item 0-A) — removê-lo antes derrubaria o
-// login. Até lá, o servidor avisa em voz alta no log a cada boot.
 if (!process.env.JWT_SECRET) {
-  console.error(
-    '[SEGURANÇA] JWT_SECRET não está definido. O segredo de assinatura do ' +
-      'login é um valor PÚBLICO de desenvolvimento. Configure a variável ' +
-      'imediatamente — qualquer pessoa pode forjar um token de admin.'
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[SEGURANÇA CRÍTICA] JWT_SECRET não está definido. Configure a variável no ambiente de produção imediatamente.'
+    );
+  }
+  console.warn(
+    '[AVISO DEV] JWT_SECRET não está definido no ambiente local. Usando segredo de desenvolvimento.'
   );
 }
 

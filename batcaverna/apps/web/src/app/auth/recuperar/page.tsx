@@ -262,6 +262,16 @@ function RecuperarSenhaForm() {
             />
           </div>
 
+          {/* Card Tático Antispam */}
+          <div className="p-3.5 bg-yellow-500/10 border border-yellow-500/25 rounded-xl text-xs space-y-1.5">
+            <p className="text-[#F5C518] font-bold flex items-center gap-1.5">
+              <span>⚠️</span> Não encontrou na Caixa de Entrada?
+            </p>
+            <p className="text-bat-text-muted leading-relaxed">
+              Verifique sua pasta de <strong className="text-white">Spam</strong> ou <strong className="text-white">Lixo Eletrônico</strong> (ou aba <em>Promoções</em>). Se estiver lá, marque a mensagem como <strong className="text-[#F5C518]">"Não é spam"</strong> para receber futuros e-mails diretamente na sua caixa principal.
+            </p>
+          </div>
+
           <button
             type="submit"
             disabled={code.length !== 6}
@@ -270,13 +280,23 @@ function RecuperarSenhaForm() {
             Confirmar código
           </button>
 
-          <button
-            type="button"
-            onClick={() => { setStep("email"); setErros([]); setMensagem(""); }}
-            className="w-full py-2 text-sm text-bat-text-muted hover:text-[#F5C518] transition-colors cursor-pointer"
-          >
-            ← Voltar e tentar outro e-mail
-          </button>
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={handleSolicitarCodigo}
+              disabled={loading}
+              className="text-xs text-[#F5C518] hover:underline disabled:opacity-50 cursor-pointer font-medium"
+            >
+              {loading ? "Reenviando..." : "↻ Reenviar código"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStep("email"); setErros([]); setMensagem(""); }}
+              className="text-xs text-bat-text-muted hover:text-[#F5C518] transition-colors cursor-pointer"
+            >
+              ← Trocar e-mail
+            </button>
+          </div>
         </form>
       )}
 

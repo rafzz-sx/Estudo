@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   usePlayerStore,
   formatarTempoMusica,
+  registrarControladorYouTube,
+  extrairVideoIdYouTube,
 } from "@/stores/player-store";
 
 /**
@@ -248,6 +250,155 @@ export function DynamicIsland() {
   const capaProcessada = useRef<string | null>(null);
   const [arrastando, setArrastando] = useState<number | null>(null);
 
+  const ytPlayerRef = useRef<any>(null);
+  const prontoRef = useRef(false);
+  const intervalSyncRef = useRef<number | null>(null);
+  const pendenteRef = useRef<{ videoId: string; vol: number; pos: number } | null>(null);
+
+  // Integração com a API do YouTube Iframe para tocar faixas do YouTube sem parar
+  useEffect(() => {
+    const inicializarYT = () => {
+      if (ytPlayerRef.current) return;
+      if (typeof window === "undefined" || !(window as any).YT || !(window as any).YT.Player) return;
+
+      try {
+        ytPlayerRef.current = new (window as any).YT.Player("batcaverna-youtube-iframe-player", {
+          height: "1",
+          width: "1",
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+          },
+          events: {
+            onReady: () => {
+              prontoRef.current = true;
+              if (pendenteRef.current) {
+                const { videoId, vol, pos } = pendenteRef.current;
+                pendenteRef.current = null;
+                controlador.tocar(videoId, vol, pos);
+              }
+            },
+            onStateChange: (event: any) => {
+              // 1 = PLAYING
+              if (event.data === 1) {
+                if (!intervalSyncRef.current) {
+                  intervalSyncRef.current = window.setInterval(() => {
+                    try {
+                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === "function") {
+                        const pos = ytPlayerRef.current.getCurrentTime() || 0;
+                        const dur = ytPlayerRef.current.getDuration() || 0;
+                        usePlayerStore.getState()._sincronizar(pos, dur);
+                      }
+                    } catch {}
+                  }, 500);
+                }
+              } else {
+                if (intervalSyncRef.current) {
+                  clearInterval(intervalSyncRef.current);
+                  intervalSyncRef.current = null;
+                }
+              }
+
+              // 0 = ENDED
+              if (event.data === 0) {
+                usePlayerStore.getState()._aoTerminar();
+              }
+            },
+            onError: (err: any) => {
+              console.warn("YouTube Player error:", err?.data);
+              usePlayerStore.getState().proxima();
+            },
+          },
+        });
+      } catch (err) {
+        console.warn("Erro ao instanciar YouTube Player:", err);
+      }
+    };
+
+    const controlador = {
+      tocar: (videoId: string, vol: number, pos = 0) => {
+        if (!prontoRef.current || !ytPlayerRef.current || typeof ytPlayerRef.current.loadVideoById !== "function") {
+          pendenteRef.current = { videoId, vol, pos };
+          return;
+        }
+        try {
+          ytPlayerRef.current.loadVideoById({ videoId, startSeconds: pos });
+          if (typeof ytPlayerRef.current.setVolume === "function") {
+            ytPlayerRef.current.setVolume(vol * 100);
+          }
+          if (typeof ytPlayerRef.current.playVideo === "function") {
+            ytPlayerRef.current.playVideo();
+          }
+        } catch (err) {
+          console.warn("Erro ao tocar vídeo no YouTube Player:", err);
+        }
+      },
+      pausar: () => {
+        try {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+            ytPlayerRef.current.pauseVideo();
+          }
+        } catch {}
+      },
+      retomar: () => {
+        try {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+            ytPlayerRef.current.playVideo();
+          }
+        } catch {}
+      },
+      buscar: (segundos: number) => {
+        try {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+            ytPlayerRef.current.seekTo(segundos, true);
+          }
+        } catch {}
+      },
+      definirVolume: (vol: number) => {
+        try {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
+            ytPlayerRef.current.setVolume(vol * 100);
+          }
+        } catch {}
+      },
+      estaPronto: () => prontoRef.current,
+    };
+
+    registrarControladorYouTube(controlador);
+
+    if (typeof window !== "undefined") {
+      if ((window as any).YT && (window as any).YT.Player) {
+        inicializarYT();
+      } else {
+        const callbackAnterior = (window as any).onYouTubeIframeAPIReady;
+        (window as any).onYouTubeIframeAPIReady = () => {
+          if (typeof callbackAnterior === "function") callbackAnterior();
+          inicializarYT();
+        };
+
+        if (!document.getElementById("batcaverna-yt-script")) {
+          const tag = document.createElement("script");
+          tag.id = "batcaverna-yt-script";
+          tag.src = "https://www.youtube.com/iframe_api";
+          document.body.appendChild(tag);
+        }
+      }
+    }
+
+    return () => {
+      if (intervalSyncRef.current) {
+        clearInterval(intervalSyncRef.current);
+        intervalSyncRef.current = null;
+      }
+      registrarControladorYouTube(null);
+    };
+  }, []);
+
   // O `onMouseUp`/`onTouchEnd` ficava só no <input>. Quem arrastava e soltava
   // o dedo fora da barra — o normal num celular, a barra tem 4px de altura —
   // nunca disparava o evento: a posição congelava no valor arrastado e a
@@ -334,67 +485,55 @@ export function DynamicIsland() {
     });
   }, [musica?.capa_url, definirCores]);
 
-  if (!musica) return null;
-
   const progresso = duracao > 0 ? ((arrastando ?? posicao) / duracao) * 100 : 0;
-
-  // ═══ PASTILHA RECOLHIDA ═══
-  //
-  // Antes só existiam dois estados: aberto ou FECHADO. Quem queria a tela
-  // livre para ler um enunciado tinha de fechar o player — e perdia a fila
-  // inteira, tendo de remontá-la depois. Agora recolhe para uma pastilha que
-  // continua tocando e volta com um toque.
-  if (minimizado) {
-    return (
-      <div className="fixed bottom-4 right-4 z-40 lg:bottom-auto lg:right-6 lg:top-4">
-        <button
-          onClick={alternarMinimizado}
-          className="flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 shadow-2xl backdrop-blur-xl transition-transform hover:scale-105 active:scale-95"
-          style={{
-            background: `linear-gradient(135deg, ${corPrimaria}33, ${corSecundaria}f5)`,
-            borderColor: `${corPrimaria}55`,
-          }}
-          aria-label={`Reabrir o player — tocando ${musica.titulo}`}
-          title={`${musica.titulo}${musica.artista ? ` — ${musica.artista}` : ""}`}
-        >
-          <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-black/30">
-            {musica.capa_url ? (
-              <img
-                src={musica.capa_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-sm">
-                🎵
-              </span>
-            )}
-          </span>
-          {/* O ▶/⏸ aqui é indicador de estado, não botão: a pastilha inteira
-              reabre o player. Ter dois alvos de toque num alvo de 40px seria
-              impossível de acertar no celular. */}
-          <span className="text-xs font-bold text-white/90">
-            {tocando ? "▶" : "⏸"}
-          </span>
-        </button>
-      </div>
-    );
-  }
+  const ehYouTube =
+    musica?.fonte === "youtube" ||
+    Boolean(extrairVideoIdYouTube(musica?.audio_url));
 
   return (
-    // Posição:
-    //   • No MOBILE fica no RODAPÉ. Antes era `top-[3.75rem]`, logo abaixo da
-    //     topbar — e como a ilha é fixa e não empurra nada, ela cobria o
-    //     começo do enunciado justamente quando o aluno rolava para cima para
-    //     reler a questão. O rodapé está livre (não há barra de navegação
-    //     inferior) e é onde todo player de música fica no celular.
-    //   • No DESKTOP continua no topo: lá a navegação é a barra lateral e o
-    //     conteúdo tem margem de sobra.
-    <div
-      className={`fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-all duration-500 ease-out lg:bottom-auto lg:top-4 ${
-        expandido ? "w-[min(94vw,26rem)]" : "w-[min(90vw,22rem)]"
-      }`}
-    >
+    <>
+      <div
+        id="batcaverna-youtube-iframe-player"
+        className="pointer-events-none fixed -bottom-96 -left-96 h-1 w-1 opacity-0"
+        aria-hidden="true"
+      />
+
+      {!musica ? null : minimizado ? (
+        <div className="fixed bottom-4 right-4 z-40 lg:bottom-auto lg:right-6 lg:top-4">
+          <button
+            onClick={alternarMinimizado}
+            className="flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 shadow-2xl backdrop-blur-xl transition-transform hover:scale-105 active:scale-95"
+            style={{
+              background: `linear-gradient(135deg, ${corPrimaria}33, ${corSecundaria}f5)`,
+              borderColor: `${corPrimaria}55`,
+            }}
+            aria-label={`Reabrir o player — tocando ${musica.titulo}`}
+            title={`${musica.titulo}${musica.artista ? ` — ${musica.artista}` : ""}`}
+          >
+            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-black/30">
+              {musica.capa_url ? (
+                <img
+                  src={musica.capa_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-sm">
+                  🎵
+                </span>
+              )}
+            </span>
+            <span className="text-xs font-bold text-white/90">
+              {tocando ? "▶" : "⏸"}
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div
+          className={`fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-all duration-500 ease-out lg:bottom-auto lg:top-4 ${
+            expandido ? "w-[min(94vw,26rem)]" : "w-[min(90vw,22rem)]"
+          }`}
+        >
       <div
         className="overflow-hidden rounded-[1.75rem] border shadow-2xl backdrop-blur-xl transition-all duration-500"
         style={{
@@ -427,9 +566,16 @@ export function DynamicIsland() {
             onClick={() => definirExpandido(!expandido)}
             className="min-w-0 flex-1 cursor-pointer text-left"
           >
-            <p className="truncate text-xs font-bold text-white">
-              {musica.titulo}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-xs font-bold text-white">
+                {musica.titulo}
+              </p>
+              {ehYouTube && (
+                <span className="shrink-0 rounded bg-red-600/80 px-1 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
+                  YT
+                </span>
+              )}
+            </div>
             <p className="truncate text-[11px] text-white/60">
               {musica.artista ?? "Desconhecido"}
             </p>
@@ -579,6 +725,8 @@ export function DynamicIsland() {
         )}
       </div>
     </div>
+      )}
+    </>
   );
 }
 

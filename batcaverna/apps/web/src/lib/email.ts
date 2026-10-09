@@ -9,7 +9,9 @@
  * Quem chama recebe `{ ok: boolean, erro?: string, id?: string }` e decide o fluxo.
  */
 
-import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 const TIMEOUT_MS = 10000;
 
@@ -50,9 +52,9 @@ function remetente(): string {
 }
 
 // ─── Cache do Transporter SMTP ─────────────────────────────────
-let transporterCache: nodemailer.Transporter | null = null;
+let transporterCache: Transporter | null = null;
 
-function obterTransporter(): nodemailer.Transporter | null {
+function obterTransporter(): Transporter | null {
   const host = process.env.SMTP_HOST?.trim();
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
@@ -83,6 +85,47 @@ function obterTransporter(): nodemailer.Transporter | null {
   return transporterCache;
 }
 
+let logoCache: Buffer | null = null;
+function obterBufferLogo(): Buffer | null {
+  if (logoCache) return logoCache;
+  try {
+    const caminhos = [
+      path.join(process.cwd(), 'public/images/bat_logo_dark.png'),
+      path.join(process.cwd(), 'apps/web/public/images/bat_logo_dark.png'),
+      path.join(process.cwd(), 'public/images/bat_logo.png'),
+      path.join(process.cwd(), 'apps/web/public/images/bat_logo.png'),
+    ];
+    for (const c of caminhos) {
+      if (fs.existsSync(/*turbopackIgnore: true*/ c)) {
+        logoCache = fs.readFileSync(/*turbopackIgnore: true*/ c);
+        return logoCache;
+      }
+    }
+  } catch {
+    // Silencioso se houver restrição
+  }
+  return null;
+}
+
+/**
+ * Obtém a URL base real do sistema na Vercel ou local
+ */
+export function obterAppUrl(): string {
+  const custom = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+  )?.trim();
+
+  if (custom) {
+    const comProtocolo = custom.startsWith('http') ? custom : `https://${custom}`;
+    return comProtocolo.replace(/\/+$/, '');
+  }
+
+  return 'https://estudo-tan.vercel.app';
+}
+
 /**
  * Disparo primário via SMTP com fallback para API REST (Resend / Brevo)
  */
@@ -99,13 +142,32 @@ async function dispararEmail(corpo: {
   const transporter = obterTransporter();
   if (transporter) {
     try {
+      const bufferLogo = obterBufferLogo();
+      const attachments = bufferLogo
+        ? [
+            {
+              filename: 'batcaverna_logo.png',
+              content: bufferLogo,
+              cid: 'bat_logo_inline',
+              contentType: 'image/png',
+            },
+          ]
+        : [];
+
       const info = await Promise.race([
         transporter.sendMail({
           from,
           to: para,
+          replyTo: 'batcaverna.suporte@gmail.com',
           subject: assunto,
           html,
           text: texto || '',
+          attachments,
+          headers: {
+            'X-Priority': '1',
+            'Importance': 'high',
+            'X-Entity-Ref-ID': `batcaverna-${Date.now()}`,
+          },
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Timeout SMTP após ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
@@ -230,8 +292,8 @@ export async function enviarEmail(params: {
 // ══════════════════════════════════════════════════════════════════
 
 function moldura(titulo: string, miolo: string): string {
-  const urlBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://batcaverna.app').replace(/\/+$/, '');
-  const logoUrl = `${urlBase}/images/bat_logo.png`;
+  const urlBase = obterAppUrl();
+  const logoUrlFallback = `${urlBase}/images/bat_logo_dark.png`;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -248,17 +310,17 @@ function moldura(titulo: string, miolo: string): string {
     </tr>
     <!-- Cabeçalho com Logo Oficial da BatCaverna -->
     <tr>
-      <td style="padding:28px 32px 14px 32px;text-align:left;">
+      <td style="padding:26px 28px 14px 28px;text-align:left;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
             <td style="vertical-align:middle;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:12px;">
-                    <img src="${logoUrl}" width="40" height="40" alt="BatCaverna" style="display:block;width:40px;height:40px;object-fit:contain;border:0;">
+                    <img src="cid:bat_logo_inline" onerror="this.onerror=null;this.src='${logoUrlFallback}';" width="54" height="32" alt="BatCaverna" style="display:block;max-height:36px;width:auto;object-fit:contain;border:0;">
                   </td>
                   <td style="vertical-align:middle;">
-                    <span style="font-size:21px;font-weight:900;letter-spacing:1.5px;color:#F5C518;display:block;line-height:1;">BATCAVERNA</span>
+                    <span style="font-size:20px;font-weight:900;letter-spacing:1.5px;color:#F5C518;display:block;line-height:1;">BATCAVERNA</span>
                     <span style="font-size:10px;font-weight:600;letter-spacing:1px;color:#8E8E98;text-transform:uppercase;display:block;margin-top:2px;">Plataforma Militar de Estudos</span>
                   </td>
                 </tr>
@@ -274,17 +336,20 @@ function moldura(titulo: string, miolo: string): string {
     </tr>
     <!-- Conteúdo Principal -->
     <tr>
-      <td style="padding:8px 32px 32px 32px;color:#B4B4BE;font-size:14px;line-height:1.65;">
+      <td style="padding:8px 28px 28px 28px;color:#B4B4BE;font-size:14px;line-height:1.65;">
         ${miolo}
       </td>
     </tr>
   </table>
-  <!-- Rodapé com Missão da Plataforma -->
+  <!-- Rodapé com Informações de Segurança e Antispam -->
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;margin:20px auto 0 auto;text-align:center;">
     <tr>
       <td style="color:#6B6B78;font-size:12px;line-height:1.5;padding:0 16px;">
         <p style="margin:0 0 4px 0;color:#8E8E98;font-weight:600;">BatCaverna — Preparação Tática Militar</p>
-        <p style="margin:0;">Porque é aqui, focado e em silêncio, que você constrói a sua aprovação.</p>
+        <p style="margin:0 0 8px 0;">Porque é aqui, focado e em silêncio, que você constrói a sua aprovação.</p>
+        <p style="margin:0;font-size:11px;color:#52525B;">
+          Se este e-mail caiu na sua pasta de <strong>Spam</strong> ou <strong>Lixo Eletrônico</strong>, marque como <em>"Não é spam"</em> ou adicione <strong>batcaverna.suporte@gmail.com</strong> aos seus contatos confiáveis.
+        </p>
       </td>
     </tr>
   </table>
@@ -301,11 +366,11 @@ export function modeloResetSenhaLinkECodigo(params: {
   email: string;
 }) {
   const { token, codigo, minutos, email } = params;
-  const urlBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://batcaverna.app').replace(/\/+$/, '');
+  const urlBase = obterAppUrl();
   const link = `${urlBase}/auth/recuperar?token=${token}&email=${encodeURIComponent(email)}`;
 
   return {
-    assunto: `🔐 Recuperação de Senha — BatCaverna (Código: ${codigo})`,
+    assunto: '🔐 Recuperação de Senha — BatCaverna',
     html: moldura(
       'Protocolo de Redefinição de Senha',
       `<p style="margin:0 0 16px 0;font-size:15px;color:#EDEDF0;">
@@ -391,7 +456,7 @@ export function modeloConfirmacaoSenhaAlterada(email: string) {
 /** O código de 6 dígitos simples (retrocompatibilidade) */
 export function modeloCodigoDeSenha(codigo: string, minutos: number) {
   return {
-    assunto: `${codigo} é o seu código para redefinir a senha`,
+    assunto: '🔐 Recuperação de Senha — BatCaverna',
     html: moldura(
       'Redefinir sua senha',
       `<p style="margin:0 0 16px 0;">Use o código abaixo na tela de recuperação:</p>
@@ -407,7 +472,7 @@ export function modeloCodigoDeSenha(codigo: string, minutos: number) {
 
 /** E-mail de confirmação de cadastro com token */
 export function modeloVerificacaoEmail(token: string, nome: string) {
-  const urlBase = (process.env.NEXT_PUBLIC_APP_URL || 'https://batcaverna.app').replace(/\/+$/, '');
+  const urlBase = obterAppUrl();
   const link = `${urlBase}/verificar-email?token=${token}`;
 
   return {
