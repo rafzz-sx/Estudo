@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { formatarDataHoraVersao } from "@batcaverna/utils";
+import { CURRENT_APP_VERSION } from "@/data/changelog";
 import { PainelAvisos } from "@/components/admin/PainelAvisos";
 import { PainelModeracao } from "@/components/admin/PainelModeracao";
 import { PainelSaude } from "@/components/admin/PainelSaude";
@@ -148,7 +149,7 @@ export default function AdminPage() {
 
   // Versão do Sistema
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
-    versao_atual: "3.0.0",
+    versao_atual: CURRENT_APP_VERSION,
     atualizado_em: new Date().toISOString(),
   });
 
@@ -494,16 +495,20 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Badge de Versão */}
-        <div className="relative flex flex-col sm:items-end bg-bat-bg-primary border border-bat-gold-400/30 px-4 py-2.5 rounded-xl text-right">
+        {/* Badge de Versão & Link para Novidades */}
+        <Link
+          href="/novidades"
+          className="relative flex flex-col sm:items-end bg-bat-bg-primary hover:bg-bat-bg-card border border-bat-gold-400/30 hover:border-bat-gold-400/60 px-4 py-2.5 rounded-xl text-right transition-all no-underline group"
+          title="Ver diário de lançamentos e novidades"
+        >
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-mono font-bold text-bat-gold-400">Versão {appInfo.versao_atual}</span>
+            <span className="text-xs font-mono font-bold text-bat-gold-400 group-hover:underline">Versão {appInfo.versao_atual}</span>
           </div>
           <p className="text-[11px] text-bat-text-muted mt-0.5">
             Atualizado: {formatarDataHoraVersao(appInfo.atualizado_em)}
           </p>
-        </div>
+        </Link>
       </div>
 
       {/* ═══ ABAS DE NAVEGAÇÃO ═══ */}

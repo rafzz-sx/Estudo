@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/stores/auth-store";
 
@@ -383,6 +384,17 @@ export function NotificationCenter({ align = "auto" }: Props) {
                 </div>
               ))
             )}
+          </div>
+
+          {/* Atalho para Diário de Novidades */}
+          <div className="p-2.5 bg-bat-bg-secondary/70 border-t border-bat-border/60 text-center">
+            <Link
+              href="/novidades"
+              onClick={() => setAberto(false)}
+              className="text-[11px] font-bold text-bat-gold-400 hover:text-bat-gold-300 transition-colors inline-flex items-center gap-1.5 no-underline"
+            >
+              <span>🚀</span> Ver Diário de Novidades & Versões →
+            </Link>
           </div>
         </div>
       )}

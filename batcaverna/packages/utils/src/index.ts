@@ -5,6 +5,8 @@
 
 import { NIVEIS_GAMIFICACAO } from '@batcaverna/ui';
 
+export * from './semver';
+
 // ─── Formatação de Tempo ─────────────────────────────────────
 
 /**

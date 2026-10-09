@@ -12,14 +12,17 @@ import { XpToast } from "@/components/XpToast";
 import { DynamicIsland } from "@/components/DynamicIsland";
 import { usePlayerStore } from "@/stores/player-store";
 import { ConviteFeedback } from "@/components/ConviteFeedback";
+import { MissedUpdatesModal } from "@/components/novidades/MissedUpdatesModal";
+import { CURRENT_APP_VERSION } from "@/data/changelog";
+import { compareSemver } from "@batcaverna/utils";
 
 // ─── Links do menu categorizados ──────────────────────────────
 interface NavLink {
   href: string;
   label: string;
   icon: string;
-  /** Nome do contador a exibir como selo. Só "revisoes" por enquanto. */
-  contador?: "revisoes";
+  /** Nome do contador a exibir como selo. "revisoes" ou "novidades". */
+  contador?: "revisoes" | "novidades";
 }
 
 interface NavSection {
@@ -64,6 +67,7 @@ const navSectionsBase: NavSection[] = [
     id: "conta",
     title: "Conta & Apoio",
     links: [
+      { href: "/novidades", label: "Novidades", icon: "🚀", contador: "novidades" },
       { href: "/perfil", label: "Meu Perfil", icon: "👤" },
       { href: "/perfil?tab=config", label: "Configurações", icon: "⚙️" },
       { href: "/tickets", label: "Suporte", icon: "🎫" },
@@ -79,6 +83,7 @@ const bottomNavItemsBase: NavLink[] = [
   { href: "/dashboard", label: "Hoje", icon: "🏠" },
   { href: "/questoes", label: "Questões", icon: "❓" },
   { href: "/simulado", label: "Simulado", icon: "⏱️" },
+  { href: "/novidades", label: "Novidades", icon: "🚀", contador: "novidades" },
   { href: "/redacao", label: "Redação", icon: "✍️" },
   { href: "/cronograma", label: "Cronograma", icon: "🗓️" },
   { href: "/revisoes", label: "Revisões", icon: "🔁", contador: "revisoes" },
@@ -117,6 +122,30 @@ function useRevisoesPendentes() {
   return pendentes;
 }
 
+/** Verifica se há novidades lançadas que o usuário ainda não visualizou */
+function useNovidadesNaoVistas() {
+  const [temNovidades, setTemNovidades] = useState(false);
+
+  useEffect(() => {
+    const verificar = () => {
+      try {
+        const lastSeen = localStorage.getItem("batcaverna_last_seen_version");
+        if (lastSeen && compareSemver(CURRENT_APP_VERSION, lastSeen) > 0) {
+          setTemNovidades(true);
+        } else {
+          setTemNovidades(false);
+        }
+      } catch {}
+    };
+
+    verificar();
+    window.addEventListener("batcaverna_version_updated", verificar);
+    return () => window.removeEventListener("batcaverna_version_updated", verificar);
+  }, []);
+
+  return temNovidades;
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -124,6 +153,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [currentTab, setCurrentTab] = useState<string>("");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const revisoesPendentes = useRevisoesPendentes();
+  const novidadesPendentes = useNovidadesNaoVistas();
   const lastNavTimeRef = useRef(0);
 
   const handleNavClick = (
@@ -246,6 +276,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
                 </span>
               )}
+              {link.contador === "novidades" && novidadesPendentes && (
+                <span className="w-2 h-2 rounded-full bg-bat-gold-400 shadow-[0_0_8px_rgba(245,197,24,0.8)] animate-pulse" />
+              )}
             </Link>
           );
         })}
@@ -258,6 +291,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Player global: fica fora da árvore de páginas para a música não
           parar a cada navegação. Só aparece quando há algo tocando. */}
       <DynamicIsland />
+
+      {/* Alerta inteligente de atualizações perdidas para soldados que retornam */}
+      <MissedUpdatesModal />
 
       {/* Convite de feedback após 1h e 3h de uso acumulado */}
       <ConviteFeedback />
@@ -355,6 +391,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           >
             Sair da conta
           </button>
+
+          {/* Versão da Plataforma & Novidades */}
+          <Link
+            href="/novidades"
+            className="mt-3 flex items-center justify-between text-[11px] font-mono text-bat-text-muted hover:text-bat-gold-400 transition-colors pt-2.5 border-t border-bat-border/50 no-underline group"
+            title="Ver histórico de novidades"
+          >
+            <span className="flex items-center gap-1.5">
+              <span className="group-hover:text-bat-gold-400">v{CURRENT_APP_VERSION}</span>
+              {novidadesPendentes && (
+                <span className="w-1.5 h-1.5 rounded-full bg-bat-gold-400 animate-pulse" />
+              )}
+            </span>
+            <span className="text-[10px] text-bat-gold-400 font-bold uppercase tracking-wider group-hover:underline">
+              Novidades →
+            </span>
+          </Link>
         </div>
       </aside>
 
@@ -510,6 +563,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <span className="absolute top-1 right-1.5 min-w-4 h-4 rounded-full bg-bat-gold-400 px-1 text-center text-[9px] font-black text-black leading-4 flex items-center justify-center">
                     {revisoesPendentes > 99 ? "99+" : revisoesPendentes}
                   </span>
+                )}
+                {item.contador === "novidades" && novidadesPendentes && (
+                  <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-bat-gold-400 shadow-[0_0_8px_rgba(245,197,24,0.8)] animate-pulse" />
                 )}
               </Link>
             );

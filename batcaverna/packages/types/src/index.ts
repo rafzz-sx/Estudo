@@ -353,12 +353,33 @@ export interface ImportacaoLog {
   duracao_segundos: number;
 }
 
-// ─── App Info ────────────────────────────────────────────────
+// ─── App Info & Changelog ────────────────────────────────────
+
+export type ChangeType = 'novo' | 'melhoria' | 'correcao' | 'removido';
+
+export interface ChangelogItem {
+  id: string;
+  tipo: ChangeType;
+  titulo: string;
+  descricao: string;
+  tag?: string;
+}
+
+export interface ReleaseItem {
+  versao: string;
+  dataLancamento: string; // ISO 8601 string
+  titulo: string;
+  resumo: string;
+  destaque?: boolean;
+  impacto?: 'major' | 'minor' | 'patch';
+  alteracoes: ChangelogItem[];
+}
 
 export interface AppInfo {
   id: string;
   versao_atual: string;
   atualizado_em: string;
+  notas_versao?: string | null;
 }
 
 // ─── Auditoria ───────────────────────────────────────────────

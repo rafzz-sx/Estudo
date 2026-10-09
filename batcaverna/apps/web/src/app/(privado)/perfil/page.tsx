@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { calcularNivel, formatarDataHoraVersao } from "@batcaverna/utils";
+import { CURRENT_APP_VERSION } from "@/data/changelog";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
 import { SeletorBadges } from "@/components/SeletorBadges";
 import { GaleriaBadges } from "@/components/GaleriaBadges";
@@ -142,7 +143,7 @@ function PerfilConteudo() {
 
   // Informações de Versão do App
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
-    versao_atual: "3.0.0",
+    versao_atual: CURRENT_APP_VERSION,
     atualizado_em: new Date().toISOString(),
   });
 
@@ -1171,10 +1172,17 @@ function PerfilConteudo() {
             )}
           </div>
 
-          {/* Rodapé Dinâmico de Versão */}
-          <p className="text-center text-bat-text-muted text-xs mt-6">
-            BatCaverna v{appInfo.versao_atual} · Atualizado em {formatarDataHoraVersao(appInfo.atualizado_em)}
-          </p>
+          {/* Rodapé Dinâmico de Versão & Novidades */}
+          <div className="text-center mt-6">
+            <Link
+              href="/novidades"
+              className="inline-flex items-center gap-2 text-xs text-bat-text-muted hover:text-bat-gold-400 transition-colors no-underline group"
+              title="Ver histórico de melhorias da plataforma"
+            >
+              <span>BatCaverna v{appInfo.versao_atual} · Atualizado em {formatarDataHoraVersao(appInfo.atualizado_em)}</span>
+              <span className="font-bold text-[10px] text-bat-gold-400 group-hover:underline">Novidades →</span>
+            </Link>
+          </div>
         </div>
       )}
     </div>

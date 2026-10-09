@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
+import { CURRENT_APP_VERSION } from '@/data/changelog';
 
 /**
- * Versão de reserva, usada só quando `app_info` está vazia.
- * Mantenha em sincronia com o último seed `versao_*.sql`.
+ * Versão canônica da plataforma obtida da fonte única da verdade (changelog).
  */
-const VERSAO_APP = '3.0.0';
+const VERSAO_APP = CURRENT_APP_VERSION;
 
 // GET /api/app-info — Retorna versão atual e data de atualização
 export async function GET() {
