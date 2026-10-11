@@ -183,6 +183,8 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
     multiplicador,
     sincroniaEsquadrao,
     amigosSincronia,
+    boosterSegundosRestantes,
+    boosterExpirado,
     pauseSession,
     resumeSession,
   } = useStudySessionStore();
@@ -222,7 +224,7 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
             : isPaused
             ? "Sessão pausada"
             : sincroniaEsquadrao
-            ? "⚔️ Sincronia de Esquadrão Ativa (+10% XP) estudando junto com amigos!"
+            ? "🔥 Booster 1.2x Ativo com amigos e temporizador!"
             : "Sessão de estudo ativa na trilha"
         }
       >
@@ -231,7 +233,7 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
             isPaused || pausadoPorEstarForaDaTrilha
               ? "bg-amber-400"
               : sincroniaEsquadrao
-              ? "bg-bat-gold-400 animate-pulse shadow-[0_0_8px_rgba(245,197,24,0.8)]"
+              ? "bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(245,197,24,0.8)]"
               : "bg-bat-success animate-pulse"
           }`}
         />
@@ -244,9 +246,14 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
               fora da trilha
             </span>
           ) : sincroniaEsquadrao ? (
-            <span className="text-[10px] font-extrabold bg-bat-gold-400 text-black px-1.5 py-0.2 rounded shadow-[0_0_8px_rgba(245,197,24,0.6)] flex items-center gap-1">
-              <span>⚔️</span>
-              <span className="hidden sm:inline">Sincronia</span> {multiplicador}x
+            <span className="text-[10px] font-extrabold bg-gradient-to-r from-amber-500 to-yellow-400 text-black px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(245,197,24,0.6)] flex items-center gap-1">
+              <span>🔥</span>
+              <span>1.2x</span>
+              {!boosterExpirado && boosterSegundosRestantes !== null && (
+                <span className="font-mono text-[9px] opacity-90 hidden sm:inline">
+                  {Math.floor(boosterSegundosRestantes / 60)}m
+                </span>
+              )}
             </span>
           ) : multiplicador > 1 ? (
             <span className="text-[10px] font-bold bg-bat-gold-400 text-black px-1.5 py-0.2 rounded shadow-sm">
@@ -300,12 +307,35 @@ export function StudySessionBadge({ variant = "compact" }: { variant?: "compact"
             )}
 
             {sincroniaEsquadrao && (
-              <div className="p-2.5 rounded-xl bg-bat-gold-400/10 border border-bat-gold-400/30 text-[11px] text-bat-gold-300 mb-3 leading-relaxed flex items-start gap-2 shadow-[0_0_15px_rgba(245,197,24,0.1)]">
-                <span className="text-base shrink-0">⚔️</span>
-                <div>
-                  <span className="font-bold text-bat-gold-400">Sincronia de Esquadrão Ativa (+10% XP)!</span>
+              <div
+                className={`p-2.5 rounded-xl border text-[11px] mb-3 leading-relaxed flex items-start gap-2 ${
+                  boosterExpirado
+                    ? "bg-bat-bg-secondary border-bat-border text-bat-text-secondary"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-[0_0_15px_rgba(245,197,24,0.15)]"
+                }`}
+              >
+                <span className="text-base shrink-0">{boosterExpirado ? "⏱️" : "🔥"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold text-bat-gold-400">
+                      {boosterExpirado
+                        ? "Limite do Booster Atingido (60 min)"
+                        : "Booster 1.2x Ativo com Amigo!"}
+                    </span>
+                    {!boosterExpirado && boosterSegundosRestantes !== null && (
+                      <span className="font-mono text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+                        {formatarSegundosParaTimer(boosterSegundosRestantes).slice(3)} restantes
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] text-bat-text-secondary mt-0.5">
-                    Você e {amigosSincronia.length > 0 ? amigosSincronia.map((a) => a.apelido).join(", ") : "seu amigo"} estão combatendo juntos e ganhando bônus simultâneo de XP.
+                    {boosterExpirado
+                      ? "O limite tático de 60 minutos de booster foi completado para evitar sobrecarga. Parabéns pelo foco conjunto!"
+                      : `Você e ${
+                          amigosSincronia.length > 0
+                            ? amigosSincronia.map((a) => a.apelido).join(", ")
+                            : "seu amigo"
+                        } estão com o booster de 1.2x (+20% XP) ativo com temporizador tático.`}
                   </p>
                 </div>
               </div>

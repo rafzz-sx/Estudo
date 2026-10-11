@@ -84,11 +84,20 @@ export async function POST(req: NextRequest) {
       console.warn('Aviso ao checar sincronia de esquadrão:', errSync);
     }
 
+    // ─── Booster de Estudo com Amigo (1.2x com Temporizador) ────
+    // Limite tático de 3600 segundos (60 minutos) de booster ativo para evitar farm infinito
+    const TEMPO_MAXIMO_BOOSTER = 3600;
+    const boosterSegundosUsadosCliente = Number(body.booster_segundos_usados ?? 0);
+    const boosterSegundosUsados = Math.min(TEMPO_MAXIMO_BOOSTER, Math.max(0, boosterSegundosUsadosCliente));
+    const boosterSegundosRestantes = Math.max(0, TEMPO_MAXIMO_BOOSTER - boosterSegundosUsados);
+    const boosterExpirado = boosterSegundosRestantes <= 0;
+
     // Multiplicador de continuidade: +10% a cada 15min (máx 1.5x)
-    // + Bônus de Sincronia de Esquadrão: +10% (+0.10) enquanto estuda junto com amigos
+    // + Booster de Sincronia com Amigo: +20% (+0.20 / total 1.2x base) enquanto o temporizador estiver ativo
     const multiplicadorBase = Math.min(1 + blocos15Min * 0.1, 1.5);
-    const bonusSincronia = sincroniaEsquadrao ? 0.1 : 0;
-    const multiplicador = Math.min(Math.round((multiplicadorBase + bonusSincronia) * 100) / 100, 1.6);
+    const boosterAtivo = sincroniaEsquadrao && !boosterExpirado;
+    const bonusSincronia = boosterAtivo ? 0.20 : 0;
+    const multiplicador = Math.min(Math.round((multiplicadorBase + bonusSincronia) * 100) / 100, 1.7);
 
     // XP: 1 XP por minuto de estudo x multiplicador
     const xpGanhoNesteIntervalo = Math.max(0, Math.round((diffSegundos / 60) * multiplicador));
@@ -101,6 +110,12 @@ export async function POST(req: NextRequest) {
       multiplicador_continuidade_atual: multiplicador,
       xp_ganho_na_sessao: novoXpSessao,
     };
+
+    if (body.dispositivo && (body.dispositivo === 'app' || body.dispositivo === 'web')) {
+      if (session.dispositivo_origem !== body.dispositivo) {
+        updatePayload.dispositivo_origem = body.dispositivo;
+      }
+    }
 
     // Atualizar sessão no Supabase
     await supabase
@@ -186,6 +201,10 @@ export async function POST(req: NextRequest) {
         multiplicador,
         sincronia_esquadrao: sincroniaEsquadrao,
         amigos_sincronia: amigosEmSincronia,
+        booster_ativo: boosterAtivo,
+        booster_multiplicador: 1.2,
+        booster_segundos_restantes: boosterSegundosRestantes,
+        booster_expirado: boosterExpirado,
         blocos_completados: blocos15Min,
         novos_blocos: novosBlocos,
         // O store precisa disso para atualizar a patente na topbar e

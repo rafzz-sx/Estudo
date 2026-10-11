@@ -257,14 +257,19 @@ export function DynamicIsland() {
 
   // Integração com a API do YouTube Iframe para tocar faixas do YouTube sem parar
   useEffect(() => {
+    let intervaloPoll: NodeJS.Timeout | null = null;
+
     const inicializarYT = () => {
       if (ytPlayerRef.current) return;
       if (typeof window === "undefined" || !(window as any).YT || !(window as any).YT.Player) return;
 
+      const containerEl = document.getElementById("batcaverna-youtube-iframe-player");
+      if (!containerEl) return;
+
       try {
         ytPlayerRef.current = new (window as any).YT.Player("batcaverna-youtube-iframe-player", {
-          height: "1",
-          width: "1",
+          height: "180",
+          width: "280",
           playerVars: {
             autoplay: 1,
             controls: 0,
@@ -273,6 +278,8 @@ export function DynamicIsland() {
             modestbranding: 1,
             rel: 0,
             playsinline: 1,
+            enablejsapi: 1,
+            origin: typeof window !== "undefined" ? window.location.origin : undefined,
           },
           events: {
             onReady: () => {
@@ -286,6 +293,7 @@ export function DynamicIsland() {
             onStateChange: (event: any) => {
               // 1 = PLAYING
               if (event.data === 1) {
+                usePlayerStore.setState({ tocando: true });
                 if (!intervalSyncRef.current) {
                   intervalSyncRef.current = window.setInterval(() => {
                     try {
@@ -297,8 +305,15 @@ export function DynamicIsland() {
                     } catch {}
                   }, 500);
                 }
-              } else {
+              } else if (event.data === 2) {
+                // 2 = PAUSED
+                usePlayerStore.setState({ tocando: false });
                 if (intervalSyncRef.current) {
+                  clearInterval(intervalSyncRef.current);
+                  intervalSyncRef.current = null;
+                }
+              } else {
+                if (intervalSyncRef.current && event.data !== 3) {
                   clearInterval(intervalSyncRef.current);
                   intervalSyncRef.current = null;
                 }
@@ -311,7 +326,16 @@ export function DynamicIsland() {
             },
             onError: (err: any) => {
               console.warn("YouTube Player error:", err?.data);
-              usePlayerStore.getState().proxima();
+              const cod = err?.data;
+              if (cod === 150 || cod === 101) {
+                console.warn("Vídeo com restrição de incorporação pelo proprietário.");
+              }
+              const s = usePlayerStore.getState();
+              if (s.fila.length > 1) {
+                s.proxima();
+              } else {
+                usePlayerStore.setState({ tocando: false, posicao: 0 });
+              }
             },
           },
         });
@@ -328,6 +352,9 @@ export function DynamicIsland() {
         }
         try {
           ytPlayerRef.current.loadVideoById({ videoId, startSeconds: pos });
+          if (typeof ytPlayerRef.current.unMute === "function") {
+            ytPlayerRef.current.unMute();
+          }
           if (typeof ytPlayerRef.current.setVolume === "function") {
             ytPlayerRef.current.setVolume(vol * 100);
           }
@@ -387,10 +414,19 @@ export function DynamicIsland() {
           tag.src = "https://www.youtube.com/iframe_api";
           document.body.appendChild(tag);
         }
+
+        // Poll de segurança caso a API já tenha carregado mas o callback não disparou
+        intervaloPoll = setInterval(() => {
+          if ((window as any).YT && (window as any).YT.Player) {
+            if (intervaloPoll) clearInterval(intervaloPoll);
+            inicializarYT();
+          }
+        }, 200);
       }
     }
 
     return () => {
+      if (intervaloPoll) clearInterval(intervaloPoll);
       if (intervalSyncRef.current) {
         clearInterval(intervalSyncRef.current);
         intervalSyncRef.current = null;
@@ -494,7 +530,7 @@ export function DynamicIsland() {
     <>
       <div
         id="batcaverna-youtube-iframe-player"
-        className="pointer-events-none fixed -bottom-96 -left-96 h-1 w-1 opacity-0"
+        className="pointer-events-none fixed bottom-2 right-2 h-36 w-60 opacity-[0.001] -z-50 overflow-hidden"
         aria-hidden="true"
       />
 

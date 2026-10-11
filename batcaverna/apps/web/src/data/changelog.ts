@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.4.0';
+export const CURRENT_APP_VERSION = '3.5.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -18,12 +18,64 @@ export const CURRENT_APP_VERSION = '3.4.0';
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
   {
+    versao: '3.5.0',
+    dataLancamento: '2026-10-10T21:30:00-03:00',
+    titulo: 'Caderno de Erros Impecável, Filtro por Assuntos & Booster 1.2x',
+    resumo:
+      'Evolução tática com reconstrução total do Caderno de Erros (comparativo de respostas e correção KaTeX), filtro de questões por assunto dinâmico, Booster 1.2x com temporizador de foco em dupla e arsenal de Bizus com tags do ENEM.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'caderno-erros-impecavel-comparativo',
+        tipo: 'melhoria',
+        titulo: 'Caderno de Erros Impecável & Comparativo Visual',
+        descricao:
+          'Visualização direta da resposta que você errou versus o gabarito oficial em verde, atalho para refazer a questão no banco e correção definitiva de expressões matemáticas com KaTeX.',
+        tag: 'Caderno & Erros',
+      },
+      {
+        id: 'filtro-questoes-por-assunto',
+        tipo: 'novo',
+        titulo: 'Filtro Dinâmico de Questões por Assunto',
+        descricao:
+          'Agora você pode filtrar questões de qualquer matéria por seus assuntos específicos com contagem de questões em tempo real, permitindo treino cirúrgico nas suas maiores dificuldades.',
+        tag: 'Banco de Questões',
+      },
+      {
+        id: 'booster-1-2x-amigos-temporizador',
+        tipo: 'novo',
+        titulo: 'Booster 1.2x de Esquadrão com Temporizador',
+        descricao:
+          'Estudar em dupla com seus amigos agora concede +20% de XP (1.2x) com um temporizador tático de 60 minutos por sessão, incentivando sessões intensivas e prevenindo farm infinito.',
+        tag: 'Sincronia & XP',
+      },
+      {
+        id: 'bizus-taticos-enem-tags',
+        tipo: 'novo',
+        titulo: 'Arsenal de Bizus Táticos com Tags do ENEM',
+        descricao:
+          'Adição de 10 novos bizus descontraídos e fáceis de memorizar (TRI, Escala, Crase, Conversão km/h, Bhaskara rápido, Redação nota 1000) e pílulas de palavras-chave rápidas.',
+        tag: 'Bizus & Dicas',
+      },
+      {
+        id: 'suporte-musica-admin-melhorias',
+        tipo: 'melhoria',
+        titulo: 'Reconstrução do Suporte e Melhorias de Música e Admin',
+        descricao:
+          'Suporte reformulado no formato de chat militar moderno, termo "Adicionar" intuitivo para músicas e playlists, e painel de moderação com contestações de gabarito simplificadas.',
+        tag: 'Plataforma & UX',
+      },
+    ],
+  },
+  {
     versao: '3.4.0',
     dataLancamento: '2026-10-09T20:30:00-03:00',
     titulo: 'Trilha Sonora Tática, Chat Datado & Blindagem de Segurança',
     resumo:
       'Integração musical completa com importação de playlists do Spotify e busca no YouTube, novo chat militar com histórico datado, fluxo de recuperação visual de conta e blindagem total de segurança.',
-    destaque: true,
+    destaque: false,
     impacto: 'minor',
     classificacao: 'grande',
     alteracoes: [

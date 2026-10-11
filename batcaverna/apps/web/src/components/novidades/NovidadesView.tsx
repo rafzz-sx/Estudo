@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { CHANGELOG_HISTORY, CURRENT_APP_VERSION } from "@/data/changelog";
-import type { ChangeType, ReleaseClassificacao, ReleaseItem } from "@batcaverna/types";
+import type { ChangeType, ReleaseClassificacao } from "@batcaverna/types";
 import {
   formatReleaseDateTime,
   determinarClassificacao,
@@ -419,7 +419,7 @@ export function NovidadesView() {
           <div className="text-4xl mb-3">🔍</div>
           <h3 className="text-lg font-bold text-white">Nenhuma atualização encontrada</h3>
           <p className="text-bat-text-muted text-sm mt-1 max-w-md mx-auto">
-            Não encontramos nenhum registro correspondente ao termo "{busca}" com os filtros selecionados.
+            Não encontramos nenhum registro correspondente ao termo &ldquo;{busca}&rdquo; com os filtros selecionados.
           </p>
           <button
             onClick={() => {
@@ -433,7 +433,7 @@ export function NovidadesView() {
           </button>
         </div>
       ) : (
-        <div className="relative pl-4 sm:pl-6 space-y-8 before:content-[''] before:absolute before:left-[11px] sm:before:left-[15px] before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-bat-gold-400/40 before:via-bat-border before:to-transparent">
+        <div className="relative pl-6 sm:pl-10 space-y-10 before:content-[''] before:absolute before:left-[17px] sm:before:left-[21px] before:top-6 before:bottom-6 before:w-[3px] before:bg-gradient-to-b before:from-bat-gold-400 before:via-bat-gold-400/40 before:to-transparent before:rounded-full before:shadow-[0_0_12px_rgba(245,197,24,0.3)]">
           {releasesFiltradas.map((rel) => {
             const { dataFormatada, horaFormatada, tempoRelativo } = formatReleaseDateTime(
               rel.dataLancamento
@@ -446,42 +446,55 @@ export function NovidadesView() {
               <div
                 key={rel.versao}
                 id={anchorId}
-                className="relative pl-6 sm:pl-8 group scroll-mt-28"
+                className="relative pl-7 sm:pl-10 group scroll-mt-28"
               >
-                {/* Marcador do Ponto na Linha do Tempo */}
+                {/* Linha conectora horizontal entre o nó e o card */}
                 <div
-                  className={`absolute -left-[14px] sm:-left-[18px] top-6 w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all ${
+                  className={`absolute left-[-16px] sm:left-[-22px] top-7 w-6 sm:w-8 h-[2px] transition-colors ${
                     isLatest
-                      ? "bg-bat-gold-400 border-black shadow-[0_0_15px_rgba(245,197,24,0.6)]"
-                      : "bg-bat-bg-card border-bat-border group-hover:border-bat-gold-400/60"
+                      ? "bg-gradient-to-r from-bat-gold-400 to-bat-gold-400/60 shadow-[0_0_8px_rgba(245,197,24,0.5)]"
+                      : "bg-bat-border group-hover:bg-bat-gold-400/50"
                   }`}
+                />
+
+                {/* Nó / Marcador da Linha do Tempo */}
+                <div
+                  className={`absolute -left-[30px] sm:-left-[36px] top-3.5 w-9 h-9 rounded-2xl flex items-center justify-center border-2 transition-all duration-300 z-10 ${
+                    isLatest
+                      ? "bg-gradient-to-br from-bat-gold-400 to-amber-500 border-bat-gold-300 shadow-[0_0_22px_rgba(245,197,24,0.7)] scale-105"
+                      : "bg-bat-bg-card/95 border-bat-border/80 text-bat-text-muted group-hover:border-bat-gold-400/70 group-hover:text-bat-gold-400 group-hover:shadow-[0_0_14px_rgba(245,197,24,0.3)] group-hover:scale-105"
+                  }`}
+                  title={`${classInfo.rotulo} - v${rel.versao}`}
                 >
-                  <div
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      isLatest ? "bg-black" : "bg-bat-gold-400"
-                    }`}
-                  />
+                  <span className={`text-sm ${isLatest ? "filter drop-shadow-md" : ""}`}>
+                    {classInfo.icon}
+                  </span>
                 </div>
 
                 {/* Card da Versão */}
                 <div
-                  className={`bg-bat-bg-card border rounded-2xl p-5 sm:p-7 transition-all duration-300 ${
+                  className={`relative overflow-hidden rounded-3xl border transition-all duration-300 backdrop-blur-md ${
                     isLatest
-                      ? "border-bat-gold-400/50 shadow-[0_0_25px_rgba(245,197,24,0.08)] bg-gradient-to-b from-bat-bg-card to-bat-bg-card/90"
-                      : "border-bat-border hover:border-bat-border-glow"
+                      ? "bg-gradient-to-br from-bat-bg-card via-bat-bg-card to-bat-bg-secondary/90 border-bat-gold-400/50 shadow-[0_8px_32px_rgba(245,197,24,0.12)] p-6 sm:p-8"
+                      : "bg-bat-bg-card/90 border-bat-border/70 hover:border-bat-gold-400/35 hover:shadow-[0_6px_24px_rgba(0,0,0,0.4)] p-5 sm:p-7"
                   }`}
                 >
+                  {/* Luz de fundo sutil para a versão mais recente */}
+                  {isLatest && (
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-bat-gold-400/5 rounded-full blur-2xl pointer-events-none" />
+                  )}
+
                   {/* Cabeçalho do Card */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-bat-border/60">
-                    <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-bat-border/60">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                       {/* Número da Versão */}
-                      <span className="font-mono font-bold text-base sm:text-lg text-bat-gold-400 bg-bat-gold-400/10 px-3 py-1 rounded-xl border border-bat-gold-400/25">
+                      <span className="font-mono font-black text-base sm:text-lg text-bat-gold-400 bg-bat-gold-400/10 px-3.5 py-1 rounded-xl border border-bat-gold-400/30 shadow-xs">
                         v{rel.versao}
                       </span>
 
-                      {/* Selo Oficial de Classificação (Maior, Grande, Atualização, Pequena) */}
+                      {/* Selo Oficial de Classificação */}
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide border flex items-center gap-1.5 ${classInfo.badgeClass}`}
+                        className={`px-3 py-1 rounded-xl text-[11px] font-extrabold uppercase tracking-wide border flex items-center gap-1.5 shadow-xs ${classInfo.badgeClass}`}
                         title={classInfo.descricao}
                       >
                         <span>{classInfo.icon}</span>
@@ -490,27 +503,27 @@ export function NovidadesView() {
 
                       {/* Badge Versão Atual */}
                       {isLatest && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          Versão Atual
+                        <span className="px-3 py-1 rounded-xl text-[11px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          Versão em Operação
                         </span>
                       )}
                     </div>
 
                     {/* Data, Hora e Copiar Link */}
-                    <div className="flex items-center gap-2 text-xs text-bat-text-muted">
-                      <span title={`${dataFormatada} às ${horaFormatada}`}>
-                        🕒 {tempoRelativo} · {dataFormatada}
+                    <div className="flex items-center gap-2 text-xs font-mono text-bat-text-muted">
+                      <span title={`${dataFormatada} às ${horaFormatada}`} className="flex items-center gap-1.5">
+                        <span>🕒</span> {tempoRelativo} · {dataFormatada}
                       </span>
                       <button
                         onClick={() => copiarLinkVersao(rel.versao)}
-                        className="p-1 rounded-md hover:bg-bat-bg-elevated text-bat-text-muted hover:text-bat-gold-400 transition-colors ml-1 cursor-pointer"
-                        title="Copiar link desta versão"
+                        className="p-1.5 rounded-lg hover:bg-bat-bg-elevated text-bat-text-muted hover:text-bat-gold-400 transition-colors cursor-pointer border border-transparent hover:border-bat-border/60"
+                        title="Copiar link direto desta versão"
                       >
                         {copiadoId === rel.versao ? (
                           <span className="text-[11px] text-emerald-400 font-bold">Copiado!</span>
                         ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -524,35 +537,35 @@ export function NovidadesView() {
                   </div>
 
                   {/* Título & Resumo da Release */}
-                  <div className="mt-4">
-                    <h2 className="heading text-xl sm:text-2xl font-bold text-white tracking-wide">
+                  <div className="relative z-10 mt-5">
+                    <h2 className="heading text-xl sm:text-2xl font-black text-white tracking-wide">
                       {rel.titulo}
                     </h2>
-                    <p className="text-bat-text-secondary text-sm mt-1.5 leading-relaxed">
+                    <p className="text-bat-text-secondary text-sm sm:text-base mt-2 leading-relaxed">
                       {rel.resumo}
                     </p>
                   </div>
 
                   {/* Alterações Específicas */}
-                  <div className="mt-6 space-y-3">
+                  <div className="relative z-10 mt-6 space-y-3">
                     {rel.alteracoes.map((item) => {
                       const badge = getBadgeStyle(item.tipo);
 
                       return (
                         <div
                           key={item.id}
-                          className="bg-bat-bg-elevated/50 hover:bg-bat-bg-elevated border border-bat-border/50 hover:border-bat-border rounded-xl p-3.5 sm:p-4 transition-colors"
+                          className="bg-bat-bg-elevated/40 hover:bg-bat-bg-elevated/70 border border-bat-border/60 hover:border-bat-gold-400/30 rounded-2xl p-4 sm:p-4.5 transition-all duration-200"
                         >
-                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${badge.badgeClass}`}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${badge.badgeClass}`}
                             >
                               <span>{badge.icon}</span>
                               {badge.label}
                             </span>
 
                             {item.tag && (
-                              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-bat-bg/80 text-bat-text-muted border border-bat-border">
+                              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-bat-bg-secondary text-bat-gold-400/90 border border-bat-gold-400/20">
                                 #{item.tag}
                               </span>
                             )}
@@ -562,7 +575,7 @@ export function NovidadesView() {
                             </h4>
                           </div>
 
-                          <p className="text-xs sm:text-sm text-bat-text-secondary leading-relaxed pl-1 sm:pl-2 border-l border-bat-border/60 ml-1 mt-1">
+                          <p className="text-xs sm:text-sm text-bat-text-secondary leading-relaxed pl-2.5 border-l-2 border-bat-border/80 mt-1.5">
                             {item.descricao}
                           </p>
                         </div>

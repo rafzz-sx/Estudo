@@ -57,7 +57,9 @@ interface UsuarioAdmin {
   nome: string;
   apelido: string;
   apelidos_antigos: string[];
+  historico_detalhado?: { apelido: string; data: string }[];
   email: string;
+  email_verified?: boolean;
   role: "admin" | "user";
   nivel_atual: number;
   xp_total: number;
@@ -68,6 +70,33 @@ interface UsuarioAdmin {
   suspenso_ate?: string | null;
   motivo_suspensao?: string | null;
   situacao?: "ativa" | "suspensa" | "desativada";
+  concurso_alvo?: string | null;
+  concurso_nome?: string | null;
+  total_questoes_respondidas?: number;
+  total_acertos?: number;
+  taxa_acerto?: number | null;
+  ultimo_login_em?: string | null;
+}
+
+function formatarTempoRelativo(dataIso?: string | null): string {
+  if (!dataIso) return "Nunca";
+  const ms = Date.now() - new Date(dataIso).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "Agora";
+  if (mins < 60) return `Há ${mins}m`;
+  const horas = Math.floor(mins / 60);
+  if (horas < 24) return `Há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 30) return `Há ${dias}d`;
+  return new Date(dataIso).toLocaleDateString("pt-BR");
+}
+
+function formatarTempoEstudoMinutos(segundos?: number): string {
+  if (!segundos || segundos <= 0) return "0 min";
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 interface TicketAdmin {
@@ -124,6 +153,7 @@ export default function AdminPage() {
   // Moderação de contas
   const [moderando, setModerando] = useState<string | null>(null);
   const [avisoConta, setAvisoConta] = useState<string | null>(null);
+  const [soldadoDossie, setSoldadoDossie] = useState<UsuarioAdmin | null>(null);
 
   // Usuários Online em Tempo Real
   const [usuariosOnline, setUsuariosOnline] = useState<any[]>([]);
@@ -1180,51 +1210,108 @@ export default function AdminPage() {
 
       {/* ═══ TAB 2: USUÁRIOS ONLINE AGORA ═══ */}
       {aba === "online" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-4">
-          <div className="flex justify-between items-center">
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
             <div>
-              <h2 className="heading text-xl text-bat-text">Monitoramento em Tempo Real</h2>
-              <p className="text-bat-text-secondary text-xs">
-                Sessões de estudo ativas nos últimos 10 minutos e telemetria de uso da plataforma.
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <h2 className="heading text-xl text-bat-text">Soldados em Combate Agora</h2>
+              </div>
+              <p className="text-bat-text-secondary text-xs mt-0.5">
+                Sessões ativas com telemetria em tempo real e identificação de dispositivo (Aplicativo APK vs Navegador Web).
               </p>
             </div>
-            <button
-              onClick={carregarOnline}
-              disabled={loadingOnline}
-              className="btn-primary py-2 px-4 text-xs font-bold"
-            >
-              {loadingOnline ? "Atualizando..." : "🔄 Atualizar Agora"}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1.5 rounded-xl bg-bat-bg-primary border border-bat-border text-xs font-mono text-bat-gold-400">
+                ⚡ {usuariosOnline.length} soldado{usuariosOnline.length !== 1 ? "s" : ""} ativo{usuariosOnline.length !== 1 ? "s" : ""}
+              </span>
+              <button
+                onClick={carregarOnline}
+                disabled={loadingOnline}
+                className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className={loadingOnline ? "animate-spin" : ""}>🔄</span>
+                {loadingOnline ? "Sincronizando..." : "Atualizar"}
+              </button>
+            </div>
           </div>
 
           {usuariosOnline.length === 0 ? (
-            <div className="p-12 text-center text-bat-text-muted text-xs">
-              <span className="text-3xl block mb-2">⏱️</span>
-              Nenhuma sessão de estudo ativa neste exato momento.
+            <div className="p-12 text-center text-bat-text-muted text-xs bg-bat-bg-primary/50 border border-bat-border/50 rounded-2xl">
+              <span className="text-4xl block mb-3">🛡️</span>
+              <p className="text-sm font-bold text-bat-text">Nenhum soldado estudando no momento</p>
+              <p className="text-bat-text-muted mt-1">
+                As sessões aparecem aqui em tempo real enquanto os alunos mantêm o cronômetro ligado.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {usuariosOnline.map((u, i) => (
-                <div key={i} className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
-                      {u.avatar_url ? (
-                        <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+              {usuariosOnline.map((u, i) => {
+                const ehApp = u.dispositivo === "app";
+                return (
+                  <div
+                    key={i}
+                    className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border hover:border-bat-gold-400/50 transition-all space-y-3 relative overflow-hidden group shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden shrink-0 shadow-inner">
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            u.apelido?.[0]?.toUpperCase() || "S"
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-bat-text truncate">{u.apelido}</p>
+                            {u.concurso_sigla && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30">
+                                {u.concurso_sigla}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-bat-text-muted truncate">{u.nome || u.email}</p>
+                        </div>
+                      </div>
+
+                      {/* Badge Dispositivo */}
+                      {ehApp ? (
+                        <span className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shadow-sm">
+                          <span>📱</span>
+                          <span>APK (App)</span>
+                        </span>
                       ) : (
-                        u.apelido?.[0]?.toUpperCase() || "S"
+                        <span className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-sky-500/15 text-sky-400 border border-sky-500/30 flex items-center gap-1 shadow-sm">
+                          <span>💻</span>
+                          <span>Web</span>
+                        </span>
                       )}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-bat-text">{u.apelido}</p>
-                      <p className="text-[11px] text-bat-text-muted">{u.nome}</p>
+
+                    <div className="grid grid-cols-3 gap-1 py-2 px-2.5 rounded-lg bg-bat-bg-secondary/60 text-center font-mono text-[11px]">
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">Duração</span>
+                        <span className="font-bold text-bat-text">
+                          ⏱️ {formatarTempoEstudoMinutos(u.duracao_segundos)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">Bônus</span>
+                        <span className="font-bold text-bat-gold-400">
+                          🔥 x{u.multiplicador}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">XP Ganho</span>
+                        <span className="font-bold text-emerald-400">
+                          +{u.xp_ganho || 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex justify-between text-xs font-mono pt-2 border-t border-bat-border/40">
-                    <span className="text-bat-gold-400">🔥 Multiplicador: x{u.multiplicador}</span>
-                    <span className="text-emerald-400 font-bold">📱 {u.dispositivo?.toUpperCase()}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1236,7 +1323,7 @@ export default function AdminPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
-              placeholder="Buscar soldado por nome, apelido ou e-mail..."
+              placeholder="Buscar soldado por nome, apelido, e-mail ou concurso..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               className="flex-1 input-field text-xs"
@@ -1248,11 +1335,11 @@ export default function AdminPage() {
                   onClick={() => setFiltroRole(r)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all cursor-pointer ${
                     filtroRole === r
-                      ? "bg-bat-gold-400 text-black"
-                      : "bg-bat-bg-primary text-bat-text-secondary border border-bat-border"
+                      ? "bg-bat-gold-400 text-black shadow-md shadow-bat-gold-400/20"
+                      : "bg-bat-bg-primary text-bat-text-secondary border border-bat-border hover:text-bat-text"
                   }`}
                 >
-                  {r === "todos" ? "Todos" : r === "admin" ? "Admins" : "Alunos"}
+                  {r === "todos" ? `Todos (${usuarios.length})` : r === "admin" ? "Admins" : "Alunos"}
                 </button>
               ))}
             </div>
@@ -1264,7 +1351,7 @@ export default function AdminPage() {
             </p>
           )}
 
-          {/* ═══ VISUALIZAÇÃO MOBILE (Cards verticais sem rolagem lateral) ═══ */}
+          {/* ═══ VISUALIZAÇÃO MOBILE (Cards verticais) ═══ */}
           <div className="sm:hidden space-y-3">
             {usuariosFiltrados.length === 0 ? (
               <p className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border">
@@ -1280,89 +1367,86 @@ export default function AdminPage() {
                     className="p-4 rounded-xl border border-bat-border bg-bat-bg-primary space-y-3"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-bold text-bat-text text-sm truncate">{u.nome}</p>
-                          {u.role === "admin" ? (
-                            <span className="badge-admin text-[10px]">ADMIN</span>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-10 h-10 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 shrink-0 overflow-hidden">
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-bat-bg-secondary text-bat-text-muted">
-                              ALUNO
-                            </span>
+                            u.apelido?.[0]?.toUpperCase() || "S"
                           )}
                         </div>
-                        <p className="text-xs text-bat-text-muted truncate">{u.email}</p>
-                        <p className="text-xs text-bat-gold-400 font-mono font-bold mt-1">
-                          🦇 {u.apelido}
-                          {u.apelidos_antigos?.length > 0 && (
-                            <span className="font-normal text-[10px] text-bat-text-muted ml-1">
-                              (antes: {u.apelidos_antigos.join(", ")})
-                            </span>
-                          )}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-bold text-bat-text text-sm truncate">{u.nome}</p>
+                            {u.role === "admin" ? (
+                              <span className="badge-admin text-[10px]">ADMIN</span>
+                            ) : null}
+                            {u.concurso_alvo && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30">
+                                🎯 {u.concurso_alvo}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-bat-text-muted truncate">{u.email}</p>
+                          <p className="text-xs text-bat-gold-400 font-mono font-bold mt-0.5">
+                            🦇 {u.apelido}
+                          </p>
+                        </div>
                       </div>
                       <span
                         className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-bold ${
                           situacao === "ativa"
-                            ? "bg-bat-success/10 text-bat-success"
+                            ? "bg-bat-success/10 text-bat-success border border-bat-success/30"
                             : situacao === "suspensa"
-                            ? "bg-bat-warning/10 text-bat-warning"
-                            : "bg-bat-error/10 text-bat-error"
+                            ? "bg-bat-warning/10 text-bat-warning border border-bat-warning/30"
+                            : "bg-bat-error/10 text-bat-error border border-bat-error/30"
                         }`}
                       >
                         {situacao.toUpperCase()}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-mono text-bat-text-muted pt-2 border-t border-bat-border/50">
-                      <span className="text-bat-text">Nv. {u.nivel_atual} · {u.xp_total.toLocaleString("pt-BR")} XP</span>
-                      <span>desde {new Date(u.criado_em).toLocaleDateString("pt-BR")}</span>
+                    <div className="grid grid-cols-3 gap-2 py-2 px-2.5 rounded-lg bg-bat-bg-secondary/40 text-[11px] font-mono">
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">Patente</span>
+                        <span className="text-bat-text font-bold">Nv. {u.nivel_atual}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">Precisão</span>
+                        <span className="text-emerald-400 font-bold">
+                          {u.taxa_acerto !== null && u.taxa_acerto !== undefined ? `${u.taxa_acerto}%` : "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-bat-text-muted block">Ofensiva</span>
+                        <span className="text-bat-gold-400 font-bold">🔥 {u.streak_dias}d</span>
+                      </div>
                     </div>
 
-                    {u.motivo_suspensao && (
-                      <p className="text-[11px] text-bat-warning bg-bat-warning/10 p-2 rounded-lg">
-                        Motivo: {u.motivo_suspensao}
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-bat-border/40">
-                      {u.role === "admin" ? (
-                        <AcaoConta
-                          rotulo="Rebaixar"
-                          onClick={() => moderarConta(u, "rebaixar")}
-                          ocupado={ocupado}
-                        />
-                      ) : (
-                        <AcaoConta
-                          rotulo="Promover"
-                          onClick={() => moderarConta(u, "promover")}
-                          ocupado={ocupado}
-                        />
-                      )}
-
-                      {situacao === "ativa" ? (
-                        <>
+                    <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-bat-border/40">
+                      <button
+                        onClick={() => setSoldadoDossie(u)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer"
+                      >
+                        👁️ Ver Dossiê
+                      </button>
+                      <div className="flex gap-1">
+                        {situacao === "ativa" ? (
                           <AcaoConta
-                            rotulo="Suspender 7d"
+                            rotulo="Suspender"
                             tom="aviso"
                             onClick={() => moderarConta(u, "suspender")}
                             ocupado={ocupado}
                           />
+                        ) : (
                           <AcaoConta
-                            rotulo="Desativar"
-                            tom="erro"
-                            onClick={() => moderarConta(u, "desativar")}
+                            rotulo="Liberar"
+                            tom="ok"
+                            onClick={() => moderarConta(u, "liberar")}
                             ocupado={ocupado}
                           />
-                        </>
-                      ) : (
-                        <AcaoConta
-                          rotulo="Liberar"
-                          tom="ok"
-                          onClick={() => moderarConta(u, "liberar")}
-                          ocupado={ocupado}
-                        />
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1370,15 +1454,17 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* ═══ VISUALIZAÇÃO DESKTOP (Tabela original) ═══ */}
+          {/* ═══ VISUALIZAÇÃO DESKTOP (Tabela Completa Enriquecida) ═══ */}
           <div className="hidden sm:block overflow-x-auto rounded-xl border border-bat-border">
-            <table className="w-full min-w-[800px] text-left text-xs">
+            <table className="w-full min-w-[850px] text-left text-xs">
               <thead>
                 <tr className="bg-bat-bg-primary border-b border-bat-border text-bat-text-muted uppercase font-mono">
                   <th className="py-3 px-4">Soldado</th>
-                  <th className="py-3 px-4">Apelido Atual</th>
-                  <th className="py-3 px-4">Nível / XP</th>
-                  <th className="py-3 px-4">Cargo</th>
+                  <th className="py-3 px-4">Apelido</th>
+                  <th className="py-3 px-4">Concurso Alvo</th>
+                  <th className="py-3 px-4">Patente & XP</th>
+                  <th className="py-3 px-4">Desempenho</th>
+                  <th className="py-3 px-4">Último Login</th>
                   <th className="py-3 px-4">Situação</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -1389,12 +1475,20 @@ export default function AdminPage() {
                   const ocupado = moderando === u.id;
                   return (
                     <tr key={u.id} className="hover:bg-bat-bg-tertiary/30 transition-colors">
-                      <td className="py-3 px-4 font-bold text-bat-text">
-                        {u.nome}
-                        <span className="block font-normal text-bat-text-muted">{u.email}</span>
-                        <span className="block font-mono text-[10px] text-bat-text-muted">
-                          desde {new Date(u.criado_em).toLocaleDateString("pt-BR")}
-                        </span>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-bat-bg-secondary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden shrink-0 shadow-inner">
+                            {u.avatar_url ? (
+                              <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              u.apelido?.[0]?.toUpperCase() || "S"
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-bat-text truncate">{u.nome}</p>
+                            <span className="block font-normal text-bat-text-muted text-[11px] truncate">{u.email}</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-bat-gold-400 font-mono font-bold">
                         🦇 {u.apelido}
@@ -1404,30 +1498,62 @@ export default function AdminPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 font-mono">Nv. {u.nivel_atual} · {u.xp_total} XP</td>
-                      <td className="py-3 px-4 font-bold">
-                        {u.role === "admin" ? <span className="badge-admin">ADMIN</span> : "ALUNO"}
+                      <td className="py-3 px-4">
+                        {u.concurso_alvo ? (
+                          <span className="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-bat-gold-400/15 text-bat-gold-400 border border-bat-gold-400/30">
+                            🎯 {u.concurso_alvo}
+                          </span>
+                        ) : (
+                          <span className="text-bat-text-muted text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        <span className="font-bold text-bat-text">Nv. {u.nivel_atual}</span>
+                        <span className="block text-bat-text-muted text-[10px]">
+                          {u.xp_total.toLocaleString("pt-BR")} XP
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-400">
+                              {u.taxa_acerto !== null && u.taxa_acerto !== undefined ? `${u.taxa_acerto}%` : "—"}
+                            </span>
+                            <span className="text-bat-gold-400 text-[11px]">🔥 {u.streak_dias}d</span>
+                          </div>
+                          <span className="block text-[10px] text-bat-text-muted">
+                            {u.total_questoes_respondidas || 0} questões
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-bat-text-muted">
+                        {formatarTempoRelativo(u.ultimo_login_em)}
                       </td>
                       <td className="py-3 px-4">
                         <span
                           className={`rounded-lg px-2 py-0.5 text-[10px] font-bold ${
                             situacao === "ativa"
-                              ? "bg-bat-success/10 text-bat-success"
+                              ? "bg-bat-success/10 text-bat-success border border-bat-success/30"
                               : situacao === "suspensa"
-                              ? "bg-bat-warning/10 text-bat-warning"
-                              : "bg-bat-error/10 text-bat-error"
+                              ? "bg-bat-warning/10 text-bat-warning border border-bat-warning/30"
+                              : "bg-bat-error/10 text-bat-error border border-bat-error/30"
                           }`}
                         >
                           {situacao}
                         </span>
-                        {u.motivo_suspensao && (
-                          <span className="mt-0.5 block max-w-[160px] truncate text-[10px] text-bat-text-muted">
-                            {u.motivo_suspensao}
-                          </span>
+                        {u.role === "admin" && (
+                          <span className="ml-1 badge-admin text-[9px]">ADMIN</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex flex-wrap justify-end gap-1.5">
+                          <button
+                            onClick={() => setSoldadoDossie(u)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer"
+                          >
+                            👁️ Dossiê
+                          </button>
+
                           {u.role === "admin" ? (
                             <AcaoConta
                               rotulo="Rebaixar"
@@ -1445,7 +1571,7 @@ export default function AdminPage() {
                           {situacao === "ativa" ? (
                             <>
                               <AcaoConta
-                                rotulo="Suspender 7d"
+                                rotulo="Suspender"
                                 tom="aviso"
                                 onClick={() => moderarConta(u, "suspender")}
                                 ocupado={ocupado}
@@ -1472,6 +1598,171 @@ export default function AdminPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL: DOSSIÊ TÁTICO DO SOLDADO ═══ */}
+      {soldadoDossie && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            {/* Fechar */}
+            <button
+              onClick={() => setSoldadoDossie(null)}
+              className="absolute top-4 right-4 text-bat-text-muted hover:text-bat-text text-xl p-2 cursor-pointer"
+            >
+              ✕
+            </button>
+
+            {/* Cabeçalho do Dossiê */}
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-bat-bg-secondary border-2 border-bat-gold-400/40 flex items-center justify-center font-bold text-2xl text-bat-gold-400 overflow-hidden shadow-lg shrink-0">
+                {soldadoDossie.avatar_url ? (
+                  <img src={soldadoDossie.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  soldadoDossie.apelido?.[0]?.toUpperCase() || "S"
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="heading text-lg text-bat-text font-bold truncate">
+                    {soldadoDossie.nome}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    soldadoDossie.role === 'admin' ? 'bg-bat-gold-400 text-black' : 'bg-bat-bg-secondary text-bat-text-muted border border-bat-border'
+                  }`}>
+                    {soldadoDossie.role === 'admin' ? 'ADMIN' : 'ALUNO'}
+                  </span>
+                </div>
+                <p className="text-xs text-bat-text-muted">{soldadoDossie.email}</p>
+                <p className="text-xs font-mono font-bold text-bat-gold-400 mt-1">
+                  🦇 Apelido Atual: {soldadoDossie.apelido}
+                </p>
+              </div>
+            </div>
+
+            {/* Concurso Foco */}
+            <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-mono text-bat-text-muted block">Concurso Alvo</span>
+                <span className="text-sm font-bold text-bat-gold-400">
+                  {soldadoDossie.concurso_alvo ? `🎯 ${soldadoDossie.concurso_alvo} ${soldadoDossie.concurso_nome ? `· ${soldadoDossie.concurso_nome}` : ''}` : 'Nenhum concurso selecionado'}
+                </span>
+              </div>
+              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                soldadoDossie.situacao === 'ativa'
+                  ? 'bg-bat-success/15 text-bat-success border border-bat-success/30'
+                  : soldadoDossie.situacao === 'suspensa'
+                  ? 'bg-bat-warning/15 text-bat-warning border border-bat-warning/30'
+                  : 'bg-bat-error/15 text-bat-error border border-bat-error/30'
+              }`}>
+                {soldadoDossie.situacao?.toUpperCase()}
+              </span>
+            </div>
+
+            {/* Estatísticas de Combate */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
+                <span className="text-[10px] text-bat-text-muted block">Patente / Nível</span>
+                <span className="text-base font-bold text-bat-text font-mono">Nv. {soldadoDossie.nivel_atual}</span>
+                <span className="text-[10px] text-bat-text-muted block">{soldadoDossie.xp_total.toLocaleString("pt-BR")} XP</span>
+              </div>
+              <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
+                <span className="text-[10px] text-bat-text-muted block">Ofensiva</span>
+                <span className="text-base font-bold text-bat-gold-400 font-mono">🔥 {soldadoDossie.streak_dias} dias</span>
+                <span className="text-[10px] text-bat-text-muted block">Sequência</span>
+              </div>
+              <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
+                <span className="text-[10px] text-bat-text-muted block">Questões Feitas</span>
+                <span className="text-base font-bold text-bat-text font-mono">{soldadoDossie.total_questoes_respondidas || 0}</span>
+                <span className="text-[10px] text-bat-text-muted block">{soldadoDossie.total_acertos || 0} acertos</span>
+              </div>
+              <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
+                <span className="text-[10px] text-bat-text-muted block">Precisão</span>
+                <span className="text-base font-bold text-emerald-400 font-mono">
+                  {soldadoDossie.taxa_acerto !== null && soldadoDossie.taxa_acerto !== undefined ? `${soldadoDossie.taxa_acerto}%` : '—'}
+                </span>
+                <span className="text-[10px] text-bat-text-muted block">Taxa de acerto</span>
+              </div>
+            </div>
+
+            {/* Histórico de Apelidos */}
+            {soldadoDossie.apelidos_antigos && soldadoDossie.apelidos_antigos.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
+                <span className="text-[11px] font-bold text-bat-text-muted block">Histórico de Apelidos Anteriores:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {soldadoDossie.apelidos_antigos.map((ap, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded bg-bat-bg-secondary text-[11px] font-mono text-bat-text-secondary border border-bat-border">
+                      {ap}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Datas de Acesso */}
+            <div className="flex justify-between text-xs text-bat-text-muted font-mono pt-2 border-t border-bat-border/50">
+              <span>Cadastrado: {new Date(soldadoDossie.criado_em).toLocaleDateString("pt-BR")}</span>
+              <span>Último login: {formatarTempoRelativo(soldadoDossie.ultimo_login_em)}</span>
+            </div>
+
+            {/* Ações Táticas */}
+            <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-bat-border/50">
+              {soldadoDossie.role === 'admin' ? (
+                <button
+                  onClick={() => {
+                    moderarConta(soldadoDossie, "rebaixar");
+                    setSoldadoDossie(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-bat-bg-secondary hover:bg-bat-error/20 text-bat-error border border-bat-error/30 cursor-pointer"
+                >
+                  Rebaixar a Aluno
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    moderarConta(soldadoDossie, "promover");
+                    setSoldadoDossie(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-bat-bg-secondary hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer"
+                >
+                  Promover a Administrador
+                </button>
+              )}
+
+              {soldadoDossie.situacao === 'ativa' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      moderarConta(soldadoDossie, "suspender");
+                      setSoldadoDossie(null);
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-bat-warning/15 hover:bg-bat-warning/25 text-bat-warning border border-bat-warning/30 cursor-pointer"
+                  >
+                    Suspender por 7 Dias
+                  </button>
+                  <button
+                    onClick={() => {
+                      moderarConta(soldadoDossie, "desativar");
+                      setSoldadoDossie(null);
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-bat-error/15 hover:bg-bat-error/25 text-bat-error border border-bat-error/30 cursor-pointer"
+                  >
+                    Desativar Conta
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    moderarConta(soldadoDossie, "liberar");
+                    setSoldadoDossie(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-bat-success/15 hover:bg-bat-success/25 text-bat-success border border-bat-success/30 cursor-pointer"
+                >
+                  Liberar Acesso
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

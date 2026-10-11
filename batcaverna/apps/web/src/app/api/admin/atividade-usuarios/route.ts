@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
       user_id: string;
       dispositivo_origem: string | null;
       iniciada_em: string;
+      ultima_atividade_em: string | null;
       duracao_segundos: number | null;
       multiplicador_continuidade_atual: number | null;
       xp_ganho_na_sessao: number | null;
@@ -37,12 +38,12 @@ export async function GET(req: NextRequest) {
       supabase
         .from('study_sessions')
         .select(`
-          id, user_id, dispositivo_origem, iniciada_em, duracao_segundos,
+          id, user_id, dispositivo_origem, iniciada_em, ultima_atividade_em, duracao_segundos,
           multiplicador_continuidade_atual, xp_ganho_na_sessao,
-          user:users!user_id (id, nome, apelido, email, avatar_url, nivel_atual, streak_dias)
+          user:users!user_id (id, nome, apelido, email, avatar_url, nivel_atual, streak_dias, user_concurso_favoritos (concursos (sigla)))
         `)
         .is('finalizada_em', null)
-        .gte('iniciada_em', dezMinAtras)
+        .or(`iniciada_em.gte.${dezMinAtras},ultima_atividade_em.gte.${dezMinAtras}`)
         .order('iniciada_em', { ascending: false })
     );
 
@@ -74,10 +75,7 @@ export async function GET(req: NextRequest) {
           avatar_url: s.user?.avatar_url,
           nivel_atual: s.user?.nivel_atual || 1,
           streak_dias: s.user?.streak_dias || 0,
-          // A coluna chama `dispositivo_origem`. Pedindo `dispositivo`, o
-          // PostgREST recusava a consulta INTEIRA e a aba "Usuários Online
-          // Agora" mostrava sempre lista vazia — parecia que ninguém estava
-          // estudando.
+          concurso_sigla: s.user?.user_concurso_favoritos?.[0]?.concursos?.sigla || null,
           dispositivo: s.dispositivo_origem || 'web',
           iniciada_em: s.iniciada_em,
           duracao_segundos: s.duracao_segundos || 0,

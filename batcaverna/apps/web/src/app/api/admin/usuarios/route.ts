@@ -41,7 +41,12 @@ export async function GET(req: NextRequest) {
             `id, nome, apelido, email, email_verified, role, xp_total, nivel_atual,
              streak_dias, avatar_url, criado_em, ultimo_login_em,
              ativo, suspenso_ate, motivo_suspensao,
-             total_questoes_respondidas, total_acertos`
+             total_questoes_respondidas, total_acertos,
+             user_concurso_favoritos (
+               concursos (
+                 sigla, nome
+               )
+             )`
           )
           .order('criado_em', { ascending: false })
       );
@@ -83,8 +88,18 @@ export async function GET(req: NextRequest) {
     const lista = (users ?? []).map((u) => {
       const suspenso =
         !!u.suspenso_ate && new Date(u.suspenso_ate).getTime() > agora;
+      const concursoFav = u.user_concurso_favoritos?.[0]?.concursos;
+      const respondidas = u.total_questoes_respondidas || 0;
+      const acertos = u.total_acertos || 0;
+      const taxa = respondidas > 0 ? Math.round((acertos / respondidas) * 100) : null;
+
       return {
         ...u,
+        concurso_alvo: concursoFav?.sigla || null,
+        concurso_nome: concursoFav?.nome || null,
+        taxa_acerto: taxa,
+        total_questoes_respondidas: respondidas,
+        total_acertos: acertos,
         apelidos_antigos: (historico[u.id] ?? []).map((h) => h.apelido),
         historico_detalhado: historico[u.id] ?? [],
         // Estado já resolvido, para a tela não repetir a regra.

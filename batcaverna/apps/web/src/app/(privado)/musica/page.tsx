@@ -70,6 +70,7 @@ export default function MusicaPage() {
   const [spotifyProgresso, setSpotifyProgresso] = useState<string | null>(null);
 
   const [novaPlaylist, setNovaPlaylist] = useState("");
+  const [criandoPlaylist, setCriandoPlaylist] = useState(false);
   /** Faixa cujo menu "adicionar à playlist" está aberto. */
   const [menuPara, setMenuPara] = useState<string | null>(null);
 
@@ -267,17 +268,31 @@ export default function MusicaPage() {
   };
 
   const criarPlaylist = async () => {
-    if (novaPlaylist.trim().length < 2) return;
-    const res = await fetchWithAuth("/api/playlists", {
-      method: "POST",
-      body: JSON.stringify({ nome: novaPlaylist.trim() }),
-    });
-    const json = await res.json();
-    if (json.success) {
-      // A resposta da criação não traz `musicas`; sem isso a playlist recém
-      // criada quebraria o `p.musicas.length` do card.
-      setPlaylists((p) => [{ musicas: [], ...json.data }, ...p]);
-      setNovaPlaylist("");
+    const nomeLimpo = novaPlaylist.trim();
+    if (nomeLimpo.length < 2) {
+      setAviso("O nome da playlist deve ter pelo menos 2 caracteres.");
+      return;
+    }
+    setCriandoPlaylist(true);
+    setAviso(null);
+    try {
+      const res = await fetchWithAuth("/api/playlists", {
+        method: "POST",
+        body: JSON.stringify({ nome: nomeLimpo }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPlaylists((p) => [{ musicas: [], ...json.data }, ...p]);
+        setNovaPlaylist("");
+        setAviso(`✅ Playlist "${nomeLimpo}" criada com sucesso!`);
+      } else {
+        setAviso(json.error || "Não foi possível criar a playlist.");
+      }
+    } catch (err) {
+      console.error("Erro ao criar playlist:", err);
+      setAviso("Erro de conexão ao criar playlist. Tente novamente.");
+    } finally {
+      setCriandoPlaylist(false);
     }
   };
 
@@ -645,16 +660,17 @@ export default function MusicaPage() {
             <input
               value={novaPlaylist}
               onChange={(e) => setNovaPlaylist(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && criarPlaylist()}
+              onKeyDown={(e) => e.key === "Enter" && !criandoPlaylist && criarPlaylist()}
               placeholder="Nome da nova playlist..."
+              disabled={criandoPlaylist}
               className="input-field min-w-0 flex-1"
             />
             <button
               onClick={criarPlaylist}
-              disabled={novaPlaylist.trim().length < 2}
+              disabled={criandoPlaylist || novaPlaylist.trim().length < 2}
               className="btn-primary shrink-0 px-5 py-2.5 text-sm disabled:opacity-40"
             >
-              Criar playlist
+              {criandoPlaylist ? "Criando..." : "Criar playlist"}
             </button>
           </div>
 
@@ -864,7 +880,7 @@ export default function MusicaPage() {
                                   : "bg-bat-gold-400/20 text-bat-gold-400 hover:bg-bat-gold-400/30 border border-bat-gold-400/40"
                               }`}
                             >
-                              {jaAdd ? "✓ Adicionada" : "+ Acervo"}
+                              {jaAdd ? "✓ Adicionada" : "+ Adicionar"}
                             </button>
                           </div>
                         </div>

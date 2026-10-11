@@ -14,6 +14,9 @@ interface StudySessionState {
   multiplicador: number;
   sincroniaEsquadrao: boolean;
   amigosSincronia: { id: string; apelido: string }[];
+  boosterSegundosRestantes: number | null;
+  boosterSegundosUsados: number;
+  boosterExpirado: boolean;
   isInitializing: boolean;
 
   // Actions
@@ -35,6 +38,22 @@ interface StudySessionState {
  * que a interface precise observar.
  */
 let ultimaDuracaoEnviada = -1;
+
+export function detectarDispositivo(): 'app' | 'web' {
+  if (typeof window === 'undefined') return 'web';
+  const win = window as unknown as {
+    IS_BATCAVERNA_MOBILE_APP?: boolean;
+    ReactNativeWebView?: unknown;
+  };
+  if (
+    win.IS_BATCAVERNA_MOBILE_APP === true ||
+    win.ReactNativeWebView !== undefined ||
+    (typeof navigator !== 'undefined' && /BatCaverna|Android.*wv|wv.*Android/i.test(navigator.userAgent))
+  ) {
+    return 'app';
+  }
+  return 'web';
+}
 
 export function formatarSegundosParaTimer(totalSegundos: number): string {
   const horas = Math.floor(totalSegundos / 3600);
@@ -73,6 +92,9 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
   multiplicador: 1.0,
   sincroniaEsquadrao: false,
   amigosSincronia: [],
+  boosterSegundosRestantes: null,
+  boosterSegundosUsados: 0,
+  boosterExpirado: false,
   isInitializing: false,
 
   initSession: async () => {
@@ -111,10 +133,11 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       }
 
       // 2. Se não tem sessão ativa, iniciar nova sessão
+      const dispositivo = detectarDispositivo();
       const startRes = await fetchWithAuth('/api/study-sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dispositivo: 'web' }),
+        body: JSON.stringify({ dispositivo }),
       });
 
       if (startRes.ok) {
@@ -155,7 +178,11 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
         // `keepalive` deixa a requisição terminar mesmo com a aba fechando —
         // sem isso o navegador a cancela e o tempo do último intervalo some.
         keepalive: opcoes?.keepalive === true,
-        body: JSON.stringify({ duracao_segundos: duracaoSegundos }),
+        body: JSON.stringify({
+          duracao_segundos: duracaoSegundos,
+          booster_segundos_usados: get().boosterSegundosUsados,
+          dispositivo: detectarDispositivo(),
+        }),
       });
 
       if (res.ok) {
@@ -167,6 +194,8 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
             xp_ganho_intervalo,
             sincronia_esquadrao,
             amigos_sincronia,
+            booster_segundos_restantes,
+            booster_expirado,
             // Vindos do servidor a partir da 2.1.0: são a verdade.
             xp_total: xpTotalServidor,
             nivel: nivelServidor,
@@ -176,20 +205,24 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
           const estavaEmSincronia = get().sincroniaEsquadrao;
           const agoraEmSincronia = !!sincronia_esquadrao;
 
-          // Atualizar métricas de gamificação e sincronia de esquadrão
+          // Atualizar métricas de gamificação e sincronia de esquadrão com booster
           set({
             xpGanhoNaSessao: xp_ganho_total_sessao,
             multiplicador,
             sincroniaEsquadrao: agoraEmSincronia,
             amigosSincronia: amigos_sincronia || [],
+            boosterSegundosRestantes: typeof booster_segundos_restantes === 'number' ? booster_segundos_restantes : get().boosterSegundosRestantes,
+            boosterExpirado: !!booster_expirado,
           });
 
-          // Se acabou de ativar sincronia de esquadrão (+10% XP), avisar no sistema
+          // Se acabou de ativar sincronia de esquadrão (+20% XP Booster 1.2x), avisar no sistema
           if (!estavaEmSincronia && agoraEmSincronia && typeof window !== "undefined") {
             window.dispatchEvent(
               new CustomEvent("batcaverna_sincronia_ativada", {
                 detail: {
                   amigos: amigos_sincronia || [],
+                  booster_multiplicador: 1.2,
+                  segundos_restantes: booster_segundos_restantes ?? 3600,
                 },
               })
             );
@@ -257,11 +290,28 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
 
     const novaDuracao = duracaoSegundos + 1;
+    const { sincroniaEsquadrao, boosterExpirado, boosterSegundosUsados, boosterSegundosRestantes } = get();
+
+    let novoBoosterUsados = boosterSegundosUsados;
+    let novoBoosterRestantes = boosterSegundosRestantes;
+    let novoBoosterExpirado = boosterExpirado;
+
+    if (sincroniaEsquadrao && !boosterExpirado) {
+      novoBoosterUsados += 1;
+      const baseRestantes = boosterSegundosRestantes ?? 3600;
+      novoBoosterRestantes = Math.max(0, baseRestantes - 1);
+      if (novoBoosterRestantes <= 0) {
+        novoBoosterExpirado = true;
+      }
+    }
 
     set((state) => ({
       duracaoSegundos: novaDuracao,
       tempoEstudoHoje: state.tempoEstudoHoje + 1,
       tempoEstudoTotal: state.tempoEstudoTotal + 1,
+      boosterSegundosUsados: novoBoosterUsados,
+      boosterSegundosRestantes: novoBoosterRestantes,
+      boosterExpirado: novoBoosterExpirado,
     }));
   },
 
@@ -297,6 +347,9 @@ export const useStudySessionStore = create<StudySessionState>()((set, get) => ({
       duracaoSegundos: 0,
       sincroniaEsquadrao: false,
       amigosSincronia: [],
+      boosterSegundosRestantes: null,
+      boosterSegundosUsados: 0,
+      boosterExpirado: false,
     });
   },
 }));

@@ -54,10 +54,10 @@ export function XpToast() {
       clearTimeout(timer);
       setToastAtivo({
         tipo: "sincronia",
-        titulo: "⚔️ Sincronia de Esquadrão (+10% XP)!",
+        titulo: "🔥 Booster 1.2x Ativado com Amigo!",
         mensagem: e.detail?.avisoConfig
-          ? `Combate conjunto com ${amigoNome}! Mensagem enviada na DM. (Você pode gerenciar o envio automático no seu Perfil).`
-          : `Você e ${amigoNome} estão combatendo juntos e ganhando +10% de XP!`,
+          ? `Combate conjunto com ${amigoNome}! Mensagem enviada na DM com temporizador de booster de 60 min.`
+          : `Você e ${amigoNome} ativaram o Booster de 1.2x (+20% XP) com temporizador tático!`,
       });
 
       timer = setTimeout(() => setToastAtivo(null), 5500);

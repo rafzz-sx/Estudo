@@ -80,6 +80,7 @@ interface Resultado {
 interface OpcoesFiltro {
   concursos: { id: string; sigla: string; nome: string; total_questoes: number }[];
   materias: { id: string; nome: string; icone_emoji: string | null; total_questoes: number }[];
+  assuntos?: { id: string; nome: string; materia_id: string; total_questoes: number }[];
   anos: number[];
 }
 
@@ -105,6 +106,7 @@ function BancoDeQuestoes() {
   const [filtros, setFiltros] = useState({
     concurso: params.get("concurso") ?? "todos",
     materia: params.get("materia") ?? "todas",
+    assunto: params.get("assunto") ?? "todos",
     area: params.get("area") ?? "todas",
     ano: params.get("ano") ?? "todos",
     dificuldade: "todas",
@@ -138,9 +140,11 @@ function BancoDeQuestoes() {
   useEffect(() => {
     const carregar = async () => {
       try {
-        const res = await fetchWithAuth(
-          `/api/questoes/filtros?concurso=${encodeURIComponent(filtros.concurso)}`
-        );
+        const qs = new URLSearchParams({
+          concurso: filtros.concurso,
+          materia: filtros.materia,
+        });
+        const res = await fetchWithAuth(`/api/questoes/filtros?${qs}`);
         const json = await res.json();
         if (json.success) setOpcoes(json.data);
       } catch {
@@ -148,7 +152,7 @@ function BancoDeQuestoes() {
       }
     };
     carregar();
-  }, [filtros.concurso]);
+  }, [filtros.concurso, filtros.materia]);
 
   // ─── Listagem ──────────────────────────────────────────────
   const carregarQuestoes = useCallback(
@@ -161,6 +165,7 @@ function BancoDeQuestoes() {
           per_page: "10",
           concurso: filtros.concurso,
           materia: filtros.materia,
+          assunto: filtros.assunto,
           area: filtros.area,
           ano: filtros.ano,
           dificuldade: filtros.dificuldade,
@@ -326,7 +331,9 @@ function BancoDeQuestoes() {
         <Campo label="Matéria">
           <select
             value={filtros.materia}
-            onChange={(e) => setFiltros({ ...filtros, materia: e.target.value })}
+            onChange={(e) =>
+              setFiltros({ ...filtros, materia: e.target.value, assunto: "todos" })
+            }
             className="input-field text-sm"
           >
             <option value="todas">Todas as matérias</option>
@@ -334,6 +341,27 @@ function BancoDeQuestoes() {
               <option key={m.id} value={m.nome}>
                 {m.icone_emoji ? `${m.icone_emoji} ` : ""}
                 {m.nome} ({m.total_questoes})
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo label="Assunto da matéria">
+          <select
+            value={filtros.assunto}
+            onChange={(e) => setFiltros({ ...filtros, assunto: e.target.value })}
+            className="input-field text-sm"
+          >
+            <option value="todos">
+              {opcoes?.assuntos && opcoes.assuntos.length > 0
+                ? "Todos os assuntos"
+                : filtros.materia !== "todas"
+                ? "Todos os assuntos desta matéria"
+                : "Todos os assuntos"}
+            </option>
+            {opcoes?.assuntos?.map((a) => (
+              <option key={a.id} value={a.nome}>
+                {a.nome} ({a.total_questoes})
               </option>
             ))}
           </select>

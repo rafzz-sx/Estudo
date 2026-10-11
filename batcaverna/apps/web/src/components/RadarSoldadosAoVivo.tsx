@@ -30,6 +30,8 @@ export function RadarSoldadosAoVivo() {
   const isActiveStore = useStudySessionStore((s) => s.isActive);
   const isPausedStore = useStudySessionStore((s) => s.isPaused);
   const sincroniaEsquadraoStore = useStudySessionStore((s) => s.sincroniaEsquadrao);
+  const boosterSegundosRestantes = useStudySessionStore((s) => s.boosterSegundosRestantes);
+  const boosterExpirado = useStudySessionStore((s) => s.boosterExpirado);
 
   const carregarRadar = useCallback(async () => {
     try {
@@ -142,9 +144,16 @@ export function RadarSoldadosAoVivo() {
             </div>
 
             {sincroniaAtiva ? (
-              <span className="px-2.5 py-0.5 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/40 text-bat-gold-400 text-[11px] font-extrabold flex items-center gap-1 animate-pulse shadow-[0_0_12px_rgba(245,197,24,0.4)]">
-                <span>⚔️</span>
-                <span>SINCRONIA DE ESQUADRÃO ATIVA (+10% XP)</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-400/20 border border-amber-500/40 text-amber-300 text-[11px] font-extrabold flex items-center gap-1.5 animate-pulse shadow-[0_0_12px_rgba(245,197,24,0.4)]">
+                <span>🔥</span>
+                <span>
+                  BOOSTER 1.2x ATIVO
+                  {!boosterExpirado && boosterSegundosRestantes !== null && (
+                    <span className="font-mono text-amber-200">
+                      {" "}({Math.floor(boosterSegundosRestantes / 60)}m restantes)
+                    </span>
+                  )}
+                </span>
               </span>
             ) : (
               <span className="text-[11px] text-bat-text-muted">

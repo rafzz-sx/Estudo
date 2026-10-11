@@ -118,7 +118,16 @@ export async function GET(req: NextRequest) {
     if (concursoId) query = query.eq('concurso_id', concursoId);
     if (materiaId) query = query.eq('materia_id', materiaId);
 
-    const assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
+    let assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
+    const assuntoNome = searchParams.get('assunto');
+    if (!assuntoId && assuntoNome && assuntoNome.toLowerCase() !== 'todos') {
+      let qAssunto = supabase.from('assuntos').select('id').ilike('nome', assuntoNome);
+      if (materiaId) qAssunto = qAssunto.eq('materia_id', materiaId);
+      const { data: dataAssunto } = await qAssunto.maybeSingle();
+      if (dataAssunto) {
+        assuntoId = dataAssunto.id;
+      }
+    }
     if (assuntoId) query = query.eq('assunto_id', assuntoId);
 
     const ano = searchParams.get('ano');

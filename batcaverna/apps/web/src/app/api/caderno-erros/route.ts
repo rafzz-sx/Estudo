@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     // errada em janeiro e acertada em março já foi aprendida.
     const respostas: {
       questao_id: string;
+      resposta_dada: string;
       correta: boolean;
       respondido_em: string;
     }[] = [];
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     for (let inicio = 0; inicio < 20000; inicio += PAGINA) {
       const { data } = await supabase
         .from('user_questao_respostas')
-        .select('questao_id, correta, respondido_em')
+        .select('questao_id, resposta_dada, correta, respondido_em')
         .eq('user_id', user.id)
         .order('respondido_em', { ascending: false })
         .range(inicio, inicio + PAGINA - 1);
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
       if (data.length < PAGINA) break;
     }
 
-    const ultima = new Map<string, { correta: boolean; em: string; erros: number }>();
+    const ultima = new Map<string, { correta: boolean; em: string; erros: number; resposta_dada: string | null }>();
     for (const r of respostas) {
       const atual = ultima.get(r.questao_id);
       if (!atual) {
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest) {
           correta: r.correta,
           em: r.respondido_em,
           erros: r.correta ? 0 : 1,
+          resposta_dada: r.resposta_dada || null,
         });
       } else if (!r.correta) {
         atual.erros += 1;
@@ -166,6 +168,7 @@ export async function GET(req: NextRequest) {
         ...q,
         erros: ultima.get(q.id)?.erros ?? 1,
         errada_em: ultima.get(q.id)?.em ?? null,
+        resposta_dada: ultima.get(q.id)?.resposta_dada ?? null,
         anotacao: notaPorId.get(q.id)?.anotacao ?? null,
         resolvida: notaPorId.get(q.id)?.resolvida ?? false,
       });

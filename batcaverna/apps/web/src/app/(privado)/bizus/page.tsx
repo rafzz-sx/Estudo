@@ -32,6 +32,36 @@ const CORES_IMPACTO: Record<string, { cor: string; rotulo: string }> = {
   avancado: { cor: "#A855F7", rotulo: "Avançado" },
 };
 
+const TAGS_RAPIDAS = [
+  { tag: "ENEM", emoji: "📚" },
+  { tag: "TRI", emoji: "🎯" },
+  { tag: "Crase", emoji: "✍️" },
+  { tag: "Cálculo", emoji: "⚡" },
+  { tag: "Bhaskara", emoji: "📐" },
+  { tag: "Redação", emoji: "📝" },
+  { tag: "Oxirredução", emoji: "🧪" },
+  { tag: "Regência", emoji: "🔍" },
+  { tag: "Geometria", emoji: "📐" },
+  { tag: "Pegadinha", emoji: "⚠️" },
+];
+
+function obterTagsDoBizu(b: Bizu): string[] {
+  const texto = `${b.titulo} ${b.conteudo} ${b.assuntos?.nome ?? ""}`.toLowerCase();
+  const tags: string[] = [];
+  if (texto.includes("enem")) tags.push("ENEM");
+  if (texto.includes("tri")) tags.push("TRI");
+  if (texto.includes("crase")) tags.push("Crase");
+  if (texto.includes("bhaskara") || texto.includes("equação") || texto.includes("álgebra")) tags.push("Álgebra");
+  if (texto.includes("porcentagem") || texto.includes("cálculo mental") || texto.includes("rápido")) tags.push("Cálculo Rápido");
+  if (texto.includes("redação") || texto.includes("nota 1000")) tags.push("Redação");
+  if (texto.includes("regência")) tags.push("Regência");
+  if (texto.includes("oxirredução") || texto.includes("dara")) tags.push("Química");
+  if (texto.includes("km/h") || texto.includes("m/s") || texto.includes("newton") || texto.includes("energia")) tags.push("Física");
+  if (texto.includes("semelhança") || texto.includes("triângulo") || texto.includes("escala") || texto.includes("volume")) tags.push("Geometria");
+  if (texto.includes("armadilha") || texto.includes("cuidado") || texto.includes("perigosa") || texto.includes("não voltam")) tags.push("Pegadinha");
+  return tags.slice(0, 3);
+}
+
 function Bizus() {
   const params = useSearchParams();
 
@@ -69,7 +99,7 @@ function Bizus() {
         impacto: filtros.impacto,
         per_page: "50",
       });
-      if (filtros.busca.trim().length >= 3) qs.set("busca", filtros.busca.trim());
+      if (filtros.busca.trim().length >= 2) qs.set("busca", filtros.busca.trim());
       if (filtros.favoritos) qs.set("favoritos", "1");
 
       const res = await fetchWithAuth(`/api/bizus?${qs}`);
@@ -101,31 +131,48 @@ function Bizus() {
     }).catch(() => undefined);
   };
 
+  const selecionarTag = (tag: string) => {
+    setFiltros((prev) => ({
+      ...prev,
+      busca: prev.busca.toLowerCase() === tag.toLowerCase() ? "" : tag,
+    }));
+  };
+
   return (
     <div>
       <header className="mb-6">
         <h1 className="heading flex items-center gap-3 text-2xl font-bold text-bat-text sm:text-3xl">
-          <span>💡</span> Bizus
+          <span>💡</span> Bizus Táticos
         </h1>
         <p className="mt-1 text-sm text-bat-text-secondary">
-          Macetes, atalhos e armadilhas recorrentes das bancas — o que economiza
-          tempo na hora da prova.
+          Macetes, atalhos, fórmulas de ouro e armadilhas clássicas do ENEM e das bancas militares — explicados de forma simples e direta para salvar tempo na hora da prova.
           {total > 0 && ` ${total} bizu${total !== 1 ? "s" : ""} disponível(is).`}
         </p>
       </header>
 
       {/* ═══ FILTROS ═══ */}
-      <div className="mb-5 flex flex-wrap gap-2.5 sm:gap-3">
-        <input
-          value={filtros.busca}
-          onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
-          placeholder="Buscar bizu por macete, tema ou fórmula..."
-          className="input-field min-w-0 w-full sm:w-auto sm:flex-1 text-sm"
-        />
+      <div className="mb-4 flex flex-wrap gap-2.5 sm:gap-3">
+        <div className="relative min-w-0 w-full sm:w-auto sm:flex-1">
+          <input
+            value={filtros.busca}
+            onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
+            placeholder="Buscar bizu por palavra-chave, ENEM, fórmula ou pegadinha..."
+            className="input-field w-full pl-9 text-sm"
+          />
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-bat-text-muted text-sm">🔍</span>
+          {filtros.busca && (
+            <button
+              onClick={() => setFiltros({ ...filtros, busca: "" })}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-bat-text-muted hover:text-bat-text text-xs p-1"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         <select
           value={filtros.materia}
           onChange={(e) => setFiltros({ ...filtros, materia: e.target.value })}
-          className="input-field w-full sm:w-auto shrink-0 text-sm"
+          className="input-field w-full sm:w-auto shrink-0 text-sm cursor-pointer"
         >
           <option value="todas">Todas as matérias</option>
           {materias.map((m) => (
@@ -137,7 +184,7 @@ function Bizus() {
         <select
           value={filtros.impacto}
           onChange={(e) => setFiltros({ ...filtros, impacto: e.target.value })}
-          className="input-field w-full sm:w-auto shrink-0 text-sm"
+          className="input-field w-full sm:w-auto shrink-0 text-sm cursor-pointer"
         >
           {IMPACTOS.map((i) => (
             <option key={i.valor} value={i.valor}>
@@ -158,6 +205,30 @@ function Bizus() {
         </label>
       </div>
 
+      {/* ═══ PALAVRAS-CHAVE RÁPIDAS (PÍLULAS) ═══ */}
+      <div className="mb-6 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-bold text-bat-text-muted uppercase tracking-wider mr-1">
+          Palavras-chave:
+        </span>
+        {TAGS_RAPIDAS.map(({ tag, emoji }) => {
+          const ativa = filtros.busca.toLowerCase() === tag.toLowerCase();
+          return (
+            <button
+              key={tag}
+              onClick={() => selecionarTag(tag)}
+              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                ativa
+                  ? "bg-bat-gold-400 text-black shadow-xs font-bold"
+                  : "bg-bat-bg-card border border-bat-border text-bat-text-secondary hover:border-bat-gold-400/40 hover:text-bat-text"
+              }`}
+            >
+              <span>{emoji}</span>
+              <span>#{tag}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ═══ LISTA ═══ */}
       {carregando ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -176,7 +247,7 @@ function Bizus() {
           <p className="mx-auto mb-5 max-w-md text-sm text-bat-text-secondary">
             {filtros.favoritos
               ? "Toque na estrela de um bizu para guardá-lo aqui e revisar antes da prova."
-              : "Afrouxe os filtros ou explore outra matéria. Novos bizus entram junto com o conteúdo teórico de cada tema."}
+              : "Afrouxe os filtros ou explore outra matéria. Novos bizus entram junto com o conteúdo de cada tema."}
           </p>
           <Link
             href="/questoes"
@@ -189,62 +260,83 @@ function Bizus() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {bizus.map((b) => {
             const impacto = CORES_IMPACTO[b.nivel_impacto] ?? CORES_IMPACTO.util;
+            const tags = obterTagsDoBizu(b);
             return (
               <article
                 key={b.id}
-                className="rounded-2xl border border-bat-border bg-bat-bg-card p-5 transition-colors hover:border-bat-gold-400/30"
+                className="rounded-2xl border border-bat-border bg-bat-bg-card p-5 transition-all hover:border-bat-gold-400/40 hover:shadow-sm flex flex-col justify-between"
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                      style={{
-                        color: impacto.cor,
-                        borderColor: `${impacto.cor}44`,
-                        background: `${impacto.cor}15`,
-                      }}
-                    >
-                      {impacto.rotulo}
-                    </span>
-                    {b.assuntos?.materias?.nome && (
-                      <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-0.5 text-[11px] text-bat-text-muted">
-                        {b.assuntos.materias.icone_emoji} {b.assuntos.materias.nome}
+                <div>
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{
+                          color: impacto.cor,
+                          borderColor: `${impacto.cor}44`,
+                          background: `${impacto.cor}15`,
+                        }}
+                      >
+                        {impacto.rotulo}
                       </span>
-                    )}
+                      {b.assuntos?.materias?.nome && (
+                        <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-0.5 text-[11px] text-bat-text-muted">
+                          {b.assuntos.materias.icone_emoji} {b.assuntos.materias.nome}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => favoritar(b)}
+                      className="shrink-0 cursor-pointer text-lg transition-transform hover:scale-110"
+                      aria-label={b.favoritado ? "Desfavoritar" : "Favoritar"}
+                      title={b.favoritado ? "Salvo nos favoritos" : "Salvar nos favoritos"}
+                    >
+                      {b.favoritado ? "⭐" : "☆"}
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => favoritar(b)}
-                    className="shrink-0 cursor-pointer text-lg transition-transform hover:scale-110"
-                    aria-label={b.favoritado ? "Desfavoritar" : "Favoritar"}
-                  >
-                    {b.favoritado ? "⭐" : "☆"}
-                  </button>
+                  <h3 className="heading mb-2 text-base font-bold text-bat-text leading-snug">
+                    {b.titulo}
+                  </h3>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
+                    {b.conteudo}
+                  </p>
+
+                  {b.exemplo_pratico && (
+                    <div className="mt-3.5 rounded-xl border border-bat-border/80 bg-bat-bg-secondary/60 p-3.5">
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted flex items-center gap-1">
+                        <span>⚡</span>
+                        <span>Aplicação Direta na Prova</span>
+                      </p>
+                      <p className="whitespace-pre-line font-mono text-xs leading-relaxed text-bat-gold-400">
+                        {b.exemplo_pratico}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                <h3 className="heading mb-2 text-base font-bold text-bat-text">
-                  {b.titulo}
-                </h3>
-                <p className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                  {b.conteudo}
-                </p>
+                <div className="mt-4 pt-3 border-t border-bat-border/40 flex flex-wrap items-center justify-between gap-2">
+                  {b.assuntos?.nome ? (
+                    <span className="text-[11px] text-bat-text-muted">
+                      📖 {b.assuntos.nome}
+                    </span>
+                  ) : <span />}
 
-                {b.exemplo_pratico && (
-                  <div className="mt-3 rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-3.5 py-2.5">
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
-                      Na prática
-                    </p>
-                    <p className="whitespace-pre-line font-mono text-xs leading-relaxed text-bat-gold-400">
-                      {b.exemplo_pratico}
-                    </p>
-                  </div>
-                )}
-
-                {b.assuntos?.nome && (
-                  <p className="mt-3 text-[11px] text-bat-text-muted">
-                    {b.assuntos.nome}
-                  </p>
-                )}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {tags.map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => selecionarTag(t)}
+                          className="rounded-md bg-bat-bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-bat-gold-400/90 hover:bg-bat-gold-400/20 transition-colors"
+                        >
+                          #{t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </article>
             );
           })}

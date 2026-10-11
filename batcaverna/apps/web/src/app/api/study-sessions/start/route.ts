@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
     const existingSession = await buscarSessaoAtiva(supabase, userId);
 
     if (existingSession) {
+      if (dispositivo === 'app' && existingSession.dispositivo_origem !== 'app') {
+        await supabase
+          .from('study_sessions')
+          .update({ dispositivo_origem: 'app' })
+          .eq('id', existingSession.id);
+      }
+
       return NextResponse.json({
         success: true,
         data: {

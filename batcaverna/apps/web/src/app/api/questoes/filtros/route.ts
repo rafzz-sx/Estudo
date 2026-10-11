@@ -95,6 +95,63 @@ export async function GET(req: NextRequest) {
       concursoId ? { concurso_id: concursoId } : {}
     );
 
+    // ─── Assuntos vinculados com questões disponíveis ────────
+    const materiaFiltro = searchParams.get('materia');
+    let materiaIdFiltro: string | null = null;
+    if (materiaFiltro && materiaFiltro.toLowerCase() !== 'todas') {
+      const encontrada = (materias ?? []).find(
+        (m: any) => m.nome.toLowerCase() === materiaFiltro.toLowerCase() || m.id === materiaFiltro
+      );
+      materiaIdFiltro = encontrada?.id ?? null;
+      if (!materiaIdFiltro) {
+        const { data: matData } = await supabase
+          .from('materias')
+          .select('id')
+          .ilike('nome', materiaFiltro)
+          .maybeSingle();
+        materiaIdFiltro = matData?.id ?? null;
+      }
+    }
+
+    let queryAssuntosQuestoes = supabase
+      .from('questoes')
+      .select('assunto_id')
+      .not('assunto_id', 'is', null);
+
+    if (concursoId) {
+      queryAssuntosQuestoes = queryAssuntosQuestoes.eq('concurso_id', concursoId);
+    }
+    if (materiaIdFiltro) {
+      queryAssuntosQuestoes = queryAssuntosQuestoes.eq('materia_id', materiaIdFiltro);
+    } else if (materiaIds.length > 0 && concursoId) {
+      queryAssuntosQuestoes = queryAssuntosQuestoes.in('materia_id', materiaIds);
+    }
+
+    const { data: questoesComAssunto } = await queryAssuntosQuestoes;
+    const contagemAssunto: Record<string, number> = {};
+    for (const q of questoesComAssunto ?? []) {
+      if (q.assunto_id) {
+        contagemAssunto[q.assunto_id] = (contagemAssunto[q.assunto_id] || 0) + 1;
+      }
+    }
+    const idsAssuntos = Object.keys(contagemAssunto);
+
+    let assuntos: { id: string; nome: string; materia_id: string; total_questoes: number }[] = [];
+    if (idsAssuntos.length > 0) {
+      const { data: assData } = await supabase
+        .from('assuntos')
+        .select('id, nome, materia_id')
+        .in('id', idsAssuntos.slice(0, 300))
+        .order('nome');
+
+      assuntos = (assData ?? []).map((a: any) => ({
+        id: a.id,
+        nome: a.nome,
+        materia_id: a.materia_id,
+        total_questoes: contagemAssunto[a.id] ?? 0,
+      }));
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -117,6 +174,7 @@ export async function GET(req: NextRequest) {
             total_questoes: contagemMateria[m.id] ?? 0,
           }))
           .filter((m: any) => m.total_questoes > 0 || !concursoId),
+        assuntos,
         anos,
         total,
       },

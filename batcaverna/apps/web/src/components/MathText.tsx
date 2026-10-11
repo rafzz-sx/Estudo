@@ -30,8 +30,6 @@ const KNOWN_MATH_COMMANDS = new Set([
   "tilde", "dot", "ddot", "overrightarrow",
 ]);
 
-// Regex para detectar comandos LaTeX fora de delimitadores (incluindo comandos com argumentos entre chaves como \vec{V}, \frac{a}{b}, \sqrt{x})
-const NAKED_MATH_REGEX = /\\+(frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|sqrt(?:\[[^{}]*\])?\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|(?:operatorname|text|textbf|textit|mathrm|mathbf|mathbb|mathcal|mathit|bm|overline|underline|vec|hat|bar|tilde|dot|ddot|overrightarrow)\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\^[\\{]?[a-zA-Z0-9^\circ]+[\\}]?|_\{?[a-zA-Z0-9]+\}?)?|[a-zA-Z]+(?:\^[\\{]?[a-zA-Z0-9^\circ]+[\\}]?|_\{?[a-zA-Z0-9]+\}?)?)/g;
 
 /**
  * Renderiza texto que pode conter expressões LaTeX:
@@ -173,6 +171,97 @@ function preprocessPlainTextMath(text: string): string {
   );
 }
 
+function findClosingBrace(text: string, start: number): number {
+  if (text[start] !== "{") return -1;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function findClosingBracket(text: string, start: number): number {
+  if (text[start] !== "[") return -1;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "[") depth++;
+    else if (text[i] === "]") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function extractNakedMathAt(text: string, start: number): { raw: string; endIdx: number } | null {
+  if (text[start] !== "\\") return null;
+
+  const match = /^\\+([a-zA-Z]+)/.exec(text.slice(start));
+  if (!match) return null;
+
+  const cmd = match[1];
+  if (!KNOWN_MATH_COMMANDS.has(cmd)) return null;
+
+  let endIdx = start + match[0].length;
+
+  if (cmd === "frac") {
+    while (endIdx < text.length && text[endIdx] === " ") endIdx++;
+    if (text[endIdx] === "{") {
+      const numEnd = findClosingBrace(text, endIdx);
+      if (numEnd !== -1) {
+        endIdx = numEnd + 1;
+        while (endIdx < text.length && text[endIdx] === " ") endIdx++;
+        if (text[endIdx] === "{") {
+          const denEnd = findClosingBrace(text, endIdx);
+          if (denEnd !== -1) {
+            endIdx = denEnd + 1;
+          }
+        }
+      }
+    }
+  } else if (cmd === "sqrt") {
+    while (endIdx < text.length && text[endIdx] === " ") endIdx++;
+    if (text[endIdx] === "[") {
+      const bEnd = findClosingBracket(text, endIdx);
+      if (bEnd !== -1) endIdx = bEnd + 1;
+    }
+    while (endIdx < text.length && text[endIdx] === " ") endIdx++;
+    if (text[endIdx] === "{") {
+      const numEnd = findClosingBrace(text, endIdx);
+      if (numEnd !== -1) endIdx = numEnd + 1;
+    }
+  } else if (/^(vec|hat|bar|dot|ddot|text|operatorname|mathbf|mathbb|mathcal|mathrm|textbf|textit)$/.test(cmd)) {
+    while (endIdx < text.length && text[endIdx] === " ") endIdx++;
+    if (text[endIdx] === "{") {
+      const bEnd = findClosingBrace(text, endIdx);
+      if (bEnd !== -1) endIdx = bEnd + 1;
+    }
+  }
+
+  // Captura expoentes ou índices opcionais como ^2 ou _{k}
+  while (endIdx < text.length && (text[endIdx] === "^" || text[endIdx] === "_")) {
+    endIdx++;
+    if (text[endIdx] === "{") {
+      const bEnd = findClosingBrace(text, endIdx);
+      if (bEnd !== -1) endIdx = bEnd + 1;
+      else break;
+    } else if (/[a-zA-Z0-9^\circ]/.test(text[endIdx])) {
+      endIdx++;
+    } else {
+      break;
+    }
+  }
+
+  return {
+    raw: text.slice(start, endIdx),
+    endIdx,
+  };
+}
+
 // ─── Lógica de parsing e tokenização ─────────────────────────
 
 function renderMathText(text: string): string {
@@ -184,32 +273,37 @@ function renderMathText(text: string): string {
     return renderKatex(lat, false);
   }
 
-  // Preprocessa trechos matemáticos informais isolados no texto
-  const processed = preprocessPlainTextMath(text);
-
-  if (!processed.includes("$") && !processed.includes("\\")) return escapeHtml(processed);
+  if (!text.includes("$") && !text.includes("\\")) {
+    const processedPlain = preprocessPlainTextMath(text);
+    if (!processedPlain.includes("$")) {
+      return escapeHtml(processedPlain);
+    }
+  }
 
   const tokens: string[] = [];
-  let remaining = processed;
+  let remaining = text;
 
   while (remaining.length > 0) {
     const idxDouble = remaining.indexOf("$$");
     const idxSingle = remaining.indexOf("$");
 
-    // Nenhum $ restante → processa resto procurando comandos LaTeX nus
+    // Nenhum $ restante → processa resto procurando comandos LaTeX nus ou matemática pura
     if (idxSingle === -1) {
-      tokens.push(renderSegmentWithNakedMath(remaining));
+      const segmentProcessed = preprocessPlainTextMath(remaining);
+      tokens.push(renderSegmentWithNakedMath(segmentProcessed));
       break;
     }
 
     // $$ aparece antes de $ (ou na mesma posição) → display math
     if (idxDouble !== -1 && idxDouble <= idxSingle) {
       if (idxDouble > 0) {
-        tokens.push(renderSegmentWithNakedMath(remaining.slice(0, idxDouble)));
+        const seg = preprocessPlainTextMath(remaining.slice(0, idxDouble));
+        tokens.push(renderSegmentWithNakedMath(seg));
       }
       const closeIdx = remaining.indexOf("$$", idxDouble + 2);
       if (closeIdx === -1) {
-        tokens.push(renderSegmentWithNakedMath(remaining.slice(idxDouble)));
+        const seg = preprocessPlainTextMath(remaining.slice(idxDouble));
+        tokens.push(renderSegmentWithNakedMath(seg));
         break;
       }
       tokens.push(renderKatex(remaining.slice(idxDouble + 2, closeIdx), true));
@@ -219,7 +313,8 @@ function renderMathText(text: string): string {
 
     // $ simples (inline math)
     if (idxSingle > 0) {
-      tokens.push(renderSegmentWithNakedMath(remaining.slice(0, idxSingle)));
+      const seg = preprocessPlainTextMath(remaining.slice(0, idxSingle));
+      tokens.push(renderSegmentWithNakedMath(seg));
     }
 
     // Procura o $ de fechamento
@@ -234,7 +329,8 @@ function renderMathText(text: string): string {
     }
 
     if (closeIdx === -1) {
-      tokens.push(renderSegmentWithNakedMath(remaining.slice(idxSingle)));
+      const seg = preprocessPlainTextMath(remaining.slice(idxSingle));
+      tokens.push(renderSegmentWithNakedMath(seg));
       break;
     }
 
@@ -263,7 +359,6 @@ function renderSegmentWithNakedMath(text: string): string {
     .replace(/\\dot\s+([a-zA-Z])/g, (_m, p1) => `\\dot{${p1}}`);
 
   // Se o trecho inteiro começa com \ e é uma expressão matemática pura sem frases
-  // Ex: "\frac{7!}{5!} \cdot \frac{5!}{3!}"
   const trimmed = normalizedText.trim();
   if (trimmed.startsWith("\\") && !/[a-zA-Z]{5,}\s+[a-zA-Z]{5,}/.test(trimmed)) {
     const firstWord = trimmed.replace(/^\\+/, "").split(/[^a-zA-Z]/)[0];
@@ -273,33 +368,27 @@ function renderSegmentWithNakedMath(text: string): string {
   }
 
   const parts: string[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let i = 0;
+  let textStart = 0;
 
-  NAKED_MATH_REGEX.lastIndex = 0;
-  while ((match = NAKED_MATH_REGEX.exec(normalizedText)) !== null) {
-    const fullMatch = match[0];
-    const matchStart = match.index;
-    const cmdName = match[1].split(/[^a-zA-Z]/)[0];
-
-    // Ignora caracteres não-matemáticos (como \t, \n)
-    if (!KNOWN_MATH_COMMANDS.has(cmdName)) {
-      continue;
+  while (i < normalizedText.length) {
+    if (normalizedText[i] === "\\") {
+      const mathMatch = extractNakedMathAt(normalizedText, i);
+      if (mathMatch) {
+        if (i > textStart) {
+          parts.push(escapeHtml(normalizedText.slice(textStart, i)));
+        }
+        parts.push(renderKatex(mathMatch.raw, false));
+        i = mathMatch.endIdx;
+        textStart = i;
+        continue;
+      }
     }
-
-    // Adiciona o texto puro anterior
-    if (matchStart > lastIndex) {
-      parts.push(escapeHtml(normalizedText.slice(lastIndex, matchStart)));
-    }
-
-    // Renderiza o comando ou expressão LaTeX
-    const cleanCmd = fullMatch.replace(/^\\+/, "\\");
-    parts.push(renderKatex(cleanCmd, false));
-    lastIndex = matchStart + fullMatch.length;
+    i++;
   }
 
-  if (lastIndex < normalizedText.length) {
-    parts.push(escapeHtml(normalizedText.slice(lastIndex)));
+  if (textStart < normalizedText.length) {
+    parts.push(escapeHtml(normalizedText.slice(textStart)));
   }
 
   return parts.join("");
