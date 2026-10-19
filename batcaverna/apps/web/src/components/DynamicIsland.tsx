@@ -250,6 +250,8 @@ export function DynamicIsland() {
   const capaProcessada = useRef<string | null>(null);
   const [arrastando, setArrastando] = useState<number | null>(null);
 
+  const [avisoPlayer, setAvisoPlayer] = useState<string | null>(null);
+
   const ytPlayerRef = useRef<any>(null);
   const prontoRef = useRef(false);
   const intervalSyncRef = useRef<number | null>(null);
@@ -328,11 +330,12 @@ export function DynamicIsland() {
               console.warn("YouTube Player error:", err?.data);
               const cod = err?.data;
               if (cod === 150 || cod === 101) {
-                console.warn("Vídeo com restrição de incorporação pelo proprietário.");
+                setAvisoPlayer("⚠️ Faixa com restrição no YouTube. Pulando para a próxima...");
+                setTimeout(() => setAvisoPlayer(null), 4000);
               }
               const s = usePlayerStore.getState();
               if (s.fila.length > 1) {
-                s.proxima();
+                setTimeout(() => s.proxima(), 1500);
               } else {
                 usePlayerStore.setState({ tocando: false, posicao: 0 });
               }
@@ -530,12 +533,12 @@ export function DynamicIsland() {
     <>
       <div
         id="batcaverna-youtube-iframe-player"
-        className="pointer-events-none fixed bottom-2 right-2 h-36 w-60 opacity-[0.001] -z-50 overflow-hidden"
+        className="pointer-events-none fixed top-0 -left-[9999px] h-48 w-64 overflow-hidden"
         aria-hidden="true"
       />
 
       {!musica ? null : minimizado ? (
-        <div className="fixed bottom-4 right-4 z-40 lg:bottom-auto lg:right-6 lg:top-4">
+        <div className="fixed top-14 right-3 z-40 sm:top-15 sm:right-4 lg:top-4 lg:right-6">
           <button
             onClick={alternarMinimizado}
             className="flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 shadow-2xl backdrop-blur-xl transition-transform hover:scale-105 active:scale-95"
@@ -566,7 +569,7 @@ export function DynamicIsland() {
         </div>
       ) : (
         <div
-          className={`fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-all duration-500 ease-out lg:bottom-auto lg:top-4 ${
+          className={`fixed top-14 left-1/2 z-40 -translate-x-1/2 transition-all duration-500 ease-out sm:top-15 lg:top-4 ${
             expandido ? "w-[min(94vw,26rem)]" : "w-[min(90vw,22rem)]"
           }`}
         >
@@ -578,6 +581,11 @@ export function DynamicIsland() {
           boxShadow: `0 8px 32px ${corPrimaria}30, 0 2px 8px rgba(0,0,0,0.5)`,
         }}
       >
+        {avisoPlayer && (
+          <div className="bg-amber-500/25 border-b border-amber-500/30 px-3 py-1.5 text-center text-[11px] font-medium text-amber-200 animate-pulse">
+            {avisoPlayer}
+          </div>
+        )}
         {/* ═══ BARRA RECOLHIDA ═══ */}
         <div className="flex items-center gap-3 px-3 py-2">
           <button

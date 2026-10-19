@@ -58,9 +58,14 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   'https://bzrrbbaqzlfmertirbak.supabase.co';
 
-const SUPABASE_SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6cnJiYmFxemxmbWVydGlyYmFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Nzk1OTYzOCwiZXhwIjoyMTAzNTM1NjM4fQ.YfNFyyNHbjF9kYF48uNWchYvQuI_PGaIC-2LNE2UktE';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('\n❌ [ERRO DE SEGURANÇA] SUPABASE_SERVICE_ROLE_KEY não encontrada!');
+  console.error('Configure a variável SUPABASE_SERVICE_ROLE_KEY no arquivo .env.local.');
+  console.error('Por motivos de privacidade e segurança, chaves mestras de serviço nunca devem ser gravadas no código-fonte.\n');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },

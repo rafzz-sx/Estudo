@@ -71,6 +71,8 @@ export default function MusicaPage() {
 
   const [novaPlaylist, setNovaPlaylist] = useState("");
   const [criandoPlaylist, setCriandoPlaylist] = useState(false);
+  const [novaPlaylistMenu, setNovaPlaylistMenu] = useState("");
+  const [criandoPlaylistMenu, setCriandoPlaylistMenu] = useState(false);
   /** Faixa cujo menu "adicionar à playlist" está aberto. */
   const [menuPara, setMenuPara] = useState<string | null>(null);
 
@@ -130,12 +132,13 @@ export default function MusicaPage() {
   useEffect(() => {
     if (aba === "playlists") {
       setCarregando(false);
+      carregarPlaylists();
       return;
     }
     // Busca só dispara depois que o usuário para de digitar.
     const t = setTimeout(carregar, 300);
     return () => clearTimeout(t);
-  }, [carregar, aba]);
+  }, [carregar, aba, carregarPlaylists]);
 
   // ─── Ações ─────────────────────────────────────────────────
   const favoritar = async (m: MusicaLista) => {
@@ -358,6 +361,31 @@ export default function MusicaPage() {
         ? `✅ "${musica.titulo}" foi para ${nome}.`
         : `Removida de ${nome}.`
     );
+  };
+
+  const criarPlaylistRapidaParaMusica = async (m: Musica) => {
+    const nomeLimpo = novaPlaylistMenu.trim();
+    if (nomeLimpo.length < 2) return;
+    setCriandoPlaylistMenu(true);
+    try {
+      const res = await fetchWithAuth("/api/playlists", {
+        method: "POST",
+        body: JSON.stringify({ nome: nomeLimpo }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        const nova = { musicas: [], ...json.data };
+        setPlaylists((p) => [nova, ...p]);
+        setNovaPlaylistMenu("");
+        await mexerNaPlaylist(nova.id, m, "adicionar");
+      } else {
+        setAviso(json.error || "Não foi possível criar a playlist.");
+      }
+    } catch {
+      setAviso("Erro ao criar playlist.");
+    } finally {
+      setCriandoPlaylistMenu(false);
+    }
   };
 
   const musicaAtual = filaAtual[indiceAtual];
@@ -598,18 +626,17 @@ export default function MusicaPage() {
                       </button>
 
                       {menuPara === m.id && (
-                        <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-bat-border bg-bat-bg-elevated shadow-xl">
+                        <div className="absolute right-0 top-full z-30 mt-1 w-64 overflow-hidden rounded-xl border border-bat-border bg-bat-bg-elevated shadow-xl">
                           <p className="border-b border-bat-border px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
-                            Adicionar a
+                            Adicionar à playlist
                           </p>
 
                           {playlists.length === 0 ? (
-                            <p className="px-3 py-3 text-xs text-bat-text-muted">
-                              Você ainda não tem playlists. Crie uma na aba
-                              📚&nbsp;Playlists.
+                            <p className="px-3 py-2 text-xs text-bat-text-muted">
+                              Você ainda não tem playlists criadas.
                             </p>
                           ) : (
-                            <ul className="max-h-56 overflow-y-auto py-1">
+                            <ul className="max-h-48 overflow-y-auto py-1">
                               {playlists.map((p) => {
                                 const jaTem = p.musicas.some(
                                   (x) => x.id === m.id
@@ -642,6 +669,33 @@ export default function MusicaPage() {
                               })}
                             </ul>
                           )}
+
+                          <div className="border-t border-bat-border/80 bg-bat-bg-secondary/60 p-2">
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="Criar nova playlist..."
+                                value={novaPlaylistMenu}
+                                onChange={(e) => setNovaPlaylistMenu(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && novaPlaylistMenu.trim().length >= 2) {
+                                    e.preventDefault();
+                                    criarPlaylistRapidaParaMusica(m);
+                                  }
+                                }}
+                                className="input-field text-xs py-1 px-2.5 flex-1 h-7"
+                                disabled={criandoPlaylistMenu}
+                              />
+                              <button
+                                onClick={() => criarPlaylistRapidaParaMusica(m)}
+                                disabled={criandoPlaylistMenu || novaPlaylistMenu.trim().length < 2}
+                                className="btn-primary text-xs px-2.5 py-1 h-7 shrink-0 disabled:opacity-40"
+                                title="Criar playlist e adicionar esta música"
+                              >
+                                {criandoPlaylistMenu ? "..." : "＋"}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

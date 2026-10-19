@@ -57,7 +57,7 @@ export async function GET(
     let ticket: any = null;
     const { data: ticketData, error: ticketError } = await supabase
       .from('tickets')
-      .select('*, users!tickets_user_id_fkey (apelido, avatar_url)')
+      .select('*, users:users!tickets_user_id_fkey (id, nome, apelido, email, avatar_url, nivel_atual, role, xp_total, streak_dias, concurso_alvo, situacao)')
       .eq('id', ticketId)
       .maybeSingle();
 
@@ -86,7 +86,7 @@ export async function GET(
     let mensagens: any[] = [];
     const { data: msgsComUser, error: errMsgs } = await supabase
       .from('ticket_mensagens')
-      .select('id, autor_id, autor_role, conteudo, enviado_em, users (apelido, avatar_url)')
+      .select('id, autor_id, autor_role, conteudo, enviado_em, users (id, nome, apelido, avatar_url, role)')
       .eq('ticket_id', ticketId)
       .order('enviado_em', { ascending: true });
 
@@ -109,6 +109,69 @@ export async function GET(
     console.error('GET /api/tickets/[id] error:', error);
     return NextResponse.json(
       { success: false, error: 'Erro ao carregar o chamado' },
+      { status: 500 }
+    );
+  }
+}
+
+/** PATCH /api/tickets/[id] — atualiza status do ticket. */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const user = await getAuthUserFromRequest(req);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const ticketId = uuidOuNulo(id);
+    if (!ticketId) {
+      return NextResponse.json({ success: false, error: 'Chamado não encontrado' }, { status: 404 });
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('id, user_id, status')
+      .eq('id', ticketId)
+      .maybeSingle();
+
+    if (!ticket) {
+      return NextResponse.json({ success: false, error: 'Chamado não encontrado' }, { status: 404 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const statusPermitidos = ['aberto', 'em_andamento', 'respondido', 'resolvido', 'fechado', 'finalizado'];
+    const novoStatus = body?.status;
+
+    if (!novoStatus || !statusPermitidos.includes(novoStatus)) {
+      return NextResponse.json({ success: false, error: 'Status inválido' }, { status: 400 });
+    }
+
+    // Apenas admin pode alterar status para qualquer um; aluno pode fechar o seu
+    if (user.role !== 'admin' && ticket.user_id !== user.id) {
+      return NextResponse.json({ success: false, error: 'Permissão negada' }, { status: 403 });
+    }
+
+    const { data: atualizado, error } = await supabase
+      .from('tickets')
+      .update({
+        status: novoStatus,
+        atualizado_em: new Date().toISOString(),
+      })
+      .eq('id', ticketId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, data: atualizado });
+  } catch (error) {
+    console.error('PATCH /api/tickets/[id] error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Erro ao atualizar status do chamado' },
       { status: 500 }
     );
   }

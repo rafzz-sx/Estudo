@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.5.0';
+export const CURRENT_APP_VERSION = '3.6.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -18,12 +18,72 @@ export const CURRENT_APP_VERSION = '3.5.0';
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
   {
+    versao: '3.6.0',
+    dataLancamento: '2026-10-19T18:25:00-03:00',
+    titulo: 'Central de Moderação & Dossiê, Redação Militar, Áudio Clássico & Dynamic Island',
+    resumo:
+      'Grande evolução na BatCaverna: Suporte com Dossiê completo do soldado e fluxo de atendimento no painel Admin, Temas e Bizus de Conectivos para Redação Militar (ESA, EsPCEx, AFA, EPCAR, CN), Metas de Corte Oficiais dos Concursos, Streaming de Música Clássica de domínio público sem travamentos, Dynamic Island reposicionada no topo mobile e blindagem do banco contra inatividade.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'admin-suporte-dossie-soldado',
+        tipo: 'novo',
+        titulo: 'Central de Suporte & Dossiê do Soldado no Admin',
+        descricao:
+          'Painel de moderação reformulado com identificação completa dos alunos (avatar, e-mail, nível e botão direto para o Dossiê completo), busca rápida, filtros por status e controles em tempo real (Em Análise, Resolvido, Reabrir) totalmente adaptado para mobile.',
+        tag: 'Admin & Suporte',
+      },
+      {
+        id: 'redacao-militar-temas-conectivos',
+        tipo: 'novo',
+        titulo: 'Arsenal de Redação Militar & Bizus de Conectivos',
+        descricao:
+          'Adição de 11 temas oficiais recentes das Forças Armadas (ESA, EsPCEx, AFA, EPCAR e Colégio Naval), seletor com chips de bancas, contador em tempo real com validação de 4 parágrafos e guia tático interativo de conectivos e macroestrutura dissertativa.',
+        tag: 'Redação Militar',
+      },
+      {
+        id: 'metas-corte-oficiais-concursos',
+        tipo: 'melhoria',
+        titulo: 'Metas de Corte & Critérios Oficiais dos Concursos',
+        descricao:
+          'Atualização e calibração das notas de corte e regras eliminatórias por matéria com base nos editais mais recentes: ESA (Masc vs Fem, mínimo 50% e redação 5.0), EEAR (BCT vs Não-BCT, média 5.0), EsPCEx, AFA, EPCAR, Colégio Naval, EFOMM, EAM, IME, ITA e ENEM.',
+        tag: 'Metas & Concursos',
+      },
+      {
+        id: 'musica-classica-streaming-playlists',
+        tipo: 'melhoria',
+        titulo: 'Player de Áudio Clássico & Criação Rápida de Playlists',
+        descricao:
+          'Inserção de 10 faixas de música clássica para estudo em alta definição (Bach, Beethoven, Debussy, Chopin) via streaming nativo HTML5 sem bloqueios de terceiros, sincronização instantânea na aba de playlists e criação ágil de playlist direto pelo menu da música.',
+        tag: 'Música & Foco',
+      },
+      {
+        id: 'dynamic-island-mobile-topo',
+        tipo: 'melhoria',
+        titulo: 'Dynamic Island no Topo da Tela Mobile',
+        descricao:
+          'Reposicionamento da Ilha Dinâmica para o topo da tela em dispositivos móveis, eliminando sobreposições com a barra de navegação inferior e oferecendo modo minimizado compacto sem obstruir os menus.',
+        tag: 'Interface & Mobile',
+      },
+      {
+        id: 'blindagem-anti-pausa-banco',
+        tipo: 'melhoria',
+        titulo: 'Blindagem Anti-Pausa 24/7 & Segurança Reforçada',
+        descricao:
+          'Implementação de Vercel Cron diário independente e GitHub Actions 2x ao dia com ping duplo no PostgREST, eliminação de chaves em código-fonte e sanitização de scripts legados.',
+        tag: 'Segurança & Infra',
+      },
+    ],
+  },
+  {
     versao: '3.5.0',
     dataLancamento: '2026-10-10T21:30:00-03:00',
     titulo: 'Caderno de Erros Impecável, Filtro por Assuntos & Booster 1.2x',
     resumo:
       'Evolução tática com reconstrução total do Caderno de Erros (comparativo de respostas e correção KaTeX), filtro de questões por assunto dinâmico, Booster 1.2x com temporizador de foco em dupla e arsenal de Bizus com tags do ENEM.',
-    destaque: true,
+    destaque: false,
     impacto: 'minor',
     classificacao: 'grande',
     alteracoes: [

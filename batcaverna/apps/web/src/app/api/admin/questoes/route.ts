@@ -322,10 +322,12 @@ export async function DELETE(req: NextRequest) {
 
     // Log de auditoria
     try {
-      await supabase.from('audit_logs').insert({
-        user_id: admin.id,
+      await supabase.from('admin_audit_log').insert({
+        admin_id: admin.id,
         acao: 'excluir_questao',
-        entidade_afetada: `questao:${id}`,
+        entidade_afetada: 'questoes',
+        entidade_id: id,
+        detalhes: { questao_id: id },
       });
     } catch {}
 

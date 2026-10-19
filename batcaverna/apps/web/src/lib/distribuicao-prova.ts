@@ -218,15 +218,17 @@ export const REFERENCIA_APROVACAO: Record<
   string,
   { percentual: number; nota: string }
 > = {
-  ESA: { percentual: 80, nota: 'ampla concorrência geral (~78% a 84%, média ~8.0)' },
-  EEAR: { percentual: 78, nota: 'corte real (~74% não-BCT a 85% BCT)' },
-  ESPCEX: { percentual: 75, nota: 'ampla concorrência (~72% Masc / ~80% Fem)' },
-  EPCAR: { percentual: 78, nota: 'alta concorrência (~76% a 82%)' },
-  CN: { percentual: 68, nota: 'prova de alto nível técnico (~65% a 72%)' },
-  EFOMM: { percentual: 70, nota: 'CIAGA e CIABA (~68% a 75%)' },
+  ESA: { percentual: 80, nota: 'ampla concorrência (~78% a 84% Masc / ~86% a 92% Fem, mín. 50% por matéria)' },
+  EEAR: { percentual: 78, nota: 'corte real (~74% Não-BCT a ~86% BCT, mín. 5.0 por matéria)' },
+  ESPCEX: { percentual: 75, nota: 'ampla concorrência (~72% Masc / ~80% Fem, mín. 50% por disciplina)' },
+  AFA: { percentual: 76, nota: 'média histórica (~74% Aviador / ~72% Intendência e Infantaria)' },
+  EPCAR: { percentual: 78, nota: 'alta concorrência (~76% a 82%, mín. 50% por matéria)' },
+  CN: { percentual: 68, nota: 'prova de alto nível técnico (~65% a 72%, mín. 50% por matéria)' },
+  EFOMM: { percentual: 70, nota: 'CIAGA e CIABA (~68% a 76%, mín. 50% por matéria)' },
   EAM: { percentual: 65, nota: 'média de corte por Distrito Naval (~62% a 70%)' },
   IME: { percentual: 62, nota: '1ª fase objetiva (~60% a 66% + mín. 50% por matéria)' },
-  ENEM: { percentual: 72, nota: 'ampla em cursos concorridos (~70% a 76%+ acertos)' },
+  ITA: { percentual: 68, nota: '1ª fase de altíssimo nível (~65% a 72% + mín. 50% por matéria)' },
+  ENEM: { percentual: 72, nota: 'cursos concorridos SiSU (~70% a 80%+ acertos brutos, 750+ TRI)' },
 };
 
 /**

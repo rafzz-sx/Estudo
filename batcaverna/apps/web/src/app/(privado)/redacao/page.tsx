@@ -73,6 +73,8 @@ export default function RedacaoPage() {
   const [enviando, setEnviando] = useState(false);
   const inicio = useRef<number | null>(null);
   const [segundos, setSegundos] = useState(0);
+  const [filtroBanca, setFiltroBanca] = useState<string>("todas");
+  const [painelBizusAberto, setPainelBizusAberto] = useState(false);
 
   const matrizAtiva = obterMatriz(matrizAtivaId);
 
@@ -115,6 +117,15 @@ export default function RedacaoPage() {
 
   const palavras = useMemo(() => contarPalavras(texto), [texto]);
   const linhas = useMemo(() => estimarLinhas(texto), [texto]);
+  const paragrafos = useMemo(() => {
+    return texto.split(/\n+/).filter((p) => p.trim().length > 0).length;
+  }, [texto]);
+
+  const temasFiltrados = useMemo(() => {
+    if (filtroBanca === "todas") return temas;
+    return temas.filter((t) => t.origem?.toLowerCase().includes(filtroBanca.toLowerCase()));
+  }, [temas, filtroBanca]);
+
   const temaEscolhido = temas.find((t) => t.id === temaId);
 
   const enviar = async () => {
@@ -353,42 +364,132 @@ export default function RedacaoPage() {
               </div>
 
               <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
-                <label
-                  htmlFor="tema"
-                  className="mb-2 block text-xs font-bold uppercase tracking-wider text-bat-text-muted"
-                >
-                  Tema
-                </label>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="tema"
+                    className="block text-xs font-bold uppercase tracking-wider text-bat-text-muted"
+                  >
+                    Tema Proposto ({temasFiltrados.length})
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { id: "todas", label: "Todos" },
+                      { id: "esa", label: "ESA" },
+                      { id: "espcex", label: "EsPCEx" },
+                      { id: "afa", label: "AFA" },
+                      { id: "epcar", label: "EPCAR" },
+                      { id: "naval", label: "Colégio Naval" },
+                      { id: "enem", label: "ENEM" },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setFiltroBanca(f.id)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          filtroBanca === f.id
+                            ? "bg-bat-gold-400 text-black shadow-xs"
+                            : "bg-bat-bg-secondary text-bat-text-muted hover:text-bat-text"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <select
                   id="tema"
                   value={temaId}
                   onChange={(e) => setTemaId(e.target.value)}
-                  className="input-field w-full"
+                  className="input-field w-full text-xs sm:text-sm"
                 >
-                  <option value="">Escolha um tema que já caiu…</option>
-                  {temas.map((t) => (
+                  <option value="">Escolha um tema ({temasFiltrados.length} disponíveis)…</option>
+                  {temasFiltrados.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.ano ? `${t.ano} — ` : ""}
-                      {t.titulo}
+                      [{t.origem || "ENEM"}{t.ano ? ` ${t.ano}` : ""}] {t.titulo}
                     </option>
                   ))}
                 </select>
 
                 {temaEscolhido && (
                   <div className="mt-3 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3">
-                    <p className="text-sm leading-relaxed text-bat-text">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-0.5 rounded bg-bat-gold-400/15 text-bat-gold-400 text-[10px] font-mono font-bold">
+                        {temaEscolhido.origem || "ENEM"} {temaEscolhido.ano || ""}
+                      </span>
+                    </div>
+                    <p className="text-sm leading-relaxed text-bat-text font-medium">
                       {temaEscolhido.titulo}
                     </p>
+                    {temaEscolhido.textos_apoio && (
+                      <p className="text-xs text-bat-text-secondary mt-1.5 leading-relaxed bg-bat-bg-primary/60 p-2.5 rounded-lg border border-bat-border/50">
+                        📄 <strong className="text-bat-text">Orientação da Prova:</strong> {temaEscolhido.textos_apoio}
+                      </p>
+                    )}
                     {temaEscolhido.fonte_url && (
                       <a
                         href={temaEscolhido.fonte_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-1 inline-block text-xs text-bat-gold-400"
+                        className="mt-2 inline-block text-xs text-bat-gold-400 hover:underline"
                       >
                         ver a prova original →
                       </a>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* Guia Rápido Tático de Estrutura & Conectivos */}
+              <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-4">
+                <button
+                  type="button"
+                  onClick={() => setPainelBizusAberto(!painelBizusAberto)}
+                  className="flex w-full items-center justify-between text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">💡</span>
+                    <span className="text-xs font-bold text-bat-text uppercase tracking-wider">
+                      Bizus de Conectivos & Estrutura Tática ({matrizAtiva.sigla})
+                    </span>
+                  </div>
+                  <span className="text-xs text-bat-gold-400 font-mono">
+                    {painelBizusAberto ? "▲ Ocultar" : "▼ Ver Bizus"}
+                  </span>
+                </button>
+
+                {painelBizusAberto && (
+                  <div className="mt-4 pt-3 border-t border-bat-border/60 space-y-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-bat-bg-secondary/60 border border-bat-border/60">
+                        <p className="font-bold text-bat-gold-400 mb-1 flex items-center gap-1.5">
+                          <span>📐</span> Estrutura Ideal em 4 Parágrafos:
+                        </p>
+                        <ul className="space-y-1 text-bat-text-secondary text-[11px] list-disc list-inside">
+                          <li><strong>Introdução (5-7 lin):</strong> Apresentação + Tese com 2 argumentos (D1 e D2).</li>
+                          <li><strong>D1 (7-8 lin):</strong> Tópico frasal + Repertório/Fato + Desfecho argumentativo.</li>
+                          <li><strong>D2 (7-8 lin):</strong> Causa e efeito + Aprofundamento crítico.</li>
+                          <li>
+                            <strong>Conclusão (5-7 lin):</strong>{" "}
+                            {matrizAtivaId === "enem"
+                              ? "Proposta de Intervenção com os 5 elementos (Quem, O que, Como, Para que + Detalhe)."
+                              : "Retomada da tese + Síntese reflexiva dos argumentos (sem clichês)."}
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-bat-bg-secondary/60 border border-bat-border/60">
+                        <p className="font-bold text-bat-gold-400 mb-1 flex items-center gap-1.5">
+                          <span>🔗</span> Conectivos de Alta Pontuação:
+                        </p>
+                        <div className="space-y-1 text-[11px] text-bat-text-secondary">
+                          <p><strong>Para Iniciar:</strong> <em>De início..., Sob essa perspectiva..., Em primeiro plano...</em></p>
+                          <p><strong>Para Somar/Continuar:</strong> <em>Ademais..., Outrossim..., Paralelamente...</em></p>
+                          <p><strong>Para Contrapor:</strong> <em>Contudo..., Em contrapartida..., Todavia...</em></p>
+                          <p><strong>Para Concluir:</strong> <em>Portanto..., Dessarte..., Em suma..., Depreende-se, pois...</em></p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -402,12 +503,12 @@ export default function RedacaoPage() {
                     Sua dissertação
                   </label>
 
-                  <div className="flex items-center gap-3 text-xs tabular-nums">
+                  <div className="flex items-center gap-3 text-xs tabular-nums flex-wrap">
                     <span
                       className={
                         palavras >= EXTENSAO.palavrasIdealMin &&
                         palavras <= EXTENSAO.palavrasIdealMax
-                          ? "text-bat-success"
+                          ? "text-bat-success font-bold"
                           : "text-bat-text-muted"
                       }
                     >
@@ -416,16 +517,26 @@ export default function RedacaoPage() {
                     <span
                       className={
                         linhas > EXTENSAO.linhasMaximas
-                          ? "text-bat-error"
+                          ? "text-bat-error font-bold"
                           : "text-bat-text-muted"
                       }
                       title="Estimativa: ~12 palavras por linha na folha oficial"
                     >
                       ~{linhas}/{EXTENSAO.linhasMaximas} linhas
                     </span>
+                    <span
+                      className={
+                        paragrafos === 4
+                          ? "text-bat-success font-bold"
+                          : "text-bat-text-muted"
+                      }
+                      title="Recomendado: 4 parágrafos (1 introdução, 2 desenvolvimentos, 1 conclusão)"
+                    >
+                      {paragrafos} parágrafo(s) {paragrafos === 4 ? "✅" : ""}
+                    </span>
                     {segundos > 0 && (
-                      <span className="text-bat-gold-400">
-                        {Math.floor(segundos / 60)}min
+                      <span className="text-bat-gold-400 font-mono font-bold">
+                        ⏱️ {Math.floor(segundos / 60)}m{segundos % 60}s
                       </span>
                     )}
                   </div>
@@ -441,14 +552,14 @@ export default function RedacaoPage() {
                     setTexto(e.target.value);
                   }}
                   rows={18}
-                  placeholder="Introdução com a tese, dois parágrafos de desenvolvimento e a conclusão com a proposta de intervenção…"
+                  placeholder="Introdução com a tese, dois parágrafos de desenvolvimento e a conclusão com a proposta de intervenção ou síntese tática…"
                   className="input-field w-full resize-y font-serif leading-relaxed"
                 />
 
                 {linhas > EXTENSAO.linhasMaximas && (
-                  <p className="mt-2 text-xs text-bat-error">
+                  <p className="mt-2 text-xs text-bat-error font-bold">
                     ⚠️ Passou das {EXTENSAO.linhasMaximas} linhas da folha
-                    oficial. O que passa não é lido.
+                    oficial. O que passa não é lido pelo avaliador.
                   </p>
                 )}
 
@@ -457,7 +568,7 @@ export default function RedacaoPage() {
                   disabled={enviando || !temaId || texto.trim().length < 200}
                   className="btn-primary mt-4 px-6 py-2.5 text-sm disabled:opacity-40"
                 >
-                  {enviando ? "Guardando…" : "Guardar e corrigir"}
+                  {enviando ? "Guardando…" : "Guardar e autoavaliar"}
                 </button>
               </div>
             </>

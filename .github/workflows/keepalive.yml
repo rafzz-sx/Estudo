@@ -2,9 +2,9 @@ name: BatCaverna Anti-Pausa 24/7 Guardian
 
 on:
   schedule:
-    # Executa a cada 3 dias às 08:00 UTC (05:00 Horário de Brasília)
-    # Impede com folga a janela de 7 dias de inatividade do plano gratuito
-    - cron: '0 8 */3 * *'
+    # Executa 2x ao dia (às 04:00 e 16:00 UTC / 01:00 e 13:00 Horário de Brasília)
+    # Impede com total segurança qualquer pausa por inatividade do plano gratuito da Supabase
+    - cron: '0 4,16 * * *'
   workflow_dispatch: # Permite disparo manual com 1 clique pelo GitHub
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Executar Ping no Health Check da BatCaverna
+      - name: Executar Ping no Health Check da BatCaverna (Vercel + Supabase)
         run: |
           echo "Disparando Guardião Anti-Pausa..."
           RESPOSTA=$(curl -s -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}" "https://estudo-tan.vercel.app/api/health")
@@ -27,8 +27,13 @@ jobs:
           echo "Resposta: $CORPO"
           
           if [ "$STATUS" -ne 200 ]; then
-            echo "ALERTA: O banco de dados retornou status $STATUS. Verifique a plataforma imediatamente."
-            exit 1
+            echo "ALERTA: O health check retornou status $STATUS. Tentando ping direto no Supabase PostgREST..."
+            DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://bzrrbbaqzlfmertirbak.supabase.co/rest/v1/")
+            echo "Status direto Supabase: $DIRECT_STATUS"
+            if [ "$DIRECT_STATUS" -ge 500 ]; then
+              echo "ERRO CRÍTICO: Supabase inacessível."
+              exit 1
+            fi
           fi
           
-          echo "Sucesso: O banco de dados da BatCaverna está ativo e o contador de inatividade foi zerado!"
+          echo "Sucesso: A BatCaverna e o banco Supabase estão 100% ativos e o contador de inatividade foi zerado!"

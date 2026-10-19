@@ -165,6 +165,9 @@ export default function AdminPage() {
   const [ticketDetalhe, setTicketDetalhe] = useState<any | null>(null);
   const [textoResposta, setTextoResposta] = useState("");
   const [enviandoResposta, setEnviandoResposta] = useState(false);
+  const [buscaTickets, setBuscaTickets] = useState("");
+  const [filtroStatusTickets, setFiltroStatusTickets] = useState<"todos" | "abertos" | "resolvidos">("todos");
+  const [atualizandoStatusTicket, setAtualizandoStatusTicket] = useState(false);
 
   // Armazém
   const [logsArmazem, setLogsArmazem] = useState<any[]>([]);
@@ -456,6 +459,26 @@ export default function AdminPage() {
     } catch {}
     finally {
       setEnviandoResposta(false);
+    }
+  };
+
+  const handleMudarStatusTicket = async (ticketId: string, novoStatus: string) => {
+    setAtualizandoStatusTicket(true);
+    try {
+      const res = await fetchWithAuth(`/api/tickets/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: novoStatus }),
+      });
+      if (res.ok) {
+        setTicketDetalhe((prev: any) => (prev ? { ...prev, status: novoStatus } : prev));
+        setTickets((prev) =>
+          prev.map((t) => (t.id === ticketId ? { ...t, status: novoStatus as any } : t))
+        );
+      }
+    } catch {}
+    finally {
+      setAtualizandoStatusTicket(false);
     }
   };
 
@@ -1769,76 +1792,294 @@ export default function AdminPage() {
 
       {/* ═══ TAB 4: TICKETS DE SUPORTE ═══ */}
       {aba === "tickets" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5 space-y-3">
-              {tickets.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTicketSelecionadoId(t.id)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
-                    t.id === ticketSelecionadoId
-                      ? "bg-bat-gold-400/10 border-bat-gold-400/60 shadow-lg"
-                      : "bg-bat-bg-primary border-bat-border"
-                  }`}
-                >
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] uppercase font-bold text-bat-gold-400">
-                      {t.motivo}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-bat-bg-secondary text-bat-text">
-                      {t.status.toUpperCase()}
-                    </span>
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-bat-border/60">
+            <div>
+              <h2 className="heading text-xl text-bat-text flex items-center gap-2">
+                <span>🎫</span> Moderação de Tickets de Alunos
+              </h2>
+              <p className="text-bat-text-secondary text-xs mt-0.5">
+                Central de atendimento aos soldados: resolva bugs, dúvidas e pedidos com identificação completa do aluno.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-bat-gold-400/10 text-bat-gold-400 border border-bat-gold-400/20 font-bold">
+                {tickets.filter((t) => t.status === "aberto").length} aberto(s)
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
+            {/* COLUNA ESQUERDA: LISTA DE TICKETS */}
+            <div className={`lg:col-span-5 space-y-3 flex flex-col ${ticketSelecionadoId ? "hidden lg:flex" : "flex"}`}>
+              {/* Filtros e Busca */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Buscar por aluno, email ou assunto..."
+                  value={buscaTickets}
+                  onChange={(e) => setBuscaTickets(e.target.value)}
+                  className="input-field text-xs py-2 px-3 w-full"
+                />
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-bat-bg-primary rounded-xl border border-bat-border text-xs">
+                  {(["todos", "abertos", "resolvidos"] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setFiltroStatusTickets(f)}
+                      className={`py-1 px-2 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer ${
+                        filtroStatusTickets === f
+                          ? "bg-bat-gold-400 text-black shadow-xs"
+                          : "text-bat-text-muted hover:text-bat-text"
+                      }`}
+                    >
+                      {f === "todos" ? `Todos (${tickets.length})` : f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lista */}
+              <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                {tickets.filter((t: any) => {
+                  const matchBusca =
+                    t.titulo?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                    t.users?.nome?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                    t.users?.apelido?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                    t.users?.email?.toLowerCase().includes(buscaTickets.toLowerCase());
+
+                  const matchStatus =
+                    filtroStatusTickets === "todos"
+                      ? true
+                      : filtroStatusTickets === "abertos"
+                      ? t.status === "aberto" || t.status === "em_andamento"
+                      : t.status === "resolvido" || t.status === "finalizado" || t.status === "respondido";
+
+                  return matchBusca && matchStatus;
+                }).length === 0 ? (
+                  <div className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border">
+                    Nenhum chamado encontrado com esses filtros.
                   </div>
-                  <p className="text-xs font-bold text-bat-text truncate">{t.titulo}</p>
-                </button>
-              ))}
+                ) : (
+                  tickets.filter((t: any) => {
+                    const matchBusca =
+                      t.titulo?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                      t.users?.nome?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                      t.users?.apelido?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
+                      t.users?.email?.toLowerCase().includes(buscaTickets.toLowerCase());
+
+                    const matchStatus =
+                      filtroStatusTickets === "todos"
+                        ? true
+                        : filtroStatusTickets === "abertos"
+                        ? t.status === "aberto" || t.status === "em_andamento"
+                        : t.status === "resolvido" || t.status === "finalizado" || t.status === "respondido";
+
+                    return matchBusca && matchStatus;
+                  }).map((t: any) => {
+                    const ativo = t.id === ticketSelecionadoId;
+                    const ehAberto = t.status === "aberto";
+                    const ehResolvido = t.status === "resolvido" || t.status === "finalizado";
+                    const ehEmAndamento = t.status === "em_andamento";
+
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setTicketSelecionadoId(t.id)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
+                          ativo
+                            ? "bg-bat-gold-400/15 border-bat-gold-400/70 shadow-md"
+                            : "bg-bat-bg-primary border-bat-border/80 hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[10px] uppercase font-bold text-bat-gold-400 tracking-wider">
+                            {t.motivo === "bugs" ? "🐛 Bug" : t.motivo === "ideia" ? "💡 Sugestão" : "📋 Dúvida"}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              ehAberto
+                                ? "bg-bat-error/20 text-bat-error border border-bat-error/30 animate-pulse"
+                                : ehEmAndamento
+                                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                                : ehResolvido
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                : "bg-bat-bg-secondary text-bat-text-muted"
+                            }`}
+                          >
+                            {t.status.toUpperCase()}
+                          </span>
+                        </div>
+
+                        <p className={`text-xs font-bold truncate ${ativo ? "text-bat-gold-400" : "text-bat-text"}`}>
+                          {t.titulo}
+                        </p>
+
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-bat-border/40 text-[11px] text-bat-text-muted">
+                          <span className="truncate font-medium text-bat-text-secondary">
+                            👤 {t.users?.nome || t.users?.apelido || "Aluno"}
+                          </span>
+                          <span className="font-mono text-[10px] shrink-0">
+                            {formatarTempoRelativo(t.atualizado_em || t.criado_em)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            <div className="lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-5 flex flex-col justify-between min-h-[400px]">
+            {/* COLUNA DIREITA: CONVERSA / DETALHES DO TICKET */}
+            <div className={`lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-4 sm:p-5 flex flex-col justify-between min-h-[460px] ${!ticketSelecionadoId ? "hidden lg:flex" : "flex"}`}>
               {ticketDetalhe ? (
                 <div className="space-y-4 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="font-bold text-bat-text text-sm mb-3">{ticketDetalhe.titulo}</h3>
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {(ticketDetalhe.mensagens || []).map((m: any) => (
-                        <div
-                          key={m.id}
-                          className={`p-3 rounded-xl text-xs ${
-                            m.autor_role === "admin"
-                              ? "bg-bat-purple-600/30 border border-bat-purple-500/40 text-bat-text ml-4"
-                              : "bg-bat-bg-card border border-bat-border text-bat-text mr-4"
-                          }`}
-                        >
-                          <span className="font-bold text-bat-gold-400 block mb-0.5">
-                            {m.autor_role === "admin" ? "🛡️ Resposta da Administração" : "👤 Aluno"}
-                          </span>
-                          <p>{m.conteudo}</p>
+                    {/* Botão voltar no mobile */}
+                    <div className="lg:hidden mb-3">
+                      <button
+                        onClick={() => setTicketSelecionadoId(null)}
+                        className="text-xs font-bold text-bat-gold-400 flex items-center gap-1.5 p-1 rounded-lg hover:bg-bat-bg-secondary cursor-pointer"
+                      >
+                        ← Voltar para lista de chamados
+                      </button>
+                    </div>
+
+                    {/* Card de Identificação do Aluno */}
+                    <div className="p-3.5 rounded-xl bg-bat-bg-card border border-bat-border flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-bat-gold-400/20 border border-bat-gold-400/40 flex items-center justify-center font-bold text-bat-gold-400 shrink-0 overflow-hidden text-sm">
+                          {ticketDetalhe.users?.avatar_url ? (
+                            <img src={ticketDetalhe.users.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            ticketDetalhe.users?.apelido?.[0]?.toUpperCase() || "A"
+                          )}
                         </div>
-                      ))}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-bat-text text-xs sm:text-sm truncate">
+                              {ticketDetalhe.users?.nome || "Aluno"}
+                            </p>
+                            <span className="px-1.5 py-0.2 rounded bg-bat-gold-400/15 text-bat-gold-400 text-[10px] font-mono font-bold">
+                              Nv. {ticketDetalhe.users?.nivel_atual || 1}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-bat-text-muted truncate">
+                            🦇 @{ticketDetalhe.users?.apelido} · {ticketDetalhe.users?.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {ticketDetalhe.users && (
+                          <button
+                            type="button"
+                            onClick={() => setSoldadoDossie(ticketDetalhe.users)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer"
+                          >
+                            👁️ Ver Dossiê
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cabeçalho do Ticket */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-bat-border/50">
+                      <div>
+                        <h3 className="font-bold text-bat-text text-sm sm:text-base">
+                          {ticketDetalhe.titulo}
+                        </h3>
+                        <p className="text-[11px] text-bat-text-muted font-mono mt-0.5">
+                          Ticket #{ticketDetalhe.id.slice(0, 8)} · Aberto em {new Date(ticketDetalhe.criado_em).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+
+                      {/* Controle de Status */}
+                      <div className="flex items-center gap-1.5">
+                        {ticketDetalhe.status !== "em_andamento" && ticketDetalhe.status !== "resolvido" && (
+                          <button
+                            onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "em_andamento")}
+                            disabled={atualizandoStatusTicket}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer disabled:opacity-50"
+                          >
+                            ⚡ Em Análise
+                          </button>
+                        )}
+                        {ticketDetalhe.status !== "resolvido" && ticketDetalhe.status !== "finalizado" ? (
+                          <button
+                            onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "resolvido")}
+                            disabled={atualizandoStatusTicket}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer disabled:opacity-50"
+                          >
+                            ✅ Marcar Resolvido
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "aberto")}
+                            disabled={atualizandoStatusTicket}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-bat-gold-400/15 hover:bg-bat-gold-400/25 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer disabled:opacity-50"
+                          >
+                            🔄 Reabrir Chamado
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Chat de Mensagens */}
+                    <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+                      {(ticketDetalhe.mensagens || []).map((m: any) => {
+                        const ehAdmin = m.autor_role === "admin";
+                        return (
+                          <div
+                            key={m.id}
+                            className={`p-3.5 rounded-xl text-xs ${
+                              ehAdmin
+                                ? "bg-gradient-to-r from-indigo-950/40 to-bat-bg-elevated border border-indigo-500/30 text-bat-text ml-4 sm:ml-8"
+                                : "bg-bat-bg-card border border-bat-border text-bat-text mr-4 sm:mr-8"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/5">
+                              <span className={`font-bold flex items-center gap-1.5 ${ehAdmin ? "text-indigo-400" : "text-bat-gold-400"}`}>
+                                {ehAdmin ? "🛡️ Resposta da Administração" : `👤 ${ticketDetalhe.users?.apelido || m.users?.apelido || "Aluno"}`}
+                              </span>
+                              <span className="text-[10px] font-mono text-bat-text-muted">
+                                {m.enviado_em ? new Date(m.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
+                              </span>
+                            </div>
+                            <p className="whitespace-pre-wrap leading-relaxed">{m.conteudo}</p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
+                  {/* Campo de Resposta */}
                   <div className="pt-3 border-t border-bat-border/50 space-y-2">
                     <textarea
-                      placeholder="Escreva a resposta oficial ao aluno..."
+                      placeholder={`Escreva a resposta oficial para ${ticketDetalhe.users?.apelido || "o aluno"}...`}
                       value={textoResposta}
                       onChange={(e) => setTextoResposta(e.target.value)}
                       rows={3}
                       className="w-full input-field text-xs resize-none"
                     />
-                    <button
-                      onClick={() => handleResponderTicket(ticketDetalhe.id)}
-                      disabled={enviandoResposta || !textoResposta.trim()}
-                      className="btn-primary py-2 px-5 text-xs font-bold disabled:opacity-50"
-                    >
-                      {enviandoResposta ? "Enviando..." : "Responder Aluno 🚀"}
-                    </button>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-[11px] text-bat-text-muted">
+                        Pressione o botão para enviar a resposta oficial ao aluno.
+                      </span>
+                      <button
+                        onClick={() => handleResponderTicket(ticketDetalhe.id)}
+                        disabled={enviandoResposta || !textoResposta.trim()}
+                        className="btn-primary py-2 px-5 text-xs font-bold disabled:opacity-50"
+                      >
+                        {enviandoResposta ? "Enviando..." : "Responder Aluno 🚀"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-bat-text-muted text-xs">
-                  Selecione um chamado ao lado para visualizar e responder.
+                <div className="flex flex-col items-center justify-center h-full text-bat-text-muted text-xs p-8 text-center space-y-2">
+                  <span className="text-3xl block">🎫</span>
+                  <p>Selecione um chamado ao lado para visualizar os detalhes, histórico e responder o aluno.</p>
                 </div>
               )}
             </div>

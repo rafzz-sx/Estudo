@@ -3,7 +3,7 @@ import "./globals.css";
 import "katex/dist/katex.min.css";
 
 export const metadata: Metadata = {
-  title: "BatCaverna — Sua central de operações para concursos militares e ENEM",
+  title: "BatCaverna",
   description:
     "Plataforma gamificada de estudos para EEAR, ESA, EAM, CN, EPCAR, EsPCEx, EFOMM, IME e ENEM. Banco de questões, simulados, bizus, ranking e muito mais.",
   keywords: [
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     "BatCaverna",
   ],
   openGraph: {
-    title: "BatCaverna — Central de Estudos para Concursos Militares",
+    title: "BatCaverna",
     description:
       "Domine os concursos militares e o ENEM com a plataforma gamificada mais imersiva do Brasil.",
     type: "website",

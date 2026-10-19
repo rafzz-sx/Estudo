@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       .select(
         `playlist_id, ordem,
          musicas (id, titulo, artista, album, capa_url, audio_url,
-                  duracao_segundos, cor_primaria, cor_secundaria)`
+                  duracao_segundos, cor_primaria, cor_secundaria, fonte, fonte_id)`
       )
       .in(
         'playlist_id',

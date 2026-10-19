@@ -151,6 +151,12 @@ function BatCavernaApp() {
       return false;
     }
 
+    // Se a requisição for um subframe/iframe interno (ex: player do YouTube, áudio, vídeos de teoria),
+    // deve sempre ser carregado internamente na página sem abrir o navegador nativo.
+    if ((request as any).isTopFrame === false) {
+      return true;
+    }
+
     // Se for URL web externa (fora dos domínios oficiais da plataforma), abre no navegador nativo
     if (url.startsWith("http://") || url.startsWith("https://")) {
       const allowedHosts = [
@@ -165,9 +171,18 @@ function BatCavernaApp() {
         // Extrai o host de forma segura
         const match = url.match(/^https?:\/\/([^/?#]+)/i);
         const host = match ? match[1].toLowerCase() : "";
-        const isInternal = allowedHosts.some(
-          (allowed) => host === allowed || host.endsWith(".supabase.co")
-        );
+        const isInternal =
+          allowedHosts.some((allowed) => host === allowed) ||
+          host.endsWith(".supabase.co") ||
+          host.endsWith(".youtube.com") ||
+          host === "youtube.com" ||
+          host === "youtu.be" ||
+          host.endsWith(".googlevideo.com") ||
+          host.endsWith(".ytimg.com") ||
+          host.endsWith(".archive.org") ||
+          host === "archive.org" ||
+          host.endsWith(".scdn.co") ||
+          host.endsWith(".spotify.com");
 
         if (!isInternal) {
           Linking.openURL(url).catch(() => {});

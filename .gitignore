@@ -41,3 +41,12 @@ BANCO DE QUESTOES/
 
 # Binaries
 *.apk
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Scripts and parser outputs
+scripts/tmp/
+scripts/out/
+apps/web/public/images/concursos/_originais/
