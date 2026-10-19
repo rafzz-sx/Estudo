@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { formatarDataHoraVersao } from "@batcaverna/utils";
 import { CURRENT_APP_VERSION } from "@/data/changelog";
+import { CURRENT_ADMIN_VERSION, ADMIN_CHANGELOG_HISTORY } from "@/data/admin-changelog";
 import { PainelAvisos } from "@/components/admin/PainelAvisos";
 import { PainelModeracao } from "@/components/admin/PainelModeracao";
 import { PainelSaude } from "@/components/admin/PainelSaude";
@@ -144,6 +145,7 @@ export default function AdminPage() {
   const [aba, setAba] = useState<AbaAdmin>("visao_geral");
   const [categoriaDesktop, setCategoriaDesktop] = useState<"todas" | "monitoramento" | "soldados" | "seguranca" | "conteudo">("todas");
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
+  const [modalAdminNovidadesAberto, setModalAdminNovidadesAberto] = useState(false);
   const [resumoFeedback, setResumoFeedback] = useState<ResumoFeedback | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [tickets, setTickets] = useState<TicketAdmin[]>([]);
@@ -548,20 +550,43 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Badge de Versão & Link para Novidades */}
-        <Link
-          href="/novidades"
-          className="relative flex flex-col sm:items-end bg-bat-bg-primary hover:bg-bat-bg-card border border-bat-gold-400/30 hover:border-bat-gold-400/60 px-4 py-2.5 rounded-xl text-right transition-all no-underline group"
-          title="Ver diário de lançamentos e novidades"
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-mono font-bold text-bat-gold-400 group-hover:underline">Versão {appInfo.versao_atual}</span>
-          </div>
-          <p className="text-[11px] text-bat-text-muted mt-0.5">
-            Atualizado: {formatarDataHoraVersao(appInfo.atualizado_em)}
-          </p>
-        </Link>
+        {/* Badges de Versão: Painel Admin (Isolado) e Plataforma Alunos */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Badge de Versão do Painel de Admin */}
+          <button
+            type="button"
+            onClick={() => setModalAdminNovidadesAberto(true)}
+            className="flex flex-col items-start sm:items-end bg-bat-bg-primary hover:bg-bat-gold-400/[0.08] border border-bat-gold-400/40 hover:border-bat-gold-400 px-3.5 py-2 rounded-xl text-left sm:text-right transition-all group cursor-pointer shadow-md"
+            title="Ver notas técnicas e atualizações exclusivas do Painel de Admin"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-bat-gold-400 animate-pulse" />
+              <span className="text-xs font-mono font-bold text-bat-gold-400 group-hover:underline">
+                Painel Admin v{CURRENT_ADMIN_VERSION}
+              </span>
+            </div>
+            <p className="text-[10px] text-bat-text-muted mt-0.5">
+              Diário Tático de Moderação ⚡
+            </p>
+          </button>
+
+          {/* Badge de Versão Pública dos Alunos */}
+          <Link
+            href="/novidades"
+            className="flex flex-col items-start sm:items-end bg-bat-bg-primary/60 hover:bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/30 px-3 py-2 rounded-xl text-left sm:text-right transition-all no-underline group"
+            title="Ver diário público de novidades dos alunos"
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-[11px] font-mono text-bat-text-secondary group-hover:text-bat-text">
+                App v{appInfo.versao_atual}
+              </span>
+            </div>
+            <p className="text-[10px] text-bat-text-muted mt-0.5">
+              {formatarDataHoraVersao(appInfo.atualizado_em)}
+            </p>
+          </Link>
+        </div>
       </div>
 
       {/* ═══ ABAS DE NAVEGAÇÃO ═══ */}
@@ -2300,6 +2325,101 @@ export default function AdminPage() {
       {/* ═══ TAB: REDEFINIÇÕES DE SENHA ═══ */}
       {aba === "reset_senha" && <PainelResetSenha />}
     </div>{/* fim do wrapper de transição */}
+
+      {/* ═══ MODAL: DIÁRIO TÁTICO DE ATUALIZAÇÕES DO ADMIN ═══ */}
+      {modalAdminNovidadesAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-bat-bg-card border border-bat-gold-400/40 rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-start justify-between gap-4 border-b border-bat-border pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40 font-mono">
+                    PAINEL ADMIN v{CURRENT_ADMIN_VERSION}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-bat-bg-secondary text-bat-text-muted border border-bat-border">
+                    CONFIDENCIAL DO ALTO COMANDO
+                  </span>
+                </div>
+                <h2 className="heading text-xl sm:text-2xl text-bat-text">
+                  Diário Tático de Atualizações do Admin
+                </h2>
+                <p className="text-xs text-bat-text-secondary leading-relaxed">
+                  Histórico isolado de evolução interna da moderação, suporte, auditoria e infraestrutura da BatCaverna. Estas informações não são visíveis aos alunos.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalAdminNovidadesAberto(false)}
+                className="w-8 h-8 rounded-full bg-bat-bg-primary hover:bg-bat-bg-secondary border border-bat-border flex items-center justify-center text-bat-text-muted hover:text-bat-text transition-colors cursor-pointer shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Lista de Versões do Admin */}
+            <div className="space-y-6">
+              {ADMIN_CHANGELOG_HISTORY.map((rel) => (
+                <div
+                  key={rel.versao}
+                  className="bg-bat-bg-primary border border-bat-border rounded-2xl p-5 space-y-3.5 relative overflow-hidden"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-bat-gold-400 bg-bat-gold-400/10 px-2.5 py-1 rounded-lg border border-bat-gold-400/30">
+                        v{rel.versao}
+                      </span>
+                      {rel.versao === CURRENT_ADMIN_VERSION && (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/40 px-2 py-0.5 rounded">
+                          ATIVO
+                        </span>
+                      )}
+                      <h3 className="font-bold text-sm text-bat-text">{rel.titulo}</h3>
+                    </div>
+                    <span className="text-[10px] text-bat-text-muted font-mono">
+                      {formatarDataHoraVersao(rel.dataLancamento)}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-bat-text-secondary leading-relaxed bg-bat-bg-card p-3 rounded-xl border border-bat-border/60">
+                    {rel.resumo}
+                  </p>
+
+                  <div className="space-y-2 pt-1">
+                    <h4 className="text-[11px] font-bold text-bat-text-muted uppercase tracking-wider">
+                      Módulos Atualizados:
+                    </h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {rel.alteracoes.map((alt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-start gap-2.5 text-xs text-bat-text-secondary bg-bat-bg-secondary/40 p-2.5 rounded-lg border border-bat-border/40"
+                        >
+                          <span className="text-bat-gold-400 font-bold shrink-0 text-[11px] min-w-[120px]">
+                            [{alt.modulo}]
+                          </span>
+                          <span className="leading-snug">{alt.descricao}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Rodapé com botão de fechar */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setModalAdminNovidadesAberto(false)}
+                className="btn-primary py-2 px-6 text-xs font-bold"
+              >
+                Fechar Diário Tático
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -588,6 +588,18 @@ Siga rigorosamente estas diretrizes para não quebrar a arquitetura do projeto:
 > ### 7. Compilação do Android (`gradle.properties`)
 > Se compilar o APK em uma nova máquina, verifique a propriedade `org.gradle.java.home` no arquivo `apps/mobile/android/gradle.properties`. Se o caminho do JDK apontar para uma pasta de outro usuário, comente essa linha ou aponte para o seu próprio JDK instalado.
 
+> ### 8. Versionamento Controlado & Proibição de Incremento Automático
+> - **NÃO** alterar a versão da plataforma sem autorização explícita do usuário.
+> - Ao receber autorização, classificar e sincronizar os 4 arquivos canônicos (`changelog.ts`, `build.gradle`, `app.json`, `apps/mobile/package.json`).
+> - **NUNCA** criar arquivos de migração SQL apenas para atualizar versão na tabela `app_info`. A rota `/api/app-info` detecta e atualiza o Supabase automaticamente.
+
+> ### 9. Versionamento Exclusivo e Isolado do Painel de Admin (Confidencial)
+> - O **Painel de Admin possui uma versão própria e isolada** (`CURRENT_ADMIN_VERSION` em `apps/web/src/data/admin-changelog.ts`), completamente desvinculada da versão pública dos alunos.
+> - **Sigilo Absoluto de Moderação:** Melhorias de moderação, ferramentas internas, auditoria, novos módulos de gestão, tickets de suporte e dossiês de alunos **NUNCA** devem ser descritos no `changelog.ts` público dos alunos nem exibidos no modal de novidades (`MissedUpdatesModal`). É mandatório que os alunos não saibam de alterações e ferramentas internas de moderação.
+> - Quando houver melhorias exclusivas no painel de administração:
+>   1. Atualize **apenas** a versão do admin em `admin-changelog.ts` (`CURRENT_ADMIN_VERSION`) e registre no `ADMIN_CHANGELOG_HISTORY`.
+>   2. **NÃO** incremente a versão pública dos estudantes (`CURRENT_APP_VERSION`), evitando disparar pop-ups desnecessários aos alunos.
+
 ---
 
 ### 🦇 BatCaverna — Rumo à Aprovação!

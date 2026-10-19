@@ -20,21 +20,13 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
   {
     versao: '3.6.0',
     dataLancamento: '2026-10-19T18:25:00-03:00',
-    titulo: 'Central de Moderação & Dossiê, Redação Militar, Áudio Clássico & Dynamic Island',
+    titulo: 'Arsenal de Redação Militar, Metas Oficiais, Áudio Clássico & Dynamic Island',
     resumo:
-      'Grande evolução na BatCaverna: Suporte com Dossiê completo do soldado e fluxo de atendimento no painel Admin, Temas e Bizus de Conectivos para Redação Militar (ESA, EsPCEx, AFA, EPCAR, CN), Metas de Corte Oficiais dos Concursos, Streaming de Música Clássica de domínio público sem travamentos, Dynamic Island reposicionada no topo mobile e blindagem do banco contra inatividade.',
+      'Grande evolução na BatCaverna: Novos Temas Oficiais e Bizus de Conectivos para Redação Militar (ESA, EsPCEx, AFA, EPCAR, CN), Metas de Corte e Critérios Oficiais dos Concursos Militares, Streaming de Música Clássica de domínio público para foco profundo, Dynamic Island reposicionada no topo mobile e blindagem de alta estabilidade.',
     destaque: true,
     impacto: 'minor',
     classificacao: 'grande',
     alteracoes: [
-      {
-        id: 'admin-suporte-dossie-soldado',
-        tipo: 'novo',
-        titulo: 'Central de Suporte & Dossiê do Soldado no Admin',
-        descricao:
-          'Painel de moderação reformulado com identificação completa dos alunos (avatar, e-mail, nível e botão direto para o Dossiê completo), busca rápida, filtros por status e controles em tempo real (Em Análise, Resolvido, Reabrir) totalmente adaptado para mobile.',
-        tag: 'Admin & Suporte',
-      },
       {
         id: 'redacao-militar-temas-conectivos',
         tipo: 'novo',
@@ -70,10 +62,10 @@ export const CHANGELOG_HISTORY: ReleaseItem[] = [
       {
         id: 'blindagem-anti-pausa-banco',
         tipo: 'melhoria',
-        titulo: 'Blindagem Anti-Pausa 24/7 & Segurança Reforçada',
+        titulo: 'Alta Disponibilidade & Estabilidade Contínua',
         descricao:
-          'Implementação de Vercel Cron diário independente e GitHub Actions 2x ao dia com ping duplo no PostgREST, eliminação de chaves em código-fonte e sanitização de scripts legados.',
-        tag: 'Segurança & Infra',
+          'Otimização profunda de performance e conectividade com o banco de dados em nuvem, garantindo disponibilidade 24/7 ininterrupta para seus estudos.',
+        tag: 'Estabilidade',
       },
     ],
   },

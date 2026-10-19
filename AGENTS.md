@@ -34,6 +34,13 @@ Apresentar ao usuário a versão sugerida, a classificação e a justificativa a
 - **NÃO** subir código parcial antes da versão ser definida.
 - O commit final deve conter: código alterado + versão atualizada + changelog atualizado.
 
+### Versionamento Exclusivo do Painel de Admin (Confidencial)
+- O **Painel de Admin possui uma versão própria e isolada** (`CURRENT_ADMIN_VERSION` em `batcaverna/apps/web/src/data/admin-changelog.ts`), completamente separada da versão pública dos alunos (`CURRENT_APP_VERSION`).
+- **Sigilo Absoluto de Moderação:** Melhorias do painel administrativo, ferramentas de auditoria, novos módulos de moderação, dossiês de alunos e tickets de suporte **NUNCA** devem ser descritos no `changelog.ts` público dos alunos nem exibidos no modal de novidades (`MissedUpdatesModal`). É ideal os alunos não saberem de alterações internas de moderação.
+- Quando houver alterações e melhorias **exclusivas** no painel de admin:
+  1. Incrementar apenas a versão em `admin-changelog.ts` (`CURRENT_ADMIN_VERSION`) e documentar no `ADMIN_CHANGELOG_HISTORY`.
+  2. **NÃO** alterar a versão pública dos alunos (`CURRENT_APP_VERSION`), evitando criar falsos avisos de atualização para os estudantes.
+
 ### Geração do APK
 - O APK de debug é gerado com a nomenclatura `batcaverna_<versao>.apk` (configurado via `applicationVariants.all` no `build.gradle`).
 
