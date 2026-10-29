@@ -42,6 +42,7 @@ interface LinhaQuestao {
 interface LinhaMateria {
   materia_id: string;
   peso_na_prova: number | null;
+  peso_edital?: number | null;
   materias: { id: string; nome: string; icone_emoji: string | null } | null;
 }
 
@@ -137,13 +138,15 @@ async function calcularDistribuicao(
   // ─── Pesos declarados, se houver ─────────────────────────
   const { data: vinculos } = await supabase
     .from('concurso_materias')
-    .select('materia_id, peso_na_prova, materias (id, nome, icone_emoji)')
+    .select('materia_id, peso_na_prova, peso_edital, materias (id, nome, icone_emoji)')
     .eq('concurso_id', concursoId);
 
   const linhas = (vinculos ?? []) as unknown as LinhaMateria[];
   const info = new Map<string, { nome: string; emoji: string | null }>();
   for (const v of linhas) {
     if (v.materias) {
+      // Descarta redação para cálculo de simulado objetivo
+      if (/redação|redacao/i.test(v.materias.nome)) continue;
       info.set(v.materia_id, {
         nome: v.materias.nome,
         emoji: v.materias.icone_emoji,
@@ -152,12 +155,19 @@ async function calcularDistribuicao(
   }
 
   // Só vale como "edital" se houver peso para TODAS as matérias que têm
-  // questão. Um peso pela metade misturaria as duas fontes e daria uma
-  // distribuição que não é nem a do edital nem a das provas.
+  // questão. Usa preferencialmente peso_edital (calibrado) ou peso_na_prova.
   const pesoDeclarado = new Map<string, number>();
   for (const v of linhas) {
-    if (v.peso_na_prova != null && v.peso_na_prova > 0 && disponiveis.has(v.materia_id)) {
-      pesoDeclarado.set(v.materia_id, Number(v.peso_na_prova));
+    if (v.materias && /redação|redacao/i.test(v.materias.nome)) continue;
+    const peso =
+      v.peso_edital != null && Number(v.peso_edital) > 0
+        ? Number(v.peso_edital)
+        : v.peso_na_prova != null && Number(v.peso_na_prova) > 0
+        ? Number(v.peso_na_prova)
+        : null;
+
+    if (peso != null && peso > 0 && disponiveis.has(v.materia_id)) {
+      pesoDeclarado.set(v.materia_id, peso);
     }
   }
 

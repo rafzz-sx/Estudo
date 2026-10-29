@@ -17,6 +17,11 @@ import {
   gravarProvaSalva,
   apagarProvaSalva,
 } from "@/lib/prova-em-andamento";
+import {
+  obterFormatoConcurso,
+  type FormatoConcursoReal,
+} from "@/lib/formatos-concursos";
+import { type VagasDificuldade } from "@/lib/balanceamento-simulado";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface QuestaoSim {
@@ -37,12 +42,36 @@ interface QuestaoSim {
 interface Detalhe {
   questao_id: string;
   enunciado: string;
+  dificuldade?: string;
+  materia_nome?: string | null;
   resposta_dada: string | null;
   resposta_correta: string;
   correta: boolean;
   explicacao: string | null;
   resolucao_passos: PassoResolucao[] | null;
   figura_descricao: string | null;
+}
+
+interface DesempenhoDificuldade {
+  tipo: string;
+  chave: string;
+  total: number;
+  acertos: number;
+  taxa: number;
+}
+
+interface DesempenhoMateria {
+  materia_id: string;
+  nome: string;
+  emoji: string | null;
+  total: number;
+  acertos: number;
+  taxa: number;
+}
+
+interface ReferenciaCorte {
+  percentual: number;
+  nota: string;
 }
 
 interface Resultado {
@@ -57,6 +86,9 @@ interface Resultado {
   nivel: { nivel: number; titulo: string };
   subiu_nivel: boolean;
   badges_novas: { nome: string; icone: string; cor_hex: string }[];
+  desempenho_dificuldade?: DesempenhoDificuldade[];
+  desempenho_materias?: DesempenhoMateria[];
+  referencia_corte?: ReferenciaCorte | null;
   detalhes: Detalhe[];
 }
 
@@ -75,51 +107,76 @@ interface MateriaOpcao {
   total_questoes: number;
 }
 
-/**
- * Formato real de cada banca — espelha FORMATO_OFICIAL do servidor.
- * Serve só para a tela mostrar o número antes de começar; quem decide é o
- * back-end.
- */
-const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
-  EEAR: { questoes: 60, minutos: 240 },
-  ESA: { questoes: 50, minutos: 240 },
-  EPCAR: { questoes: 60, minutos: 240 },
-  CN: { questoes: 60, minutos: 240 },
-  EFOMM: { questoes: 40, minutos: 240 },
-  EAM: { questoes: 50, minutos: 240 },
-  ESPCEX: { questoes: 60, minutos: 240 },
-  ENEM: { questoes: 45, minutos: 270 },
-};
-
 const MODOS = [
-  { tipo: "rapido", rotulo: "Rápido", questoes: 10, minutos: 20, desc: "Aquecimento de 20 minutos" },
-  { tipo: "oficial", rotulo: "Formato da banca", questoes: 60, minutos: 240, desc: "A prova como ela é" },
-  { tipo: "erros", rotulo: "Refazer meus erros", questoes: 20, minutos: 50, desc: "Só o que você errou" },
-  { tipo: "materia", rotulo: "Por matéria", questoes: 20, minutos: 40, desc: "Foco numa disciplina" },
-  { tipo: "completo", rotulo: "Prova completa", questoes: 45, minutos: 150, desc: "Volume de treino" },
-  { tipo: "personalizado", rotulo: "Personalizado", questoes: 20, minutos: 45, desc: "Você define tudo" },
+  {
+    tipo: "oficial",
+    rotulo: "Simulado Real da Prova",
+    icone: "🏛️",
+    questoes: 50,
+    minutos: 240,
+    desc: "Formato oficial do concurso com tempo e questões reais",
+    destaque: true,
+  },
+  {
+    tipo: "rapido",
+    rotulo: "Rápido",
+    icone: "⚡",
+    questoes: 10,
+    minutos: 20,
+    desc: "Aquecimento de 20 minutos balanceado",
+  },
+  {
+    tipo: "erros",
+    rotulo: "Refazer meus erros",
+    icone: "🎯",
+    questoes: 20,
+    minutos: 50,
+    desc: "Apenas questões que você já errou",
+  },
+  {
+    tipo: "materia",
+    rotulo: "Por matéria",
+    icone: "📚",
+    questoes: 20,
+    minutos: 40,
+    desc: "Foco aprofundado numa disciplina",
+  },
+  {
+    tipo: "completo",
+    rotulo: "Treino Completo",
+    icone: "📦",
+    questoes: 45,
+    minutos: 150,
+    desc: "Volume intermediário de prova",
+  },
+  {
+    tipo: "personalizado",
+    rotulo: "Personalizado",
+    icone: "⚙️",
+    questoes: 20,
+    minutos: 45,
+    desc: "Você define quantidade, tempo e filtros",
+  },
 ];
 
-/** Faixas aceitas pelo servidor (`/api/simulados/start`). Espelhadas aqui
- *  para a tela não deixar o aluno pedir algo que o back vai recortar calado. */
-const LIMITES = { questoesMin: 5, questoesMax: 100, minutosMin: 5, minutosMax: 300 };
+const LIMITES = { questoesMin: 5, questoesMax: 180, minutosMin: 5, minutosMax: 360 };
 
 // ═══════════════════════════════════════════════════════════════
 function Simulado() {
   const params = useSearchParams();
   const updateUser = useAuthStore((s) => s.updateUser);
-  // A prova guardada no aparelho carrega o dono: sem isso, num computador
-  // compartilhado o próximo aluno caía dentro da prova do anterior.
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
   const [fase, setFase] = useState<"config" | "prova" | "resultado">("config");
   const [concursos, setConcursos] = useState<ConcursoOpcao[]>([]);
-  // O `tipo` também vem da URL: os atalhos do card do concurso mandam
-  // ?concurso=EEAR&tipo=rapido&auto=1 e a prova começa sozinha.
   const tipoDaUrl = params.get("tipo");
+
   const [config, setConfig] = useState({
     concurso: params.get("concurso") ?? "",
-    tipo: MODOS.some((m) => m.tipo === tipoDaUrl) ? tipoDaUrl! : "rapido",
+    tipo: MODOS.some((m) => m.tipo === tipoDaUrl) ? tipoDaUrl! : "oficial",
+    variacao_id: "",
+    dificuldade_modo: "balanceado" as "balanceado" | "facil" | "medio" | "dificil" | "custom",
+    dificuldade_proporcao: { facil: 30, medio: 50, dificil: 20 },
     materia_id: "",
     ano: "",
     total_questoes: 20,
@@ -132,17 +189,21 @@ function Simulado() {
   const [simuladoId, setSimuladoId] = useState<string | null>(null);
   const [questoes, setQuestoes] = useState<QuestaoSim[]>([]);
   const [indice, setIndice] = useState(0);
-  /**
-   * Quantas questões de cada matéria a prova recebeu.
-   *
-   * Só vem preenchido no "Formato da banca": lá a prova é repartida na
-   * proporção real da banca, em vez de sorteada uniformemente. Mostrar isso
-   * é parte do treino — o aluno precisa saber que caem 24 de Matemática e 6
-   * de Inglês, não 15 de cada.
-   */
   const [distribuicao, setDistribuicao] = useState<
     { materia: string; questoes: number }[] | null
   >(null);
+  const [distribuicaoDificuldade, setDistribuicaoDificuldade] =
+    useState<VagasDificuldade | null>(null);
+  const [formatoInfo, setFormatoInfo] = useState<{
+    sigla: string;
+    nome: string;
+    descricao: string;
+    detalhesEdital: string;
+    temRedacaoNaProvaReal: boolean;
+    redacaoDescartada: boolean;
+    adaptadoEstoque?: boolean;
+  } | null>(null);
+
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [segundosRestantes, setSegundosRestantes] = useState(0);
   const [resultado, setResultado] = useState<Resultado | null>(null);
@@ -153,27 +214,24 @@ function Simulado() {
   const inicioProva = useRef<number>(0);
   const finalizarRef = useRef<() => void>(() => {});
 
-  // ─── Catálogo ──────────────────────────────────────────────
+  // ─── Catálogo de Concursos ─────────────────────────────────
   useEffect(() => {
     fetchWithAuth("/api/concursos")
       .then((r) => r.json())
       .then((json) => {
         if (json.success) {
-          const comQuestoes = json.data.filter((c: ConcursoOpcao) => c.total_questoes >= 5);
+          const comQuestoes = json.data.filter((c: ConcursoOpcao) => c.total_questoes >= 1);
           setConcursos(comQuestoes);
           setConfig((c) => ({
             ...c,
-            concurso: c.concurso || comQuestoes[0]?.sigla || "",
+            concurso: c.concurso || comQuestoes[0]?.sigla || "EEAR",
           }));
         }
       })
       .catch(() => undefined);
   }, []);
 
-  // ─── Matérias e anos do concurso escolhido ─────────────────
-  // Sem isto o modo "Por matéria" era propaganda enganosa: mandava o tipo
-  // 'materia' sem nenhum `materia_id`, e o servidor sorteava do concurso
-  // inteiro — o aluno escolhia "foco numa disciplina" e recebia mistura.
+  // ─── Matérias e Anos do Concurso ───────────────────────────
   useEffect(() => {
     if (!config.concurso) return;
     let cancelado = false;
@@ -186,8 +244,7 @@ function Simulado() {
         if (cancelado || !json.success) return;
         setMaterias(json.data.materias ?? []);
         setAnos(json.data.anos ?? []);
-        // Trocar de concurso invalida a matéria antes escolhida.
-        setConfig((c) => ({ ...c, materia_id: "", ano: "" }));
+        setConfig((c) => ({ ...c, materia_id: "", ano: "", variacao_id: "" }));
       })
       .catch(() => undefined);
 
@@ -196,7 +253,13 @@ function Simulado() {
     };
   }, [config.concurso]);
 
-  // ─── Iniciar ───────────────────────────────────────────────
+  // ─── Formato Oficial do Concurso Atual ─────────────────────
+  const formatoAtual: FormatoConcursoReal = obterFormatoConcurso(
+    config.concurso,
+    config.variacao_id
+  );
+
+  // ─── Iniciar Simulado ──────────────────────────────────────
   const iniciar = useCallback(async () => {
     if (!config.concurso || ocupado) return;
     setOcupado(true);
@@ -204,9 +267,19 @@ function Simulado() {
 
     const modo = MODOS.find((m) => m.tipo === config.tipo)!;
     const personalizado = config.tipo === "personalizado";
+    const oficial = config.tipo === "oficial";
 
-    const quantidade = personalizado ? config.total_questoes : modo.questoes;
-    const minutos = personalizado ? config.duracao_minutos : modo.minutos;
+    const quantidade = personalizado
+      ? config.total_questoes
+      : oficial
+      ? formatoAtual.questoes
+      : modo.questoes;
+
+    const minutos = personalizado
+      ? config.duracao_minutos
+      : oficial
+      ? formatoAtual.minutos
+      : modo.minutos;
 
     try {
       const res = await fetchWithAuth("/api/simulados/start", {
@@ -214,9 +287,14 @@ function Simulado() {
         body: JSON.stringify({
           concurso: config.concurso,
           tipo: modo.tipo,
+          variacao_id: config.variacao_id || undefined,
+          dificuldade_modo: config.dificuldade_modo,
+          dificuldade_proporcao:
+            config.dificuldade_modo === "custom"
+              ? config.dificuldade_proporcao
+              : undefined,
           total_questoes: quantidade,
           duracao_minutos: minutos,
-          // Só vão quando fazem sentido: o back trata ausência como "todas".
           ...(config.materia_id ? { materia_id: config.materia_id } : {}),
           ...(config.ano ? { ano: Number(config.ano) } : {}),
         }),
@@ -231,11 +309,12 @@ function Simulado() {
       setSimuladoId(json.data.simulado_id);
       setQuestoes(json.data.questoes);
       setDistribuicao(json.data.distribuicao ?? null);
+      setDistribuicaoDificuldade(json.data.distribuicao_dificuldade ?? null);
+      setFormatoInfo(json.data.formato_info ?? null);
       setSegundosRestantes(json.data.duracao_minutos * 60);
       setRespostas({});
       setIndice(0);
-      // O relógio da prova é o do servidor: é ele que vale se a página
-      // recarregar. Cai para o do cliente só se a resposta não trouxer.
+
       const iniciadoEm: string = json.data.iniciado_em ?? new Date().toISOString();
       inicioProva.current = new Date(iniciadoEm).getTime();
       gravarProvaSalva({
@@ -248,30 +327,19 @@ function Simulado() {
         duracaoMinutos: json.data.duracao_minutos,
       });
       setFase("prova");
-      // Sinaliza estudo real: o simulado está em andamento.
       window.dispatchEvent(new Event("batcaverna_study_activity"));
     } catch {
       setErro("Falha de conexão ao iniciar o simulado.");
     } finally {
       setOcupado(false);
     }
-  }, [config, ocupado]);
+  }, [config, ocupado, formatoAtual, userId]);
 
-  // ─── Início automático (?auto=1) ───────────────────────────
-  // O botão "Simulado rápido" do card do concurso cai aqui: o aluno pediu a
-  // prova lá, não faria sentido cair numa tela de configuração de novo.
-  // O ref garante que dispare uma única vez, mesmo com o catálogo chegando
-  // depois e re-renderizando a tela.
-  // ─── Retomar prova interrompida ────────────────────────────
-  // Roda ANTES do auto-start (ordem de declaração = ordem de execução dos
-  // efeitos), e o ref abaixo é o que impede o auto-start de montar uma
-  // prova nova por cima da que estava em andamento.
+  // ─── Retomar Prova Interrompida ────────────────────────────
   const restaurou = useRef(false);
   useEffect(() => {
     if (restaurou.current) return;
-    // Só espera pelo usuário; sem ele não dá para saber se a prova é dele.
     if (!userId) return;
-    // `lerProvaSalva` recusa (e apaga) a prova de outra conta.
     const salva = lerProvaSalva(userId);
     if (!salva) return;
     restaurou.current = true;
@@ -283,24 +351,16 @@ function Simulado() {
     setQuestoes(salva.questoes as any);
     setDistribuicao(null);
     setRespostas(salva.respostas ?? {});
-    // Volta para onde a pessoa parou. Antes era sempre 0: quem recarregava na
-    // questão 47 de 60 voltava para a primeira e navegava tudo de novo.
     setIndice(
       Math.min(Math.max(0, salva.indice ?? 0), Math.max(0, salva.questoes.length - 1))
     );
     inicioProva.current = new Date(salva.iniciadoEm).getTime();
-    // Tempo esgotado enquanto a aba estava fechada: entra com 1 s para o
-    // cronômetro entregar a prova pelo caminho normal, com o que foi
-    // respondido. Não devolve o tempo perdido — a prova real também não.
     setSegundosRestantes(Math.max(1, restante));
     setFase("prova");
-    // Sinaliza estudo real: retomada de prova em andamento.
     window.dispatchEvent(new Event("batcaverna_study_activity"));
   }, [userId]);
 
-  // Cada resposta marcada — e cada troca de questão — vai para o aparelho na
-  // hora. É pouco dado (um mapa id -> letra e um número), então não há por que
-  // adiar.
+  // ─── Persistência local contínua ───────────────────────────
   useEffect(() => {
     if (fase !== "prova" || !simuladoId) return;
     const salva = lerProvaSalva(userId);
@@ -308,6 +368,7 @@ function Simulado() {
     gravarProvaSalva({ ...salva, respostas, indice });
   }, [fase, simuladoId, respostas, indice, userId]);
 
+  // ─── Auto-Start (?auto=1) ──────────────────────────────────
   const autoDisparado = useRef(false);
   useEffect(() => {
     if (params.get("auto") !== "1") return;
@@ -317,11 +378,10 @@ function Simulado() {
     iniciar();
   }, [params, fase, config.concurso, iniciar]);
 
-  // ─── Finalizar ─────────────────────────────────────────────
+  // ─── Finalizar Prova ───────────────────────────────────────
   const finalizar = useCallback(async () => {
     if (!simuladoId || ocupado) return;
     setOcupado(true);
-    // Nova tentativa começa sem o erro da anterior na tela.
     setErro(null);
 
     const tempo = Math.round((Date.now() - inicioProva.current) / 1000);
@@ -334,13 +394,6 @@ function Simulado() {
       const json = await res.json();
 
       if (!json.success) {
-        // A cópia local não corresponde a nenhuma prova aberta do usuário: ou
-        // o servidor já a fechou (outra aba, outro aparelho), ou ela não
-        // existe / não é dele — a rota devolve 404 "Simulado não encontrado".
-        //
-        // Antes só o primeiro caso limpava, porque a comparação procurava a
-        // palavra "finalizado". No segundo, a prova morta era restaurada a
-        // cada visita e o aluno ficava preso nela sem saída.
         const jaEra =
           res.status === 404 ||
           /finalizad|não encontrad|nao encontrad/i.test(String(json.error ?? ""));
@@ -397,7 +450,6 @@ function Simulado() {
       setSegundosRestantes((s) => {
         if (s <= 1) {
           clearInterval(timer);
-          // Tempo esgotado entrega a prova como está — igual à prova real.
           finalizarRef.current();
           return 0;
         }
@@ -408,7 +460,7 @@ function Simulado() {
     return () => clearInterval(timer);
   }, [fase]);
 
-  // ─── Avisa antes de sair no meio da prova ──────────────────
+  // ─── Trava contra saída acidental ──────────────────────────
   useEffect(() => {
     if (fase !== "prova") return;
     const aviso = (e: BeforeUnloadEvent) => {
@@ -419,7 +471,9 @@ function Simulado() {
     return () => window.removeEventListener("beforeunload", aviso);
   }, [fase]);
 
-  // ═══════════ CONFIGURAÇÃO ═══════════
+  // ═════════════════════════════════════════════════════════════
+  // TELA DE CONFIGURAÇÃO DO SIMULADO
+  // ═════════════════════════════════════════════════════════════
   if (fase === "config") {
     const modo = MODOS.find((m) => m.tipo === config.tipo)!;
     const personalizado = config.tipo === "personalizado";
@@ -427,100 +481,180 @@ function Simulado() {
     const modoErros = config.tipo === "erros";
     const oficial = config.tipo === "oficial";
 
-    const formato = FORMATO_OFICIAL[config.concurso?.toUpperCase()];
     const qtd = personalizado
       ? config.total_questoes
-      : oficial && formato
-      ? formato.questoes
-      : modo.questoes;
+      : oficial
+      ? formatoAtual.questoes
+      : modo.questoes ?? 20;
+
     const min = personalizado
       ? config.duracao_minutos
-      : oficial && formato
-      ? formato.minutos
-      : modo.minutos;
+      : oficial
+      ? formatoAtual.minutos
+      : modo.minutos ?? 45;
 
-    // Quantas questões existem de fato no recorte escolhido. Prometer 45
-    // questões de uma matéria que só tem 12 é frustrar o aluno na largada.
     const materiaEscolhida = materias.find((m) => m.id === config.materia_id);
+    const concursoEscolhido = concursos.find((c) => c.sigla === config.concurso);
     const disponiveis = materiaEscolhida
       ? materiaEscolhida.total_questoes
-      : concursos.find((c) => c.sigla === config.concurso)?.total_questoes ?? 0;
-    // No modo "erros" o pool é a lista de erros do próprio aluno, não o
-    // banco do concurso: comparar com `disponiveis` daria um aviso falso.
-    const vaiFaltar = !modoErros && disponiveis > 0 && disponiveis < qtd;
+      : concursoEscolhido?.total_questoes ?? 0;
+
+    const vaiAdaptarEstoque = !modoErros && disponiveis > 0 && disponiveis < qtd;
 
     return (
-      <div className="mx-auto max-w-2xl">
-        <header className="mb-6">
-          <h1 className="heading text-3xl font-bold text-bat-text">Simulado</h1>
-          <p className="mt-1 text-sm text-bat-text-secondary">
-            Prova cronometrada com questões oficiais. O gabarito só aparece
-            depois que você entregar — como na prova de verdade.
+      <div className="mx-auto max-w-3xl space-y-6">
+        <header>
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-bat-gold-400/10 px-2.5 py-1 text-xs font-bold text-bat-gold-400 border border-bat-gold-400/20">
+              Ambiente de Prova Oficial
+            </span>
+            <span className="text-xs text-bat-text-muted">
+              Tempo Real & Gabarito Blindado
+            </span>
+          </div>
+          <h1 className="heading mt-2 text-3xl font-extrabold text-bat-text">
+            Simulado BatCaverna
+          </h1>
+          <p className="mt-1 text-sm text-bat-text-secondary leading-relaxed">
+            Treino fiel sob condições reais de prova. O gabarito, as resoluções
+            passo a passo e as estatísticas de desempenho ficam{" "}
+            <strong className="text-bat-text">100% ocultos</strong> durante a prova
+            e só aparecem após o término — exatamente como no dia do seu concurso.
           </p>
         </header>
 
         {erro && (
-          <div className="mb-4 rounded-xl border border-bat-error/30 bg-bat-error/10 px-4 py-3 text-sm text-bat-error">
+          <div className="rounded-xl border border-bat-error/30 bg-bat-error/10 px-4 py-3 text-sm text-bat-error">
             {erro}
           </div>
         )}
 
-        <div className="space-y-5 rounded-2xl border border-bat-border bg-bat-bg-card p-6">
+        <div className="space-y-6 rounded-2xl border border-bat-border bg-bat-bg-card p-6 shadow-sm">
+          {/* 1. SELEÇÃO DO CONCURSO */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-bat-text">
-              Concurso
+            <label className="mb-2 block text-sm font-semibold text-bat-text">
+              1. Escolha o Concurso Alvo
             </label>
             <select
               value={config.concurso}
               onChange={(e) => setConfig({ ...config, concurso: e.target.value })}
-              className="input-field"
+              className="input-field text-base font-medium"
             >
               {concursos.length === 0 && (
-                <option value="">Nenhum concurso com questões suficientes</option>
+                <option value="">Nenhum concurso disponível</option>
               )}
               {concursos.map((c) => (
                 <option key={c.id} value={c.sigla}>
-                  {c.emoji} {c.sigla} — {c.total_questoes.toLocaleString("pt-BR")} questões
+                  {c.emoji ?? "🎯"} {c.sigla} — {c.nome} ({c.total_questoes.toLocaleString("pt-BR")} questões no banco)
                 </option>
               ))}
             </select>
           </div>
 
+          {/* CARD DE DETALHES DO FORMATO REAL DO CONCURSO */}
+          <div className="rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-bat-gold-400/15 pb-2.5 mb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{concursoEscolhido?.emoji ?? "🏛️"}</span>
+                <div>
+                  <p className="text-sm font-bold text-bat-text">
+                    Formato Oficial: {formatoAtual.sigla}
+                  </p>
+                  <p className="text-[11px] text-bat-text-muted">
+                    {formatoAtual.nome}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="inline-block rounded-md bg-bat-gold-400/20 px-2 py-0.5 text-xs font-bold text-bat-gold-400">
+                  {formatoAtual.questoes} questões · {formatoAtual.duracaoHorasTexto}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-bat-text-secondary leading-relaxed">
+              {formatoAtual.detalhesEdital}
+            </p>
+
+            {formatoAtual.temRedacaoNaProvaReal && (
+              <p className="mt-2 text-[11px] font-medium text-bat-gold-400/90 flex items-center gap-1.5">
+                <span>✍️</span>
+                <span>
+                  <strong>Redação oficial descartada no simulado:</strong> foco
+                  100% nas questões objetivas sob a velocidade e tempo real da prova.
+                </span>
+              </p>
+            )}
+
+            {/* Variações de Prova (ex: ENEM 1º dia / 2º dia / CN) */}
+            {oficial && formatoAtual.variacoes && formatoAtual.variacoes.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-bat-gold-400/15">
+                <label className="mb-1.5 block text-xs font-semibold text-bat-text">
+                  Selecione o Dia ou Extensão da Prova:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {formatoAtual.variacoes.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setConfig({ ...config, variacao_id: v.id })}
+                      className={`cursor-pointer rounded-lg border p-2.5 text-left transition-all ${
+                        (config.variacao_id || formatoAtual.variacoes![0].id) === v.id
+                          ? "border-bat-gold-400 bg-bat-gold-400/15 text-bat-gold-400 font-bold"
+                          : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
+                      }`}
+                    >
+                      <p className="text-xs">{v.nome}</p>
+                      <p className="text-[10px] text-bat-text-muted mt-0.5">
+                        {v.questoes} questões · {Math.round(v.minutos / 60)}h
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2. MODO DO SIMULADO */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-bat-text">
-              Modo
+            <label className="mb-2 block text-sm font-semibold text-bat-text">
+              2. Modo de Treino
             </label>
             <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
               {MODOS.map((m) => (
                 <button
                   key={m.tipo}
+                  type="button"
                   onClick={() => setConfig({ ...config, tipo: m.tipo })}
-                  className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
+                  className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all relative ${
                     config.tipo === m.tipo
-                      ? "border-bat-gold-400/50 bg-bat-gold-400/10"
+                      ? "border-bat-gold-400/60 bg-bat-gold-400/10 ring-1 ring-bat-gold-400/40"
                       : "border-bat-border bg-bat-bg-secondary hover:border-bat-gold-400/25"
                   }`}
                 >
+                  {m.destaque && (
+                    <span className="absolute top-2 right-2 rounded-full bg-bat-gold-400/20 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-bat-gold-400">
+                      Oficial
+                    </span>
+                  )}
                   <p
-                    className={`text-sm font-bold ${
+                    className={`text-sm font-bold flex items-center gap-1.5 ${
                       config.tipo === m.tipo ? "text-bat-gold-400" : "text-bat-text"
                     }`}
                   >
-                    {m.rotulo}
+                    <span>{m.icone}</span>
+                    <span>{m.rotulo}</span>
                   </p>
-                  <p className="mt-0.5 text-[11px] text-bat-text-muted">{m.desc}</p>
-                  <p className="mt-1.5 text-[11px] text-bat-text-secondary">
+                  <p className="mt-1 text-[11px] text-bat-text-muted leading-tight">
+                    {m.desc}
+                  </p>
+                  <p className="mt-2 text-[11px] font-semibold text-bat-text-secondary">
                     {m.tipo === "personalizado"
                       ? "Você escolhe"
                       : m.tipo === "erros"
                       ? "Até 20 dos seus erros"
                       : m.tipo === "oficial"
-                      ? (() => {
-                          const f = FORMATO_OFICIAL[config.concurso?.toUpperCase()];
-                          return f
-                            ? `${f.questoes} questões · ${f.minutos} min`
-                            : "Formato da prova";
-                        })()
+                      ? `${formatoAtual.questoes} q · ${formatoAtual.duracaoHorasTexto}`
                       : `${m.questoes} questões · ${m.minutos} min`}
                   </p>
                 </button>
@@ -528,11 +662,196 @@ function Simulado() {
             </div>
           </div>
 
-          {/* ─── Matéria: obrigatória no modo "Por matéria", opcional no
-                  personalizado ─── */}
+          {/* 3. CALIBRAÇÃO DE DIFICULDADE (TOTALMENTE CONFIGURÁVEL) */}
+          <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/40 p-4">
+            <div className="flex items-baseline justify-between mb-2">
+              <label className="text-sm font-semibold text-bat-text">
+                3. Nível e Calibração de Dificuldade
+              </label>
+              <span className="text-[11px] text-bat-text-muted">
+                Configurável pelo aluno
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* BALANCEADO REAL (RECOMENDADO) */}
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, dificuldade_modo: "balanceado" })}
+                className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
+                  config.dificuldade_modo === "balanceado"
+                    ? "border-bat-gold-400/70 bg-bat-gold-400/15 ring-1 ring-bat-gold-400/50"
+                    : "border-bat-border bg-bat-bg-card hover:border-bat-gold-400/30"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-bat-gold-400">
+                    ⚖️ Balanceado Real da Prova
+                  </span>
+                  <span className="rounded-full bg-bat-gold-400/20 px-2 py-0.5 text-[9px] font-bold text-bat-gold-400">
+                    Padrão
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-snug">
+                  O sistema calibra realisticamente: ~30% Fáceis, ~50% Médias e ~20% Difíceis.
+                </p>
+                <div className="mt-2.5 flex items-center gap-2 text-[10px] font-semibold text-bat-text-muted">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span> Fácil
+                  </span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-amber-400"></span> Média
+                  </span>
+                  <span>·</span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-rose-400"></span> Difícil
+                  </span>
+                </div>
+                <p className="mt-2 text-[10px] text-bat-gold-400 font-medium">
+                  🛡️ Nunca coloca somente fáceis, médias ou difíceis.
+                </p>
+              </button>
+
+              {/* FOCO EM FÁCEIS */}
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, dificuldade_modo: "facil" })}
+                className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
+                  config.dificuldade_modo === "facil"
+                    ? "border-emerald-500/70 bg-emerald-500/15 ring-1 ring-emerald-500/50"
+                    : "border-bat-border bg-bat-bg-card hover:border-emerald-500/30"
+                }`}
+              >
+                <span className="text-sm font-bold text-emerald-400">
+                  🟢 Foco em Fáceis
+                </span>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-snug">
+                  Aquecimento e fixação. Prioriza velocidade, confiança e revisão de conceitos fundamentais.
+                </p>
+              </button>
+
+              {/* FOCO EM MÉDIAS */}
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, dificuldade_modo: "medio" })}
+                className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
+                  config.dificuldade_modo === "medio"
+                    ? "border-amber-500/70 bg-amber-500/15 ring-1 ring-amber-500/50"
+                    : "border-bat-border bg-bat-bg-card hover:border-amber-500/30"
+                }`}
+              >
+                <span className="text-sm font-bold text-amber-400">
+                  🟡 Foco em Médias
+                </span>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-snug">
+                  O miolo da prova. Questões típicas que definem o ponto de corte do concurso.
+                </p>
+              </button>
+
+              {/* FOCO EM DIFÍCEIS */}
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, dificuldade_modo: "dificil" })}
+                className={`cursor-pointer rounded-xl border p-3.5 text-left transition-all ${
+                  config.dificuldade_modo === "dificil"
+                    ? "border-rose-500/70 bg-rose-500/15 ring-1 ring-rose-500/50"
+                    : "border-bat-border bg-bat-bg-card hover:border-rose-500/30"
+                }`}
+              >
+                <span className="text-sm font-bold text-rose-400">
+                  🔴 Foco em Difíceis / Aprofundamento
+                </span>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-snug">
+                  Nível de desempate. Questões complexas para disputar os primeiros lugares.
+                </p>
+              </button>
+            </div>
+
+            {/* CONTROLE PERSONALIZADO DE PROPORÇÕES */}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setConfig({
+                    ...config,
+                    dificuldade_modo:
+                      config.dificuldade_modo === "custom" ? "balanceado" : "custom",
+                  })
+                }
+                className="text-xs text-bat-gold-400 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+              >
+                <span>🎛️</span>
+                {config.dificuldade_modo === "custom"
+                  ? "Fechar dosagem manual (voltar ao balanceamento recomendado)"
+                  : "Deseja dosar as porcentagens manualmente? Toque aqui"}
+              </button>
+
+              {config.dificuldade_modo === "custom" && (
+                <div className="mt-3 rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/5 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-bat-text">
+                    Defina a proporção desejada (o sistema normalizará as vagas):
+                  </p>
+                  <Ajuste
+                    rotulo="🟢 Porcentagem de Fáceis"
+                    valor={config.dificuldade_proporcao.facil}
+                    minimo={0}
+                    maximo={100}
+                    passo={5}
+                    sufixo="%"
+                    onChange={(v) =>
+                      setConfig({
+                        ...config,
+                        dificuldade_proporcao: {
+                          ...config.dificuldade_proporcao,
+                          facil: v,
+                        },
+                      })
+                    }
+                  />
+                  <Ajuste
+                    rotulo="🟡 Porcentagem de Médias"
+                    valor={config.dificuldade_proporcao.medio}
+                    minimo={0}
+                    maximo={100}
+                    passo={5}
+                    sufixo="%"
+                    onChange={(v) =>
+                      setConfig({
+                        ...config,
+                        dificuldade_proporcao: {
+                          ...config.dificuldade_proporcao,
+                          medio: v,
+                        },
+                      })
+                    }
+                  />
+                  <Ajuste
+                    rotulo="🔴 Porcentagem de Difíceis"
+                    valor={config.dificuldade_proporcao.dificil}
+                    minimo={0}
+                    maximo={100}
+                    passo={5}
+                    sufixo="%"
+                    onChange={(v) =>
+                      setConfig({
+                        ...config,
+                        dificuldade_proporcao: {
+                          ...config.dificuldade_proporcao,
+                          dificil: v,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* MATÉRIA (PARA MODO MATÉRIA OU PERSONALIZADO) */}
           {(porMateria || personalizado) && (
             <div>
-              <label className="mb-2 block text-sm font-medium text-bat-text">
+              <label className="mb-2 block text-sm font-semibold text-bat-text">
                 Matéria{" "}
                 {personalizado && (
                   <span className="font-normal text-bat-text-muted">
@@ -559,20 +878,14 @@ function Simulado() {
                   </option>
                 ))}
               </select>
-              {porMateria && !config.materia_id && (
-                <p className="mt-1.5 text-[11px] text-bat-warning">
-                  Escolha uma matéria — sem isso a prova sai com todas
-                  misturadas e o treino perde o foco.
-                </p>
-              )}
             </div>
           )}
 
-          {/* ─── Ajustes finos ─── */}
+          {/* AJUSTES FINOS (MODO PERSONALIZADO) */}
           {personalizado && (
             <div className="space-y-4 rounded-xl border border-bat-gold-400/20 bg-bat-gold-400/5 p-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-bat-text">
+                <label className="mb-2 block text-sm font-semibold text-bat-text">
                   Ano da prova{" "}
                   <span className="font-normal text-bat-text-muted">
                     (opcional)
@@ -614,64 +927,35 @@ function Simulado() {
             </div>
           )}
 
-          {modoErros && (
-            <div className="rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
-              🎯 A prova é montada só com questões que você{" "}
-              <strong className="text-bat-gold-400">errou e ainda não refez</strong>.
-              É o treino de maior rendimento que existe aqui — e o que quase
-              ninguém faz sozinho, porque dói mais que resolver questão nova.
-              Acertar aqui tira a questão da sua fila.
-            </div>
-          )}
-
-          {oficial && (
-            <div className="rounded-xl border border-bat-info/25 bg-bat-info/5 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
-              {formato ? (
-                <>
-                  📋 Formato real do {config.concurso}:{" "}
-                  <strong className="text-bat-text">{formato.questoes} questões</strong>{" "}
-                  em <strong className="text-bat-text">{Math.round(formato.minutos / 60)} horas</strong>.
-                  Treinar no formato errado ensina um ritmo que não serve no dia
-                  da prova.
-                </>
-              ) : (
-                <>
-                  📋 Ainda não tenho o formato oficial deste concurso cadastrado.
-                  A prova sai no preset genérico — se você tiver o edital com a
-                  quantidade de questões e a duração, me passe que eu cadastro.
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/50 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
+          {/* RESUMO DOS PARÂMETROS DE EXECUÇÃO */}
+          <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/60 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
             ⏱️ Você terá <strong className="text-bat-gold-400">{min} minutos</strong>{" "}
-            para {qtd} questões — cerca de {Math.round((min * 60) / qtd)} segundos
-            por questão. Quando o tempo acabar, a prova é entregue
-            automaticamente.
-            {vaiFaltar && (
-              <span className="mt-2 block text-bat-warning">
-                ⚠️ Este recorte tem {disponiveis.toLocaleString("pt-BR")} questões
-                cadastradas. A prova virá com {disponiveis} em vez de {qtd}.
+            para resolver <strong>{qtd} questões</strong> — média de{" "}
+            <strong>{Math.round((min * 60) / qtd)} segundos</strong> por questão.
+            Quando o tempo acabar, a prova é entregue automaticamente.
+            {vaiAdaptarEstoque && (
+              <span className="mt-2 block text-bat-warning font-medium">
+                ⚠️ O banco de questões possui {disponiveis.toLocaleString("pt-BR")} questões
+                neste momento. O simulado será montado com todas as {disponiveis} disponíveis.
               </span>
             )}
           </div>
 
           <button
             onClick={iniciar}
-            disabled={
-              !config.concurso || ocupado || (porMateria && !config.materia_id)
-            }
-            className="btn-primary w-full py-3.5 disabled:opacity-40"
+            disabled={!config.concurso || ocupado || (porMateria && !config.materia_id)}
+            className="btn-primary w-full py-4 text-base font-bold disabled:opacity-40 cursor-pointer shadow-md"
           >
-            {ocupado ? "Montando a prova..." : "Iniciar simulado →"}
+            {ocupado ? "Montando prova oficial..." : "Iniciar simulado agora →"}
           </button>
         </div>
       </div>
     );
   }
 
-  // ═══════════ PROVA ═══════════
+  // ═════════════════════════════════════════════════════════════
+  // TELA DE EXECUÇÃO DA PROVA (CONDIÇÃO REAL: GABARITO OCULTO)
+  // ═════════════════════════════════════════════════════════════
   if (fase === "prova") {
     const q = questoes[indice];
     if (!q) return null;
@@ -681,11 +965,6 @@ function Simulado() {
 
     return (
       <div className="mx-auto max-w-3xl">
-        {/* Falha ao entregar.
-            O bloco de erro só existia na tela de configuração. Uma queda de
-            rede na hora de entregar não mostrava NADA: o botão voltava a ficar
-            clicável e o aluno concluía que estava quebrado — depois de 60
-            questões. É o pior momento possível para um erro mudo. */}
         {erro && (
           <div
             role="alert"
@@ -699,34 +978,44 @@ function Simulado() {
           </div>
         )}
 
-        {/* Como a banca reparte a prova.
-            Só aparece no "Formato da banca", e some depois da primeira
-            questão respondida — é informação de largada, não de percurso. */}
-        {distribuicao && distribuicao.length > 0 && respondidas === 0 && (
+        {/* Resumo da distribuição do simulado na primeira questão */}
+        {respondidas === 0 && (distribuicao || distribuicaoDificuldade) && (
           <div className="mb-4 rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3">
-            <p className="mb-2 text-xs font-bold text-bat-gold-400">
-              📐 Esta prova está repartida como a da banca
+            <p className="mb-1.5 text-xs font-bold text-bat-gold-400 flex items-center gap-1.5">
+              <span>🏛️</span>
+              <span>Prova Calibrada Oficial ({questoes.length} questões)</span>
             </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {distribuicao.map((d) => (
-                <span key={d.materia} className="text-xs text-bat-text-secondary">
-                  {d.materia}{" "}
-                  <strong className="text-bat-text">{d.questoes}</strong>
+            {distribuicao && distribuicao.length > 0 && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mb-1.5">
+                {distribuicao.map((d) => (
+                  <span key={d.materia} className="text-xs text-bat-text-secondary">
+                    {d.materia}: <strong className="text-bat-text">{d.questoes}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+            {distribuicaoDificuldade && (
+              <div className="flex items-center gap-3 text-[11px] text-bat-text-muted pt-1 border-t border-bat-gold-400/15">
+                <span>🟢 {distribuicaoDificuldade.facil} Fáceis</span>
+                <span>🟡 {distribuicaoDificuldade.medio} Médias</span>
+                <span>🔴 {distribuicaoDificuldade.dificil} Difíceis</span>
+                <span className="text-bat-gold-400/90 font-medium ml-auto">
+                  Gabarito 100% blindado
                 </span>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Barra fixa: cronômetro + progresso */}
+        {/* BARRA SUPERIOR FIXA: CRONÔMETRO + NAVEGAÇÃO */}
         <div className="sticky top-16 z-20 mb-5 rounded-2xl border border-bat-border bg-bat-bg-card/95 p-4 backdrop-blur-md lg:top-0">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs text-bat-text-muted">
                 Questão {indice + 1} de {questoes.length}
               </p>
-              <p className="text-sm font-medium text-bat-text">
-                {respondidas} respondida{respondidas !== 1 ? "s" : ""}
+              <p className="text-sm font-semibold text-bat-text">
+                {respondidas} de {questoes.length} respondida{respondidas !== 1 ? "s" : ""}
               </p>
             </div>
 
@@ -750,37 +1039,46 @@ function Simulado() {
             </div>
           </div>
 
-          {/* Mapa de questões */}
-          <div className="flex flex-wrap gap-1.5">
-            {questoes.map((qq, i) => (
-              <button
-                key={qq.id}
-                onClick={() => setIndice(i)}
-                className={`h-7 w-7 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
-                  i === indice
-                    ? "bg-bat-gold-400 text-black"
-                    : respostas[qq.id]
-                    ? "bg-bat-success/20 text-bat-success"
-                    : "bg-bat-bg-secondary text-bat-text-muted hover:bg-bat-bg-elevated"
-                }`}
-                aria-label={`Ir para a questão ${i + 1}`}
-              >
-                {i + 1}
-              </button>
-            ))}
+          {/* MAPA DE QUESTÕES (SEM REVELAR ACERTO/ERRO) */}
+          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+            {questoes.map((qq, i) => {
+              const respondida = !!respostas[qq.id];
+              const ativa = i === indice;
+              return (
+                <button
+                  key={qq.id}
+                  onClick={() => setIndice(i)}
+                  className={`h-7 w-7 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
+                    ativa
+                      ? "bg-bat-gold-400 text-black shadow"
+                      : respondida
+                      ? "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40"
+                      : "bg-bat-bg-secondary text-bat-text-muted hover:bg-bat-bg-elevated"
+                  }`}
+                  aria-label={`Ir para a questão ${i + 1}`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Questão */}
-        <article className="rounded-2xl border border-bat-border bg-bat-bg-card p-5 sm:p-6">
+        {/* QUESTÃO ATUAL */}
+        <article className="rounded-2xl border border-bat-border bg-bat-bg-card p-5 sm:p-6 shadow-sm">
           <header className="mb-4 flex flex-wrap items-center gap-2 border-b border-bat-border/60 pb-3">
             <span className="rounded-lg border border-bat-gold-400/20 bg-bat-gold-400/10 px-2.5 py-1 text-xs font-bold text-bat-gold-400">
               {q.concursos?.emoji} {q.concursos?.sigla}
               {q.ano ? ` — ${q.ano}` : ""}
             </span>
             {q.materias?.nome && (
-              <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-1 text-xs text-bat-text-muted">
+              <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-1 text-xs font-medium text-bat-text-secondary">
                 {q.materias.icone_emoji} {q.materias.nome}
+              </span>
+            )}
+            {q.assuntos?.nome && (
+              <span className="rounded-lg bg-bat-bg-secondary/60 px-2.5 py-1 text-xs text-bat-text-muted">
+                {q.assuntos.nome}
               </span>
             )}
           </header>
@@ -808,7 +1106,7 @@ function Simulado() {
             );
           })()}
 
-          <p className="mb-6 whitespace-pre-line text-base leading-relaxed text-bat-text">
+          <p className="mb-6 whitespace-pre-line text-base leading-relaxed text-bat-text font-normal">
             <MathText>{q.enunciado}</MathText>
           </p>
 
@@ -820,7 +1118,6 @@ function Simulado() {
                   key={alt.letra}
                   onClick={() =>
                     setRespostas((r) =>
-                      // Clicar de novo desmarca: permite deixar em branco.
                       r[q.id] === alt.letra
                         ? Object.fromEntries(
                             Object.entries(r).filter(([k]) => k !== q.id)
@@ -828,9 +1125,9 @@ function Simulado() {
                         : { ...r, [q.id]: alt.letra }
                     )
                   }
-                  className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                  className={`flex w-full cursor-pointer items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-all ${
                     marcada
-                      ? "border-bat-gold-400/45 bg-bat-gold-400/10 font-medium text-bat-gold-400"
+                      ? "border-bat-gold-400/60 bg-bat-gold-400/15 font-semibold text-bat-gold-400 ring-1 ring-bat-gold-400/40"
                       : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
                   }`}
                 >
@@ -841,18 +1138,18 @@ function Simulado() {
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={() => setIndice((i) => Math.max(0, i - 1))}
               disabled={indice === 0}
-              className="btn-secondary px-5 py-2.5 disabled:opacity-30"
+              className="btn-secondary px-5 py-2.5 disabled:opacity-30 cursor-pointer"
             >
               ← Anterior
             </button>
             <button
               onClick={() => setIndice((i) => Math.min(questoes.length - 1, i + 1))}
               disabled={indice >= questoes.length - 1}
-              className="btn-secondary px-5 py-2.5 disabled:opacity-30"
+              className="btn-secondary px-5 py-2.5 disabled:opacity-30 cursor-pointer"
             >
               Próxima →
             </button>
@@ -860,12 +1157,12 @@ function Simulado() {
               onClick={() => {
                 const faltam = questoes.length - Object.keys(respostas).length;
                 const msg = faltam
-                  ? `Você deixou ${faltam} questão(ões) em branco. Entregar mesmo assim?`
-                  : "Entregar o simulado e ver o resultado?";
+                  ? `Você deixou ${faltam} questão(ões) em branco. Deseja entregar o simulado agora e acessar seu resultado?`
+                  : "Deseja finalizar o simulado e acessar seu resultado oficial?";
                 if (confirm(msg)) finalizar();
               }}
               disabled={ocupado}
-              className="btn-primary ml-auto px-6 py-2.5 disabled:opacity-40"
+              className="btn-primary ml-auto px-6 py-2.5 disabled:opacity-40 cursor-pointer font-bold"
             >
               {ocupado ? "Corrigindo..." : "Entregar prova"}
             </button>
@@ -875,38 +1172,67 @@ function Simulado() {
     );
   }
 
-  // ═══════════ RESULTADO ═══════════
+  // ═════════════════════════════════════════════════════════════
+  // TELA DE RESULTADO (REVELADA SOMENTE APÓS O TÉRMINO)
+  // ═════════════════════════════════════════════════════════════
   if (!resultado) return null;
 
   const aproveitamento = resultado.pontuacao;
   const corNota =
     aproveitamento >= 70 ? "#22C55E" : aproveitamento >= 50 ? "#F5C518" : "#EF4444";
 
+  const refCorte = resultado.referencia_corte;
+  const passouCorte = refCorte ? aproveitamento >= refCorte.percentual : null;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      {/* Placar */}
-      <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-6 text-center">
-        <p className="mb-1 text-sm text-bat-text-muted">Resultado do simulado</p>
-        <p className="heading text-5xl font-extrabold" style={{ color: corNota }}>
-          {resultado.acertos}
-          <span className="text-2xl text-bat-text-muted">/{resultado.total_questoes}</span>
+      {/* PLACAR PRINCIPAL */}
+      <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-6 text-center shadow-sm">
+        <p className="mb-1 text-sm font-semibold uppercase tracking-wider text-bat-text-muted">
+          Resultado Oficial do Simulado
         </p>
-        <p className="mt-1 text-lg font-bold" style={{ color: corNota }}>
+        <p className="heading text-6xl font-extrabold" style={{ color: corNota }}>
+          {resultado.acertos}
+          <span className="text-2xl text-bat-text-muted font-normal">
+            /{resultado.total_questoes}
+          </span>
+        </p>
+        <p className="mt-1 text-xl font-bold" style={{ color: corNota }}>
           {aproveitamento}% de aproveitamento
         </p>
+
+        {/* COMPARATIVO COM A NOTA DE CORTE HISTÓRICA DO CONCURSO */}
+        {refCorte && (
+          <div className="mt-4 inline-block rounded-xl border border-bat-border bg-bat-bg-secondary/60 px-4 py-2.5 text-xs text-bat-text-secondary max-w-md mx-auto">
+            <p className="font-semibold text-bat-text">
+              {passouCorte ? (
+                <span className="text-emerald-400">
+                  🎉 Desempenho Competitivo para Aprovação!
+                </span>
+              ) : (
+                <span className="text-amber-400">
+                  ⚠️ Abaixo da Faixa Histórica de Aprovação
+                </span>
+              )}
+            </p>
+            <p className="mt-0.5 text-[11px] text-bat-text-muted">
+              Corte de referência: ~{refCorte.percentual}% ({refCorte.nota})
+            </p>
+          </div>
+        )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Mini rotulo="Acertos" valor={String(resultado.acertos)} cor="#22C55E" />
           <Mini rotulo="Erros" valor={String(resultado.erros)} cor="#EF4444" />
           <Mini rotulo="Em branco" valor={String(resultado.em_branco)} />
           <Mini
-            rotulo="Tempo"
+            rotulo="Tempo de prova"
             valor={formatarCronometro(resultado.tempo_gasto_segundos)}
           />
         </div>
 
-        <p className="mt-4 inline-block rounded-lg border border-bat-gold-400/25 bg-bat-gold-400/10 px-3 py-1.5 text-sm font-bold text-bat-gold-400">
-          +{resultado.xp_ganho} XP
+        <p className="mt-4 inline-block rounded-lg border border-bat-gold-400/25 bg-bat-gold-400/10 px-3.5 py-1.5 text-sm font-bold text-bat-gold-400">
+          +{resultado.xp_ganho} XP Conquistados
         </p>
 
         {resultado.badges_novas.length > 0 && (
@@ -936,7 +1262,7 @@ function Simulado() {
               setResultado(null);
               setSimuladoId(null);
             }}
-            className="btn-primary px-6 py-3"
+            className="btn-primary px-6 py-3 cursor-pointer font-bold"
           >
             Fazer outro simulado
           </button>
@@ -946,12 +1272,92 @@ function Simulado() {
         </div>
       </div>
 
-      {/* Revisão questão a questão */}
+      {/* DESEMPENHO POR DIFICULDADE (REVELADO APÓS O FIM) */}
+      {resultado.desempenho_dificuldade && (
+        <section className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
+          <h2 className="heading mb-1 text-lg font-bold text-bat-text">
+            Desempenho por Dificuldade
+          </h2>
+          <p className="mb-4 text-xs text-bat-text-muted">
+            Veja sua precisão em cada nível de complexidade das questões deste simulado.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {resultado.desempenho_dificuldade.map((d) => {
+              const cor =
+                d.chave === "facil"
+                  ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                  : d.chave === "medio"
+                  ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                  : "text-rose-400 border-rose-500/30 bg-rose-500/10";
+
+              return (
+                <div
+                  key={d.chave}
+                  className={`rounded-xl border p-3.5 text-center ${cor}`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wider">
+                    {d.tipo}
+                  </p>
+                  <p className="heading text-2xl font-extrabold mt-1">
+                    {d.acertos}/{d.total}
+                  </p>
+                  <p className="text-xs font-semibold mt-0.5 opacity-90">
+                    {d.taxa}% de acertos
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* DESEMPENHO POR MATÉRIA */}
+      {resultado.desempenho_materias && resultado.desempenho_materias.length > 0 && (
+        <section className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
+          <h2 className="heading mb-1 text-lg font-bold text-bat-text">
+            Desempenho por Disciplina
+          </h2>
+          <p className="mb-4 text-xs text-bat-text-muted">
+            Distribuição de aproveitamento pelas matérias cobradas na prova.
+          </p>
+
+          <div className="space-y-3">
+            {resultado.desempenho_materias.map((m) => (
+              <div key={m.materia_id} className="space-y-1">
+                <div className="flex justify-between text-xs font-medium">
+                  <span className="text-bat-text flex items-center gap-1.5">
+                    <span>{m.emoji ?? "📖"}</span>
+                    <span>{m.nome}</span>
+                  </span>
+                  <span className="text-bat-text-secondary">
+                    {m.acertos}/{m.total} ({m.taxa}%)
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-bat-bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${m.taxa}%`,
+                      backgroundColor:
+                        m.taxa >= 70 ? "#22C55E" : m.taxa >= 50 ? "#F5C518" : "#EF4444",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* REVISÃO COMPLETA QUESTÃO A QUESTÃO */}
       <section className="rounded-2xl border border-bat-border bg-bat-bg-card p-5">
-        <h2 className="heading mb-1 text-lg text-bat-text">Revisão da prova</h2>
+        <h2 className="heading mb-1 text-lg font-bold text-bat-text">
+          Revisão da Prova e Gabarito Comentado
+        </h2>
         <p className="mb-4 text-xs text-bat-text-muted">
-          Toque numa questão para abrir a resolução. Revisar os erros logo após
-          a prova é onde o simulado vira aprendizado.
+          Toque em uma questão para abrir o gabarito oficial, os passos de resolução
+          e a explicação detalhada.
         </p>
 
         <div className="mb-4 flex flex-wrap gap-1.5">
@@ -960,9 +1366,7 @@ function Simulado() {
               key={d.questao_id}
               onClick={() => setRevisando(revisando === i ? null : i)}
               className={`h-8 w-8 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
-                revisando === i
-                  ? "ring-2 ring-bat-gold-400"
-                  : ""
+                revisando === i ? "ring-2 ring-bat-gold-400" : ""
               } ${
                 d.correta
                   ? "bg-bat-success/20 text-bat-success"
@@ -970,9 +1374,7 @@ function Simulado() {
                   ? "bg-bat-error/20 text-bat-error"
                   : "bg-bat-bg-secondary text-bat-text-muted"
               }`}
-              title={
-                d.correta ? "Acertou" : d.resposta_dada ? "Errou" : "Em branco"
-              }
+              title={d.correta ? "Acertou" : d.resposta_dada ? "Errou" : "Em branco"}
             >
               {i + 1}
             </button>
@@ -981,12 +1383,26 @@ function Simulado() {
 
         {revisando !== null && resultado.detalhes[revisando] && (
           <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/40 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="rounded bg-bat-gold-400/20 px-2 py-0.5 text-xs font-bold text-bat-gold-400">
+                Questão {revisando + 1}
+              </span>
+              {resultado.detalhes[revisando].materia_nome && (
+                <span className="text-xs text-bat-text-muted">
+                  {resultado.detalhes[revisando].materia_nome}
+                </span>
+              )}
+              {resultado.detalhes[revisando].dificuldade && (
+                <span className="text-[11px] font-medium text-bat-text-muted ml-auto uppercase">
+                  Nível: {resultado.detalhes[revisando].dificuldade}
+                </span>
+              )}
+            </div>
+
             <p className="mb-3 whitespace-pre-line text-sm leading-relaxed text-bat-text">
-              <strong className="text-bat-gold-400">
-                Questão {revisando + 1}.
-              </strong>{" "}
               <MathText>{resultado.detalhes[revisando].enunciado}</MathText>
             </p>
+
             <ResolucaoGabarito
               respostaCorreta={resultado.detalhes[revisando].resposta_correta}
               explicacao={resultado.detalhes[revisando].explicacao}
@@ -1001,7 +1417,6 @@ function Simulado() {
   );
 }
 
-/** Deslizador + número, para os ajustes do modo personalizado. */
 function Ajuste({
   rotulo,
   valor,

@@ -3,15 +3,17 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 import { conferirBadges, avaliarStreak } from '@/lib/gamificacao';
+import { REFERENCIA_APROVACAO } from '@/lib/distribuicao-prova';
 
 /**
  * POST /api/simulados/[id]/finalizar
  * Body: { respostas: { "<questao_id>": "B", ... }, tempo_gasto_segundos?: number }
  *
- * Além de corrigir, agora grava cada resposta em `user_questao_respostas` e
- * atualiza as estatísticas por matéria. Antes, o que era respondido em
- * simulado não contava em lugar nenhum: o aluno fazia 45 questões e o
- * perfil continuava dizendo que ele não tinha respondido nada.
+ * Corrige o simulado e consolida todo o desempenho (por matéria, por dificuldade,
+ * histórico do usuário, XP e streak).
+ *
+ * Todas essas métricas de desempenho SÓ são calculadas e reveladas agora,
+ * após o término oficial da prova.
  */
 export async function POST(
   req: NextRequest,
@@ -36,7 +38,7 @@ export async function POST(
 
     const { data: simulado, error: sErr } = await supabase
       .from('simulados')
-      .select('*')
+      .select('*, concursos (sigla, nome)')
       .eq('id', simuladoId)
       .eq('user_id', user.id)
       .single();
@@ -60,7 +62,8 @@ export async function POST(
       .from('questoes')
       .select(
         `id, resposta_correta, explicacao, resolucao_passos, figura_descricao,
-         materia_id, concurso_id, enunciado`
+         materia_id, concurso_id, enunciado, dificuldade,
+         materias (id, nome, icone_emoji)`
       )
       .in('id', simulado.questoes_ids);
 
@@ -71,23 +74,53 @@ export async function POST(
       );
     }
 
-    // ─── Correção ────────────────────────────────────────────
+    // ─── Correção e Consolidação de Desempenho ──────────────
     const total = simulado.total_questoes || gabarito.length;
     const tempoPorQuestao = total > 0 ? Math.round(tempoGasto / total) : 0;
 
     let acertos = 0;
     const detalhes = [];
     const linhasHistorico = [];
-    const porMateria: Record<string, { total: number; acertos: number }> = {};
+
+    const statsMateriaMap: Record<
+      string,
+      { nome: string; emoji: string | null; total: number; acertos: number }
+    > = {};
+
+    const statsDificuldade: Record<string, { total: number; acertos: number }> = {
+      facil: { total: 0, acertos: 0 },
+      medio: { total: 0, acertos: 0 },
+      dificil: { total: 0, acertos: 0 },
+    };
 
     for (const q of gabarito) {
       const dada = (respostas[q.id] ?? '').trim().toUpperCase();
       const correta = !!dada && dada === q.resposta_correta.trim().toUpperCase();
       if (correta) acertos++;
 
+      const diff = q.dificuldade === 'facil' || q.dificuldade === 'dificil' ? q.dificuldade : 'medio';
+      statsDificuldade[diff].total += 1;
+      if (correta) statsDificuldade[diff].acertos += 1;
+
+      const mat = q.materias as any;
+      if (q.materia_id && mat) {
+        if (!statsMateriaMap[q.materia_id]) {
+          statsMateriaMap[q.materia_id] = {
+            nome: mat.nome,
+            emoji: mat.icone_emoji,
+            total: 0,
+            acertos: 0,
+          };
+        }
+        statsMateriaMap[q.materia_id].total += 1;
+        if (correta) statsMateriaMap[q.materia_id].acertos += 1;
+      }
+
       detalhes.push({
         questao_id: q.id,
         enunciado: q.enunciado,
+        dificuldade: diff,
+        materia_nome: mat?.nome ?? null,
         resposta_dada: dada || null,
         resposta_correta: q.resposta_correta,
         correta,
@@ -96,7 +129,7 @@ export async function POST(
         figura_descricao: q.figura_descricao,
       });
 
-      // Questão em branco não vira histórico — o aluno não respondeu.
+      // Questão respondida vai para histórico do aluno
       if (dada) {
         linhasHistorico.push({
           user_id: user.id,
@@ -104,20 +137,13 @@ export async function POST(
           resposta_dada: dada.slice(0, 2),
           correta,
           tempo_gasto_segundos: tempoPorQuestao,
-          combo_no_momento: 0, // simulado não alimenta o combo do banco de questões
+          combo_no_momento: 0,
         });
-
-        if (q.materia_id) {
-          porMateria[q.materia_id] ??= { total: 0, acertos: 0 };
-          porMateria[q.materia_id].total += 1;
-          if (correta) porMateria[q.materia_id].acertos += 1;
-        }
       }
     }
 
     const respondidas = linhasHistorico.length;
     const pontuacao = total > 0 ? Number(((acertos / total) * 100).toFixed(1)) : 0;
-    // 20 XP por acerto + 50 de bônus por concluir a prova inteira
     const xpGanho = acertos * 20 + 50;
 
     // ─── Persistência ────────────────────────────────────────
@@ -152,11 +178,6 @@ export async function POST(
     const nivelAntes = calcularNivel(xpAntes);
     const nivelDepois = calcularNivel(xpDepois);
 
-    // Antes, este bloco gravava `ultimo_dia_estudado = hoje` mas NÃO mexia
-    // em `streak_dias`. O efeito era pior que não contar: no dia seguinte,
-    // o cálculo do streak em /questoes/responder via que o aluno "já tinha
-    // estudado hoje" e devolvia o streak parado. Fazer simulado congelava a
-    // corrente de dias.
     const hoje = new Date().toISOString().slice(0, 10);
     const resStreak = avaliarStreak({
       ultimoDiaEstudado: dadosUser?.ultimo_dia_estudado ?? null,
@@ -185,8 +206,8 @@ export async function POST(
       })
       .eq('id', user.id);
 
-    // Estatística por matéria
-    for (const [materiaId, v] of Object.entries(porMateria)) {
+    // Atualiza estatísticas por matéria
+    for (const [materiaId, v] of Object.entries(statsMateriaMap)) {
       const { data: stat } = await supabase
         .from('user_materia_stats')
         .select('questoes_respondidas, acertos, tempo_segundos')
@@ -202,8 +223,7 @@ export async function POST(
           concurso_id: simulado.concurso_id,
           questoes_respondidas: (stat?.questoes_respondidas ?? 0) + v.total,
           acertos: (stat?.acertos ?? 0) + v.acertos,
-          tempo_segundos:
-            (stat?.tempo_segundos ?? 0) + tempoPorQuestao * v.total,
+          tempo_segundos: (stat?.tempo_segundos ?? 0) + tempoPorQuestao * v.total,
           atualizado_em: new Date().toISOString(),
         },
         { onConflict: 'user_id,materia_id,concurso_id' }
@@ -215,14 +235,57 @@ export async function POST(
       total_questoes_respondidas:
         (dadosUser?.total_questoes_respondidas ?? 0) + respondidas,
       maior_combo_pessoal: dadosUser?.maior_combo_pessoal ?? 0,
-      // O streak recém-calculado, não o antigo: a insígnia de corrente de
-      // dias tem de poder cair no mesmo simulado que fechou a corrente.
       streak_dias: streak,
       tempo_estudo_total_segundos: dadosUser?.tempo_estudo_total_segundos ?? 0,
       usou_escudo: false,
       escudos_restantes: dadosUser?.escudos_streak ?? 0,
       era_revisao: false,
     });
+
+    const siglaConcurso = (simulado.concursos as any)?.sigla?.toUpperCase();
+    const referenciaCorte = siglaConcurso ? REFERENCIA_APROVACAO[siglaConcurso] ?? null : null;
+
+    const desempenhoDificuldade = [
+      {
+        tipo: 'Fácil',
+        chave: 'facil',
+        total: statsDificuldade.facil.total,
+        acertos: statsDificuldade.facil.acertos,
+        taxa:
+          statsDificuldade.facil.total > 0
+            ? Math.round((statsDificuldade.facil.acertos / statsDificuldade.facil.total) * 100)
+            : 0,
+      },
+      {
+        tipo: 'Média',
+        chave: 'medio',
+        total: statsDificuldade.medio.total,
+        acertos: statsDificuldade.medio.acertos,
+        taxa:
+          statsDificuldade.medio.total > 0
+            ? Math.round((statsDificuldade.medio.acertos / statsDificuldade.medio.total) * 100)
+            : 0,
+      },
+      {
+        tipo: 'Difícil',
+        chave: 'dificil',
+        total: statsDificuldade.dificil.total,
+        acertos: statsDificuldade.dificil.acertos,
+        taxa:
+          statsDificuldade.dificil.total > 0
+            ? Math.round((statsDificuldade.dificil.acertos / statsDificuldade.dificil.total) * 100)
+            : 0,
+      },
+    ];
+
+    const desempenhoMaterias = Object.entries(statsMateriaMap).map(([id, val]) => ({
+      materia_id: id,
+      nome: val.nome,
+      emoji: val.emoji,
+      total: val.total,
+      acertos: val.acertos,
+      taxa: val.total > 0 ? Math.round((val.acertos / val.total) * 100) : 0,
+    })).sort((a, b) => b.total - a.total);
 
     return NextResponse.json({
       success: true,
@@ -240,6 +303,9 @@ export async function POST(
         nivel: nivelDepois,
         subiu_nivel: nivelDepois.nivel > nivelAntes.nivel,
         badges_novas: badgesNovas,
+        desempenho_dificuldade: desempenhoDificuldade,
+        desempenho_materias: desempenhoMaterias,
+        referencia_corte: referenciaCorte,
         detalhes,
       },
     });

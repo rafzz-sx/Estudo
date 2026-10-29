@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.6.0';
+export const CURRENT_APP_VERSION = '3.6.1';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,50 @@ export const CURRENT_APP_VERSION = '3.6.0';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.6.1',
+    dataLancamento: '2026-10-29T19:00:00-03:00',
+    titulo: 'Simulados Reais por Concurso & Balanceamento Inteligente Anti-Monopólio',
+    resumo:
+      'Evolução completa do motor de simulados da BatCaverna: Provas oficiais reais calibradas especificamente para cada banca (EEAR, ESA, EPCAr, Colégio Naval, EFOMM, EsPCEx, ENEM, EAM), descarte da redação para foco total na prova objetiva cronometrada, motor matemático de balanceamento com regra anti-monopólio que garante a presença de fáceis, médias e difíceis, controle total de dificuldade pelo estudante e diagnóstico de desempenho revelado exclusivamente após o término.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'atualizacao',
+    alteracoes: [
+      {
+        id: 'simulados-formato-real-bancas',
+        tipo: 'novo',
+        titulo: 'Simulado Real com Formato Oficial de Cada Banca',
+        descricao:
+          'Calibração exata das provas oficiais de cada concurso: EEAR (96 questões em 4h20min), ESA (50 questões em 4h00min), EPCAr (48 questões em 5h20min), Colégio Naval (90 questões em 5h00min), EFOMM (80 questões em 4h00min), EsPCEx (100 questões em 4h30min) e ENEM (90 questões em 5h00min ou Maratona de 180 questões). A redação é descartada no simulado para garantir foco 100% nas questões objetivas sob tempo de prova real.',
+        tag: 'Simulados & Editais',
+      },
+      {
+        id: 'motor-balanceamento-antimonopolio',
+        tipo: 'novo',
+        titulo: 'Motor de Balanceamento Anti-Monopólio',
+        descricao:
+          'Algoritmo matemático que garante que o sistema nunca selecione apenas questões fáceis, apenas médias ou apenas difíceis. Distribuição padrão de concurso (~30% Fácil, ~50% Médio e ~20% Difícil) assegurando que todas as faixas de complexidade estejam representadas.',
+        tag: 'Inteligência de Estudo',
+      },
+      {
+        id: 'configuracao-dificuldade-aluno',
+        tipo: 'melhoria',
+        titulo: 'Configurabilidade Total de Dificuldade pelo Aluno',
+        descricao:
+          'Seletor intuitivo permitindo escolher entre o Balanceamento Real da Banca (recomendado), Foco em Fáceis (aquecimento/agilidade), Foco em Médias (padrão de corte), Foco em Difíceis (critério de desempate) ou Dosagem Manual via sliders de porcentagem.',
+        tag: 'Customização',
+      },
+      {
+        id: 'blindagem-diagnostico-pos-prova',
+        tipo: 'melhoria',
+        titulo: 'Blindagem de Gabarito & Diagnóstico Pós-Prova Aprofundado',
+        descricao:
+          'Gabarito 100% oculto durante o exame com indicadores neutros no mapa de questões. Após a entrega da prova, o aluno visualiza análise gráfica de acertos por dificuldade, desempenho por matéria, comparação com a nota de corte histórica e resolução passo a passo comentada.',
+        tag: 'Resultados & Métricas',
+      },
+    ],
+  },
   {
     versao: '3.6.0',
     dataLancamento: '2026-10-19T18:25:00-03:00',

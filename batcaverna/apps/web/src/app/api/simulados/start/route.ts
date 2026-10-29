@@ -4,21 +4,25 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 import { uuidOuNulo } from '@/lib/seguranca';
 import { errosEmAberto } from '@/lib/diagnostico';
 import { distribuicaoDaProva, repartirVagas } from '@/lib/distribuicao-prova';
+import {
+  obterFormatoConcurso,
+  type FormatoConcursoReal,
+} from '@/lib/formatos-concursos';
+import {
+  selecionarQuestoesBalanceadas,
+  type ModoDificuldade,
+  type ProporcaoDificuldade,
+  type VagasDificuldade,
+} from '@/lib/balanceamento-simulado';
 
 /**
  * POST /api/simulados/start
  *
- * Body:
- *   concurso_id | concurso (sigla)   — obrigatório (a tabela exige o vínculo)
- *   tipo        rapido | completo | materia | personalizado
- *   total_questoes, duracao_minutos, materia_id, ano
+ * Gera um simulado cronometrado oficial ou personalizado com balanceamento
+ * real de matérias e dificuldades.
  *
- * Correções em relação à versão anterior:
- *   • O sorteio buscava só as 100 primeiras linhas e embaralhava — com 3 mil
- *     questões, o mesmo punhado caía sempre. Agora sorteia por deslocamento
- *     aleatório sobre a contagem real.
- *   • `concurso_id` é NOT NULL no schema; mandar null quebrava o "todos".
- *   • O gabarito nunca sai daqui: só a rota de finalizar tem acesso a ele.
+ * O gabarito e as explicações NUNCA saem daqui — o aluno realiza a prova sob
+ * condições reais e só acessa o resultado detalhado após a entrega.
  */
 
 const PRESETS: Record<string, { questoes: number; minutos: number }> = {
@@ -26,33 +30,8 @@ const PRESETS: Record<string, { questoes: number; minutos: number }> = {
   materia: { questoes: 20, minutos: 40 },
   completo: { questoes: 45, minutos: 150 },
   personalizado: { questoes: 20, minutos: 45 },
-  // Refazer o que já errou. Mais tempo por questão de propósito: aqui o
-  // objetivo não é treinar velocidade, é o assunto finalmente grudar.
   erros: { questoes: 20, minutos: 50 },
-  // Prova no formato da banca: quantidade e duração vêm do próprio concurso.
-  oficial: { questoes: 45, minutos: 180 },
-};
-
-/**
- * Formato real de cada prova.
- *
- * Um simulado de 45 questões genéricas não treina a prova da EEAR: são 60
- * questões em 4 horas, com peso diferente por matéria. Treinar no formato
- * errado ensina um ritmo que não serve no dia.
- *
- * Os números abaixo são os do formato consolidado de cada banca. Quando o
- * concurso não está aqui, o modo "oficial" cai no preset genérico — melhor
- * que inventar um formato.
- */
-const FORMATO_OFICIAL: Record<string, { questoes: number; minutos: number }> = {
-  EEAR: { questoes: 60, minutos: 240 },
-  ESA: { questoes: 50, minutos: 240 },
-  EPCAR: { questoes: 60, minutos: 240 },
-  CN: { questoes: 60, minutos: 240 },
-  EFOMM: { questoes: 40, minutos: 240 },
-  EAM: { questoes: 50, minutos: 240 },
-  ESPCEX: { questoes: 60, minutos: 240 },
-  ENEM: { questoes: 45, minutos: 270 },
+  oficial: { questoes: 50, minutos: 240 },
 };
 
 export async function POST(req: NextRequest) {
@@ -69,32 +48,31 @@ export async function POST(req: NextRequest) {
     const tipo: string = PRESETS[body?.tipo] ? body.tipo : 'personalizado';
     const preset = PRESETS[tipo];
 
-    // No modo "oficial" quem manda é o formato da banca, não o que o
-    // cliente pediu: o valor do treino está justamente em ser o formato real.
-    const formato =
-      tipo === 'oficial'
-        ? FORMATO_OFICIAL[String(body?.concurso ?? '').toUpperCase()] ?? preset
-        : null;
-
-    const quantidade = formato
-      ? formato.questoes
-      : Math.min(100, Math.max(5, Number(body?.total_questoes) || preset.questoes));
-
-    const duracaoMinutos = formato
-      ? formato.minutos
-      : Math.max(5, Number(body?.duracao_minutos) || preset.minutos);
-
     const supabase = createServerSupabaseClient();
 
-    // ─── Resolve o concurso ──────────────────────────────────
+    // ─── 1. Resolve o Concurso ────────────────────────────────
     let concursoId: string | null = body?.concurso_id ?? null;
-    if (!concursoId && body?.concurso) {
+    let concursoSigla: string = String(body?.concurso ?? '').trim().toUpperCase();
+
+    if (!concursoId && concursoSigla) {
       const { data } = await supabase
         .from('concursos')
-        .select('id')
-        .ilike('sigla', String(body.concurso))
+        .select('id, sigla, nome')
+        .ilike('sigla', concursoSigla)
         .maybeSingle();
-      concursoId = data?.id ?? null;
+
+      if (data) {
+        concursoId = data.id;
+        concursoSigla = data.sigla;
+      }
+    } else if (concursoId && !concursoSigla) {
+      const { data } = await supabase
+        .from('concursos')
+        .select('sigla')
+        .eq('id', concursoId)
+        .maybeSingle();
+
+      if (data) concursoSigla = data.sigla;
     }
 
     if (!concursoId) {
@@ -102,16 +80,56 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error:
-            'Escolha um concurso para o simulado — a prova é montada no formato da banca.',
+            'Escolha um concurso para o simulado — a prova é montada no formato real da banca.',
         },
         { status: 400 }
       );
     }
 
-    // ─── Modo "erros": o pool é o que o aluno já errou ───────
-    // Não sorteia sobre o banco: sorteia sobre a lista de questões cuja
-    // ÚLTIMA resposta continua errada. A regra mora em `diagnostico.ts`,
-    // a mesma de /caderno e do painel — três telas, uma definição.
+    // ─── 2. Formato Real e Quantidade / Tempo ────────────────
+    const variacaoId = body?.variacao_id ? String(body.variacao_id) : null;
+    const formatoOficial: FormatoConcursoReal = obterFormatoConcurso(
+      concursoSigla,
+      variacaoId
+    );
+
+    const quantidadeDesejada =
+      tipo === 'oficial'
+        ? formatoOficial.questoes
+        : Math.min(180, Math.max(5, Number(body?.total_questoes) || preset.questoes));
+
+    const duracaoMinutos =
+      tipo === 'oficial'
+        ? formatoOficial.minutos
+        : Math.max(5, Number(body?.duracao_minutos) || preset.minutos);
+
+    // ─── 3. Modo de Dificuldade ──────────────────────────────
+    const modoDificuldade: ModoDificuldade = [
+      'balanceado',
+      'facil',
+      'medio',
+      'dificil',
+      'custom',
+    ].includes(body?.dificuldade_modo)
+      ? body.dificuldade_modo
+      : 'balanceado';
+
+    const customProporcao: Partial<ProporcaoDificuldade> | undefined =
+      body?.dificuldade_proporcao && typeof body.dificuldade_proporcao === 'object'
+        ? {
+            facil: Number(body.dificuldade_proporcao.facil) || 0,
+            medio: Number(body.dificuldade_proporcao.medio) || 0,
+            dificil: Number(body.dificuldade_proporcao.dificil) || 0,
+          }
+        : undefined;
+
+    // ─── 4. Filtros Adicionais ───────────────────────────────
+    const materiaId = uuidOuNulo(body?.materia_id);
+    const anoNum = Number(body?.ano);
+    const ano =
+      Number.isInteger(anoNum) && anoNum > 1990 && anoNum < 2100 ? anoNum : null;
+
+    // ─── 5. Modo "Erros em Aberto" ───────────────────────────
     let idsErrados: string[] | null = null;
     if (tipo === 'erros') {
       const erros = await errosEmAberto(supabase, user.id, concursoId);
@@ -128,29 +146,21 @@ export async function POST(req: NextRequest) {
       idsErrados = erros.ids;
     }
 
-    // ─── Sorteio sobre o pool inteiro ────────────────────────
-    // Validados antes de virar filtro: `materia_id` chega do cliente e um
-    // texto solto no lugar de um UUID faz o PostgREST estourar 22P02.
-    const materiaId = uuidOuNulo(body?.materia_id);
-    const anoNum = Number(body?.ano);
-    const ano = Number.isInteger(anoNum) && anoNum > 1990 && anoNum < 2100
-      ? anoNum
-      : null;
-
-    const filtrar = (q: any) => {
+    // ─── 6. Verificação de Estoque Disponível ─────────────────
+    const filtrarContagem = (q: any) => {
       let r = q.eq('concurso_id', concursoId).eq('ativa', true);
       if (materiaId) r = r.eq('materia_id', materiaId);
       if (ano) r = r.eq('ano', ano);
       return r;
     };
 
-    const { count } = idsErrados
+    const { count: totalDisponivel } = idsErrados
       ? { count: idsErrados.length }
-      : await filtrar(
+      : await filtrarContagem(
           supabase.from('questoes').select('id', { count: 'exact', head: true })
         );
 
-    if (!count || count < 5) {
+    if (!totalDisponivel || totalDisponivel < 5) {
       return NextResponse.json(
         {
           success: false,
@@ -161,74 +171,75 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── Formato da banca: reparte por matéria ───────────────
-    //
-    // "Formato da banca" acertava a QUANTIDADE e a DURAÇÃO e sorteava
-    // uniformemente do concurso inteiro. Nenhuma banca distribui
-    // uniformemente: a EEAR cobra Matemática e Física em proporções
-    // específicas, e um sorteio uniforme entrega uma prova que não se parece
-    // com a prova. O aluno treinava para uma distribuição que não existe.
-    //
-    // Só vale para 'oficial' sem recorte: escolher uma matéria ou um ano é o
-    // aluno dizendo que NÃO quer o formato da banca.
+    // Se o banco tiver menos questões que o formato ideal (ex: banca nova no sistema),
+    // capamos suavemente no total disponível em vez de travar.
+    const quantidadeFinal = Math.min(quantidadeDesejada, totalDisponivel);
+
+    // ─── 7. Seleção de Questões com Matéria e Dificuldade ─────
     let ids: string[] = [];
-    let distribuicaoUsada: { materia: string; questoes: number }[] | null = null;
+    let distribuicaoMateriasUsada: { materia: string; questoes: number }[] | null = null;
+    let distribuicaoDificuldadeUsada: VagasDificuldade = {
+      facil: 0,
+      medio: 0,
+      dificil: 0,
+    };
 
-    if (tipo === 'oficial' && !idsErrados && !materiaId && !ano) {
+    if (tipo === 'erros' && idsErrados) {
+      // No modo erros, sorteamos do pool de erros do próprio aluno
+      ids = [...idsErrados]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.min(quantidadeFinal, idsErrados.length));
+    } else if (tipo === 'oficial' && !materiaId && !ano) {
+      // Modo oficial: repartição fatiada por matéria conforme edital/banco
       const fatias = await distribuicaoDaProva(supabase, concursoId);
-      const vagas = repartirVagas(quantidade, fatias);
+      const vagasPorMateria = repartirVagas(quantidadeFinal, fatias);
 
-      if (vagas.size > 0) {
-        const porMateria = await Promise.all(
-          [...vagas.entries()].map(async ([mid, quantas]) => {
-            const { data } = await supabase
-              .from('questoes')
-              .select('id')
-              .eq('concurso_id', concursoId)
-              .eq('ativa', true)
-              .eq('materia_id', mid)
-              .limit(Math.min(quantas * 6, 400));
+      if (vagasPorMateria.size > 0) {
+        const resultadoSelecao = await selecionarQuestoesBalanceadas(supabase, {
+          concursoId,
+          quantidadeTotal: quantidadeFinal,
+          modoDificuldade,
+          customProporcao,
+          vagasPorMateria,
+          ano,
+        });
 
-            return (data ?? [])
-              .map((q) => q.id)
-              .sort(() => Math.random() - 0.5)
-              .slice(0, quantas);
-          })
-        );
-
-        ids = porMateria.flat().sort(() => Math.random() - 0.5);
+        ids = resultadoSelecao.ids;
+        distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
 
         const nomePorId = new Map(fatias.map((f) => [f.materia_id, f.nome]));
-        distribuicaoUsada = [...vagas.entries()]
+        distribuicaoMateriasUsada = [...vagasPorMateria.entries()]
           .map(([mid, n]) => ({ materia: nomePorId.get(mid) ?? 'Outros', questoes: n }))
           .sort((a, b) => b.questoes - a.questoes);
       }
     }
 
-    // ─── Sorteio simples (todos os outros modos) ─────────────
-    // Puxa uma janela aleatória maior que o necessário e embaralha dentro
-    // dela: dá variedade real sem carregar as milhares de linhas.
-    if (ids.length === 0) {
-      const janela = Math.min(count, quantidade * 5);
-      const offsetMax = Math.max(0, count - janela);
-      const offset = Math.floor(Math.random() * (offsetMax + 1));
+    // Fallback ou outros modos (rápido, completo, por matéria, personalizado)
+    if (ids.length === 0 && !idsErrados) {
+      const resultadoSelecao = await selecionarQuestoesBalanceadas(supabase, {
+        concursoId,
+        quantidadeTotal: quantidadeFinal,
+        modoDificuldade,
+        customProporcao,
+        materiaId,
+        ano,
+      });
 
-      const pool = idsErrados
-        ? idsErrados.map((id) => ({ id }))
-        : (
-            await filtrar(supabase.from('questoes').select('id')).range(
-              offset,
-              offset + janela - 1
-            )
-          ).data ?? [];
-
-      ids = pool
-        .map((q: any) => q.id)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, Math.min(quantidade, pool.length));
+      ids = resultadoSelecao.ids;
+      distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
     }
 
-    // ─── Cria o simulado ─────────────────────────────────────
+    if (ids.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Não foi possível selecionar questões com os parâmetros escolhidos.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // ─── 8. Cria o Registro do Simulado ──────────────────────
     const { data: simulado, error: sErr } = await supabase
       .from('simulados')
       .insert({
@@ -246,7 +257,7 @@ export async function POST(req: NextRequest) {
 
     if (sErr) throw sErr;
 
-    // ─── Questões SEM gabarito ───────────────────────────────
+    // ─── 9. Busca as Questões SEM Gabarito ────────────────────
     const { data: questoes } = await supabase
       .from('questoes')
       .select(
@@ -256,7 +267,7 @@ export async function POST(req: NextRequest) {
       )
       .in('id', ids);
 
-    // Preserva a ordem sorteada (o .in() volta na ordem do banco).
+    // Preserva a ordem aleatória definida pelo algoritmo
     const porId = new Map((questoes ?? []).map((q) => [q.id, q]));
     const ordenadas = ids.map((id) => porId.get(id)).filter(Boolean);
 
@@ -269,11 +280,17 @@ export async function POST(req: NextRequest) {
         duracao_minutos: simulado.duracao_minutos,
         iniciado_em: simulado.iniciado_em,
         questoes: ordenadas,
-        // Quantas questões de cada matéria a prova recebeu, quando ela foi
-        // montada no formato da banca. A tela mostra isso antes de começar:
-        // saber que caem 24 de Matemática e 6 de Inglês faz parte de treinar
-        // no formato certo. `null` nos outros modos.
-        distribuicao: distribuicaoUsada,
+        distribuicao: distribuicaoMateriasUsada,
+        distribuicao_dificuldade: distribuicaoDificuldadeUsada,
+        formato_info: {
+          sigla: formatoOficial.sigla,
+          nome: formatoOficial.nome,
+          descricao: formatoOficial.descricao,
+          detalhesEdital: formatoOficial.detalhesEdital,
+          temRedacaoNaProvaReal: formatoOficial.temRedacaoNaProvaReal,
+          redacaoDescartada: formatoOficial.temRedacaoNaProvaReal,
+          adaptadoEstoque: totalDisponivel < quantidadeDesejada,
+        },
       },
     });
   } catch (error) {
