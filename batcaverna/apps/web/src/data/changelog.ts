@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.6.1';
+export const CURRENT_APP_VERSION = '3.7.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,50 @@ export const CURRENT_APP_VERSION = '3.6.1';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.0',
+    dataLancamento: '2026-10-29T20:30:00-03:00',
+    titulo: 'Simulados Multidias Calibrados, Motor TRI Oficial (INEP) & Filtro de Questões Inéditas',
+    resumo:
+      'Grande evolução na engine de simulados da BatCaverna: Separação fidedigna dos dias de prova em concursos com etapas distintas (ENEM Dia 1 e Dia 2, Colégio Naval Dia 1 e Dia 2, EFOMM e EsPCEx), cálculo de proficiência por Teoria de Resposta ao Item (TRI) oficial com modelo logístico 3PL e termômetro de coerência pedagógica, além de seletor inteligente de questões inéditas para eliminar repetições.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'simulado-multidias-enem',
+        tipo: 'novo',
+        titulo: 'Divisão Multidias Calibrada por Concurso',
+        descricao:
+          'Separação rigorosa das matérias de cada dia de prova oficial: ENEM Dia 1 (45 Humanas + 45 Linguagens) e ENEM Dia 2 (45 Matemática + 45 Natureza: Física, Química e Biologia) sem vazamento ou mistura de disciplinas, além de suporte aos 2 dias de Colégio Naval, EFOMM e EsPCEx.',
+        tag: 'Simulados & Editais',
+      },
+      {
+        id: 'motor-tri-enem-inep',
+        tipo: 'novo',
+        titulo: 'Motor TRI Oficial (Teoria de Resposta ao Item - 3PL)',
+        descricao:
+          'Implementação do algoritmo logístico de 3 parâmetros (discriminação, dificuldade e acerto ao acaso) calibrado nas escalas reais do INEP. Inclui análise de coerência pedagógica de Guttman, penalizando acertos erráticos por chute e valorizando a consistência do candidato.',
+        tag: 'Inteligência de Estudo',
+      },
+      {
+        id: 'filtro-questoes-ineditas',
+        tipo: 'novo',
+        titulo: 'Modo Questões Inéditas sem Repetição',
+        descricao:
+          'Opção "✨ Apenas questões inéditas" na tela de configuração do simulado, consultando o histórico de resolução do aluno e priorizando apenas itens que ele nunca realizou antes.',
+        tag: 'Customização',
+      },
+      {
+        id: 'diagnostico-tri-desempenho',
+        tipo: 'melhoria',
+        titulo: 'Painel de Diagnóstico TRI & Coerência Pedagógica',
+        descricao:
+          'Após finalizar o simulado, visualização detalhada da nota TRI por área do conhecimento (Matemática, Natureza, Humanas e Linguagens), medição de coerência e gráficos de evolução.',
+        tag: 'Resultados & Métricas',
+      },
+    ],
+  },
   {
     versao: '3.6.1',
     dataLancamento: '2026-10-29T19:00:00-03:00',

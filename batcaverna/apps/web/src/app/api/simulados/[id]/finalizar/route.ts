@@ -4,6 +4,11 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 import { calcularNivel } from '@batcaverna/utils';
 import { conferirBadges, avaliarStreak } from '@/lib/gamificacao';
 import { REFERENCIA_APROVACAO } from '@/lib/distribuicao-prova';
+import {
+  calcularTRIEnem,
+  type ItemTRI,
+  type ResultadoTRI,
+} from '@/lib/tri-enem';
 
 /**
  * POST /api/simulados/[id]/finalizar
@@ -245,6 +250,27 @@ export async function POST(
     const siglaConcurso = (simulado.concursos as any)?.sigla?.toUpperCase();
     const referenciaCorte = siglaConcurso ? REFERENCIA_APROVACAO[siglaConcurso] ?? null : null;
 
+    // ─── Teoria de Resposta ao Item (TRI) para ENEM ──────────
+    let resultadoTRI: ResultadoTRI | null = null;
+    if (siglaConcurso === 'ENEM') {
+      const itensTRI: ItemTRI[] = gabarito.map((q) => {
+        const dada = (respostas[q.id] ?? '').trim().toUpperCase();
+        const correta = !!dada && dada === q.resposta_correta.trim().toUpperCase();
+        const diff =
+          q.dificuldade === 'facil' || q.dificuldade === 'dificil'
+            ? q.dificuldade
+            : 'medio';
+        const mat = q.materias as any;
+        return {
+          questaoId: q.id,
+          materiaNome: mat?.nome ?? null,
+          dificuldade: diff,
+          correta,
+        };
+      });
+      resultadoTRI = calcularTRIEnem(itensTRI);
+    }
+
     const desempenhoDificuldade = [
       {
         tipo: 'Fácil',
@@ -305,6 +331,7 @@ export async function POST(
         badges_novas: badgesNovas,
         desempenho_dificuldade: desempenhoDificuldade,
         desempenho_materias: desempenhoMaterias,
+        resultado_tri: resultadoTRI,
         referencia_corte: referenciaCorte,
         detalhes,
       },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { uuidOuNulo } from '@/lib/seguranca';
+import { decriptarTexto } from '@/lib/cripto';
 
 /**
  * GET /api/tickets/[id] — um chamado com a conversa inteira.
@@ -101,9 +102,16 @@ export async function GET(
       mensagens = msgsComUser;
     }
 
+    const mensagensFormatadas = await Promise.all(
+      (mensagens || []).map(async (m: any) => ({
+        ...m,
+        conteudo: await decriptarTexto(m.conteudo),
+      }))
+    );
+
     return NextResponse.json({
       success: true,
-      data: { ...ticket, mensagens },
+      data: { ...ticket, mensagens: mensagensFormatadas },
     });
   } catch (error) {
     console.error('GET /api/tickets/[id] error:', error);

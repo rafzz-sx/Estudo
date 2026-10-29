@@ -105,7 +105,7 @@ interface TicketAdmin {
   user_id: string;
   titulo: string;
   motivo: "bugs" | "ideia" | "outros";
-  status: "aberto" | "respondido" | "finalizado";
+  status: "aberto" | "em_andamento" | "respondido" | "resolvido" | "fechado" | "finalizado";
   criado_em: string;
   atualizado_em: string;
   autor_apelido?: string;
@@ -170,6 +170,9 @@ export default function AdminPage() {
   const [buscaTickets, setBuscaTickets] = useState("");
   const [filtroStatusTickets, setFiltroStatusTickets] = useState<"todos" | "abertos" | "resolvidos">("todos");
   const [atualizandoStatusTicket, setAtualizandoStatusTicket] = useState(false);
+  const [resolverAoResponder, setResolverAoResponder] = useState(false);
+  const [emailCopiado, setEmailCopiado] = useState(false);
+  const chatMensagensEndRef = useRef<HTMLDivElement | null>(null);
 
   // Armazém
   const [logsArmazem, setLogsArmazem] = useState<any[]>([]);
@@ -178,6 +181,8 @@ export default function AdminPage() {
   const [conversasModeracao, setConversasModeracao] = useState<any[]>([]);
   const [conversaModeracaoAtivaId, setConversaModeracaoAtivaId] = useState<string | null>(null);
   const [mensagensModeracao, setMensagensModeracao] = useState<any[]>([]);
+  const [buscaConversasModeracao, setBuscaConversasModeracao] = useState("");
+  const [filtroApenasSinalizadas, setFiltroApenasSinalizadas] = useState(false);
 
   // Logs de Auditoria
   const [logsAuditoria, setLogsAuditoria] = useState<any[]>([]);
@@ -391,6 +396,13 @@ export default function AdminPage() {
     return () => clearInterval(timer);
   }, [ticketSelecionadoId]);
 
+  // Auto-scroll do chat para a mensagem mais recente
+  useEffect(() => {
+    if (ticketSelecionadoId && chatMensagensEndRef.current) {
+      chatMensagensEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [ticketDetalhe?.mensagens?.length, ticketSelecionadoId]);
+
   /** Promove, rebaixa, suspende, desativa ou libera uma conta. */
   const moderarConta = async (
     u: UsuarioAdmin,
@@ -434,7 +446,7 @@ export default function AdminPage() {
 
   // Responder Ticket
   const handleResponderTicket = async (ticketId: string) => {
-    if (!textoResposta.trim()) return;
+    if (!textoResposta.trim() || enviandoResposta) return;
     setEnviandoResposta(true);
     try {
       const res = await fetchWithAuth(`/api/tickets/${ticketId}/mensagens`, {
@@ -445,6 +457,16 @@ export default function AdminPage() {
 
       if (res.ok) {
         setTextoResposta("");
+
+        // Se a opção de marcar como resolvido estiver ativa
+        if (resolverAoResponder) {
+          await fetchWithAuth(`/api/tickets/${ticketId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "resolvido" }),
+          });
+        }
+
         // Recarregar ticket
         const detRes = await fetchWithAuth(`/api/tickets/${ticketId}`);
         if (detRes.ok) {
@@ -1815,26 +1837,30 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* ═══ TAB 4: TICKETS DE SUPORTE ═══ */}
+      {/* ═══ TAB 4: TICKETS DE SUPORTE (CHAT DE ATENDIMENTO) ═══ */}
       {aba === "tickets" && (
         <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 sm:p-6 space-y-4 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-bat-border/60">
             <div>
               <h2 className="heading text-xl text-bat-text flex items-center gap-2">
-                <span>🎫</span> Moderação de Tickets de Alunos
+                <span>🎫</span> Central de Suporte & Chat com Alunos
               </h2>
               <p className="text-bat-text-secondary text-xs mt-0.5">
-                Central de atendimento aos soldados: resolva bugs, dúvidas e pedidos com identificação completa do aluno.
+                Atendimento tático em tempo real: resolva chamados, responda dúvidas e preste suporte com identificação completa do combatente.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-bat-gold-400/10 text-bat-gold-400 border border-bat-gold-400/20 font-bold">
+              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-bat-error/15 text-bat-error border border-bat-error/30 font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-bat-error animate-ping"></span>
                 {tickets.filter((t) => t.status === "aberto").length} aberto(s)
+              </span>
+              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-bold">
+                {tickets.filter((t) => t.status === "em_andamento").length} em análise
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[560px]">
             {/* COLUNA ESQUERDA: LISTA DE TICKETS */}
             <div className={`lg:col-span-5 space-y-3 flex flex-col ${ticketSelecionadoId ? "hidden lg:flex" : "flex"}`}>
               {/* Filtros e Busca */}
@@ -1847,47 +1873,41 @@ export default function AdminPage() {
                   className="input-field text-xs py-2 px-3 w-full"
                 />
                 <div className="grid grid-cols-3 gap-1.5 p-1 bg-bat-bg-primary rounded-xl border border-bat-border text-xs">
-                  {(["todos", "abertos", "resolvidos"] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setFiltroStatusTickets(f)}
-                      className={`py-1 px-2 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer ${
-                        filtroStatusTickets === f
-                          ? "bg-bat-gold-400 text-black shadow-xs"
-                          : "text-bat-text-muted hover:text-bat-text"
-                      }`}
-                    >
-                      {f === "todos" ? `Todos (${tickets.length})` : f}
-                    </button>
-                  ))}
+                  {(["todos", "abertos", "resolvidos"] as const).map((f) => {
+                    const count =
+                      f === "todos"
+                        ? tickets.length
+                        : f === "abertos"
+                        ? tickets.filter((t) => t.status === "aberto" || t.status === "em_andamento").length
+                        : tickets.filter((t) => t.status === "resolvido" || t.status === "finalizado" || t.status === "respondido").length;
+
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setFiltroStatusTickets(f)}
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          filtroStatusTickets === f
+                            ? "bg-bat-gold-400 text-black shadow-xs font-extrabold"
+                            : "text-bat-text-muted hover:text-bat-text"
+                        }`}
+                      >
+                        <span>{f === "todos" ? "Todos" : f === "abertos" ? "Abertos" : "Resolvidos"}</span>
+                        <span className={`text-[10px] px-1 rounded-full ${filtroStatusTickets === f ? "bg-black/20 text-black" : "bg-bat-bg-card text-bat-text-secondary"}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Lista */}
-              <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1 flex-1 custom-scrollbar">
-                {tickets.filter((t: any) => {
-                  const matchBusca =
-                    t.titulo?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                    t.users?.nome?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                    t.users?.apelido?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                    t.users?.email?.toLowerCase().includes(buscaTickets.toLowerCase());
-
-                  const matchStatus =
-                    filtroStatusTickets === "todos"
-                      ? true
-                      : filtroStatusTickets === "abertos"
-                      ? t.status === "aberto" || t.status === "em_andamento"
-                      : t.status === "resolvido" || t.status === "finalizado" || t.status === "respondido";
-
-                  return matchBusca && matchStatus;
-                }).length === 0 ? (
-                  <div className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border">
-                    Nenhum chamado encontrado com esses filtros.
-                  </div>
-                ) : (
-                  tickets.filter((t: any) => {
+              {/* Lista de Chamados */}
+              <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                {(() => {
+                  const listaFiltrada = tickets.filter((t: any) => {
                     const matchBusca =
+                      !buscaTickets ||
                       t.titulo?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
                       t.users?.nome?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
                       t.users?.apelido?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
@@ -1901,7 +1921,18 @@ export default function AdminPage() {
                         : t.status === "resolvido" || t.status === "finalizado" || t.status === "respondido";
 
                     return matchBusca && matchStatus;
-                  }).map((t: any) => {
+                  });
+
+                  if (listaFiltrada.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border space-y-1">
+                        <span className="text-2xl block">📭</span>
+                        <p>Nenhum chamado encontrado com esses filtros.</p>
+                      </div>
+                    );
+                  }
+
+                  return listaFiltrada.map((t: any) => {
                     const ativo = t.id === ticketSelecionadoId;
                     const ehAberto = t.status === "aberto";
                     const ehResolvido = t.status === "resolvido" || t.status === "finalizado";
@@ -1911,14 +1942,18 @@ export default function AdminPage() {
                       <button
                         key={t.id}
                         onClick={() => setTicketSelecionadoId(t.id)}
-                        className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
                           ativo
-                            ? "bg-bat-gold-400/15 border-bat-gold-400/70 shadow-md"
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 shadow-lg ring-1 ring-bat-gold-400/40"
                             : "bg-bat-bg-primary border-bat-border/80 hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated/40"
                         }`}
                       >
+                        {ativo && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-bat-gold-400" />
+                        )}
+
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[10px] uppercase font-bold text-bat-gold-400 tracking-wider">
+                          <span className="text-[10px] uppercase font-bold text-bat-gold-400 tracking-wider flex items-center gap-1">
                             {t.motivo === "bugs" ? "🐛 Bug" : t.motivo === "ideia" ? "💡 Sugestão" : "📋 Dúvida"}
                           </span>
                           <span
@@ -1941,27 +1976,30 @@ export default function AdminPage() {
                         </p>
 
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-bat-border/40 text-[11px] text-bat-text-muted">
-                          <span className="truncate font-medium text-bat-text-secondary">
-                            👤 {t.users?.nome || t.users?.apelido || "Aluno"}
+                          <span className="truncate font-medium text-bat-text-secondary flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-bat-gold-400/20 text-bat-gold-400 text-[9px] font-bold inline-flex items-center justify-center shrink-0">
+                              {t.users?.apelido?.[0]?.toUpperCase() || "A"}
+                            </span>
+                            <span>{t.users?.nome || t.users?.apelido || "Aluno"}</span>
                           </span>
-                          <span className="font-mono text-[10px] shrink-0">
+                          <span className="font-mono text-[10px] shrink-0 text-bat-text-muted">
                             {formatarTempoRelativo(t.atualizado_em || t.criado_em)}
                           </span>
                         </div>
                       </button>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </div>
 
             {/* COLUNA DIREITA: CONVERSA / DETALHES DO TICKET */}
-            <div className={`lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-4 sm:p-5 flex flex-col justify-between min-h-[460px] ${!ticketSelecionadoId ? "hidden lg:flex" : "flex"}`}>
+            <div className={`lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-4 sm:p-5 flex flex-col justify-between min-h-[560px] ${!ticketSelecionadoId ? "hidden lg:flex" : "flex"}`}>
               {ticketDetalhe ? (
-                <div className="space-y-4 flex-1 flex flex-col justify-between">
+                <div className="space-y-3.5 flex-1 flex flex-col justify-between">
                   <div>
                     {/* Botão voltar no mobile */}
-                    <div className="lg:hidden mb-3">
+                    <div className="lg:hidden mb-2">
                       <button
                         onClick={() => setTicketSelecionadoId(null)}
                         className="text-xs font-bold text-bat-gold-400 flex items-center gap-1.5 p-1 rounded-lg hover:bg-bat-bg-secondary cursor-pointer"
@@ -1970,10 +2008,10 @@ export default function AdminPage() {
                       </button>
                     </div>
 
-                    {/* Card de Identificação do Aluno */}
-                    <div className="p-3.5 rounded-xl bg-bat-bg-card border border-bat-border flex flex-wrap items-center justify-between gap-3 mb-3">
+                    {/* Card de Identificação Completa do Aluno */}
+                    <div className="p-3.5 rounded-xl bg-bat-bg-card border border-bat-border flex flex-wrap items-center justify-between gap-3 mb-3 shadow-xs">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-bat-gold-400/20 border border-bat-gold-400/40 flex items-center justify-center font-bold text-bat-gold-400 shrink-0 overflow-hidden text-sm">
+                        <div className="w-11 h-11 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/50 flex items-center justify-center font-bold text-bat-gold-400 shrink-0 overflow-hidden text-sm shadow-inner">
                           {ticketDetalhe.users?.avatar_url ? (
                             <img src={ticketDetalhe.users.avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -1988,19 +2026,42 @@ export default function AdminPage() {
                             <span className="px-1.5 py-0.2 rounded bg-bat-gold-400/15 text-bat-gold-400 text-[10px] font-mono font-bold">
                               Nv. {ticketDetalhe.users?.nivel_atual || 1}
                             </span>
+                            {ticketDetalhe.users?.concurso_alvo && (
+                              <span className="px-1.5 py-0.2 rounded bg-bat-bg-secondary text-bat-text-secondary text-[10px] font-bold border border-bat-border">
+                                🎯 {ticketDetalhe.users.concurso_alvo}
+                              </span>
+                            )}
+                            {ticketDetalhe.users?.streak_dias > 0 && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 text-[10px] font-bold">
+                                🔥 {ticketDetalhe.users.streak_dias}d
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-bat-text-muted truncate">
-                            🦇 @{ticketDetalhe.users?.apelido} · {ticketDetalhe.users?.email}
+                          <p className="text-[11px] text-bat-text-muted truncate mt-0.5">
+                            🦇 @{ticketDetalhe.users?.apelido} · <span className="font-mono text-bat-text-secondary">{ticketDetalhe.users?.email}</span>
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {ticketDetalhe.users?.email && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(ticketDetalhe.users.email);
+                              setEmailCopiado(true);
+                              setTimeout(() => setEmailCopiado(false), 2000);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-bat-bg-secondary hover:bg-bat-bg-elevated text-bat-text-secondary border border-bat-border cursor-pointer transition-colors"
+                          >
+                            {emailCopiado ? "✓ Copiado!" : "📋 Copiar E-mail"}
+                          </button>
+                        )}
                         {ticketDetalhe.users && (
                           <button
                             type="button"
                             onClick={() => setSoldadoDossie(ticketDetalhe.users)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer transition-colors"
                           >
                             👁️ Ver Dossiê
                           </button>
@@ -2008,33 +2069,38 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Cabeçalho do Ticket */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-bat-border/50">
+                    {/* Cabeçalho do Chamado e Controles de Status */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-bat-border/50">
                       <div>
-                        <h3 className="font-bold text-bat-text text-sm sm:text-base">
-                          {ticketDetalhe.titulo}
-                        </h3>
-                        <p className="text-[11px] text-bat-text-muted font-mono mt-0.5">
-                          Ticket #{ticketDetalhe.id.slice(0, 8)} · Aberto em {new Date(ticketDetalhe.criado_em).toLocaleDateString("pt-BR")}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-bat-bg-secondary text-bat-gold-400 border border-bat-border">
+                            {ticketDetalhe.motivo === "bugs" ? "🐛 Bug" : ticketDetalhe.motivo === "ideia" ? "💡 Sugestão" : "📋 Dúvida"}
+                          </span>
+                          <h3 className="font-bold text-bat-text text-sm sm:text-base">
+                            {ticketDetalhe.titulo}
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-bat-text-muted font-mono mt-1">
+                          Ticket #{ticketDetalhe.id.slice(0, 8)} · Aberto em {new Date(ticketDetalhe.criado_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
 
-                      {/* Controle de Status */}
+                      {/* Controle de Status Tático */}
                       <div className="flex items-center gap-1.5">
                         {ticketDetalhe.status !== "em_andamento" && ticketDetalhe.status !== "resolvido" && (
                           <button
                             onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "em_andamento")}
                             disabled={atualizandoStatusTicket}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer disabled:opacity-50 transition-colors"
                           >
-                            ⚡ Em Análise
+                            ⚡ Colocar Em Análise
                           </button>
                         )}
                         {ticketDetalhe.status !== "resolvido" && ticketDetalhe.status !== "finalizado" ? (
                           <button
                             onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "resolvido")}
                             disabled={atualizandoStatusTicket}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer disabled:opacity-50 transition-colors"
                           >
                             ✅ Marcar Resolvido
                           </button>
@@ -2042,7 +2108,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => handleMudarStatusTicket(ticketDetalhe.id, "aberto")}
                             disabled={atualizandoStatusTicket}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-bat-gold-400/15 hover:bg-bat-gold-400/25 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-bat-gold-400/15 hover:bg-bat-gold-400/25 text-bat-gold-400 border border-bat-gold-400/30 cursor-pointer disabled:opacity-50 transition-colors"
                           >
                             🔄 Reabrir Chamado
                           </button>
@@ -2050,61 +2116,153 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Chat de Mensagens */}
-                    <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+                    {/* Chat Feed de Mensagens (Estilo Conversacional Moderno) */}
+                    <div className="space-y-3.5 h-[360px] sm:h-[400px] overflow-y-auto pr-2 p-3.5 bg-bat-bg-card/40 rounded-2xl border border-bat-border/60 custom-scrollbar">
+                      {/* Pinned Card de Abertura do Chamado */}
+                      <div className="text-center my-1">
+                        <span className="inline-block px-3 py-1 rounded-full bg-bat-bg-secondary border border-bat-border text-[10px] font-semibold text-bat-text-muted">
+                          📌 Início do chamado aberto por @{ticketDetalhe.users?.apelido || "aluno"}
+                        </span>
+                      </div>
+
                       {(ticketDetalhe.mensagens || []).map((m: any) => {
                         const ehAdmin = m.autor_role === "admin";
-                        return (
-                          <div
-                            key={m.id}
-                            className={`p-3.5 rounded-xl text-xs ${
-                              ehAdmin
-                                ? "bg-gradient-to-r from-indigo-950/40 to-bat-bg-elevated border border-indigo-500/30 text-bat-text ml-4 sm:ml-8"
-                                : "bg-bat-bg-card border border-bat-border text-bat-text mr-4 sm:mr-8"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/5">
-                              <span className={`font-bold flex items-center gap-1.5 ${ehAdmin ? "text-indigo-400" : "text-bat-gold-400"}`}>
-                                {ehAdmin ? "🛡️ Resposta da Administração" : `👤 ${ticketDetalhe.users?.apelido || m.users?.apelido || "Aluno"}`}
-                              </span>
-                              <span className="text-[10px] font-mono text-bat-text-muted">
-                                {m.enviado_em ? new Date(m.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
-                              </span>
+                        const horaFormatada = m.enviado_em
+                          ? new Date(m.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                          : "";
+
+                        if (ehAdmin) {
+                          // Balão da Administração (Direita)
+                          return (
+                            <div key={m.id} className="flex items-end gap-2.5 max-w-[85%] sm:max-w-[78%] ml-auto justify-end">
+                              <div className="flex flex-col items-end">
+                                <span className="text-[10px] text-bat-gold-400 font-bold mr-1 mb-1 flex items-center gap-1">
+                                  <span>🛡️</span> Administração (Você)
+                                </span>
+                                <div className="p-3.5 rounded-2xl rounded-tr-xs bg-gradient-to-br from-bat-gold-400/20 via-bat-gold-400/10 to-bat-bg-elevated border border-bat-gold-400/40 text-bat-text shadow-md">
+                                  <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed select-text font-normal">
+                                    {m.conteudo}
+                                  </p>
+                                  <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] text-bat-gold-400/80 font-mono">
+                                    <span>{horaFormatada}</span>
+                                    <span title="Entregue ao aluno">✓✓</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-bat-gold-400/20 border border-bat-gold-400/50 flex items-center justify-center font-bold text-bat-gold-400 shrink-0 text-xs shadow-xs">
+                                🦇
+                              </div>
                             </div>
-                            <p className="whitespace-pre-wrap leading-relaxed">{m.conteudo}</p>
+                          );
+                        }
+
+                        // Balão do Aluno (Esquerda)
+                        return (
+                          <div key={m.id} className="flex items-end gap-2.5 max-w-[85%] sm:max-w-[78%] mr-auto">
+                            <div className="w-8 h-8 rounded-full bg-bat-bg-card border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 shrink-0 overflow-hidden text-xs shadow-xs">
+                              {ticketDetalhe.users?.avatar_url ? (
+                                <img src={ticketDetalhe.users.avatar_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                ticketDetalhe.users?.apelido?.[0]?.toUpperCase() || "A"
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-bat-text-muted font-semibold ml-1 mb-1 flex items-center gap-1">
+                                <span>👤</span> {ticketDetalhe.users?.nome || ticketDetalhe.users?.apelido || "Aluno"}
+                              </span>
+                              <div className="p-3.5 rounded-2xl rounded-tl-xs bg-bat-bg-card border border-bat-border text-bat-text shadow-sm">
+                                <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed select-text font-normal">
+                                  {m.conteudo}
+                                </p>
+                                <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] text-bat-text-muted font-mono">
+                                  <span>{horaFormatada}</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
+                      <div ref={chatMensagensEndRef} />
                     </div>
                   </div>
 
-                  {/* Campo de Resposta */}
-                  <div className="pt-3 border-t border-bat-border/50 space-y-2">
-                    <textarea
-                      placeholder={`Escreva a resposta oficial para ${ticketDetalhe.users?.apelido || "o aluno"}...`}
-                      value={textoResposta}
-                      onChange={(e) => setTextoResposta(e.target.value)}
-                      rows={3}
-                      className="w-full input-field text-xs resize-none"
-                    />
-                    <div className="flex justify-between items-center gap-2">
-                      <span className="text-[11px] text-bat-text-muted">
-                        Pressione o botão para enviar a resposta oficial ao aluno.
-                      </span>
-                      <button
-                        onClick={() => handleResponderTicket(ticketDetalhe.id)}
-                        disabled={enviandoResposta || !textoResposta.trim()}
-                        className="btn-primary py-2 px-5 text-xs font-bold disabled:opacity-50"
-                      >
-                        {enviandoResposta ? "Enviando..." : "Responder Aluno 🚀"}
-                      </button>
+                  {/* Respostas Rápidas & Caixa de Envio */}
+                  <div className="pt-2 border-t border-bat-border/60 space-y-2.5">
+                    {/* Chips de Resposta Rápida (Canned Responses) */}
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-[10px] uppercase font-bold text-bat-text-muted tracking-wider">
+                          ⚡ Respostas Rápidas:
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                        {[
+                          { label: "🚀 Resolvido", texto: "Olá, soldado! O erro reportado foi analisado e corrigido com sucesso em nossa plataforma. Qualquer outra dúvida, estamos à disposição!" },
+                          { label: "🔍 Em Análise", texto: "Olá! Recebemos seu chamado e nossa equipe técnica já está analisando os detalhes para solucionar o mais rápido possível." },
+                          { label: "📸 Pedir Print", texto: "Olá, combatente! Poderia nos fornecer mais detalhes sobre o ocorrido (ou um print da tela e qual aparelho/navegador você está usando) para agilizar o suporte?" },
+                          { label: "💡 Ideia Anotada", texto: "Excelente sugestão! Registramos sua recomendação diretamente no nosso backlog de melhorias da plataforma. Muito obrigado pela contribuição!" },
+                          { label: "✅ Dúvida Esclarecida", texto: "Olá! Esperamos ter esclarecido sua dúvida. Se precisar de mais alguma orientação nos estudos, pode contar sempre com a BatCaverna!" },
+                        ].map((chip) => (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => setTextoResposta(chip.texto)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bat-bg-secondary hover:bg-bat-gold-400/15 hover:text-bat-gold-400 hover:border-bat-gold-400/40 text-bat-text-secondary border border-bat-border cursor-pointer shrink-0 transition-all"
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Caixa de Texto */}
+                    <div className="space-y-2">
+                      <textarea
+                        placeholder={`Escreva sua resposta para @${ticketDetalhe.users?.apelido || "o aluno"} (ou selecione uma resposta rápida acima)...`}
+                        value={textoResposta}
+                        onChange={(e) => setTextoResposta(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            handleResponderTicket(ticketDetalhe.id);
+                          }
+                        }}
+                        rows={3}
+                        className="w-full input-field text-xs sm:text-sm resize-none rounded-xl py-2.5 px-3.5 focus:border-bat-gold-400"
+                      />
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-1.5 text-xs text-bat-text-secondary cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={resolverAoResponder}
+                              onChange={(e) => setResolverAoResponder(e.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-bat-border text-bat-gold-400 focus:ring-bat-gold-400/40 bg-bat-bg-card accent-bat-gold-400 cursor-pointer"
+                            />
+                            <span>Marcar como resolvido após enviar</span>
+                          </label>
+                          <span className="hidden sm:inline-block text-[11px] text-bat-text-muted">
+                            · Pressione <kbd className="px-1 py-0.5 rounded bg-bat-bg-secondary border border-bat-border text-[10px] font-mono">Ctrl+Enter</kbd>
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleResponderTicket(ticketDetalhe.id)}
+                          disabled={enviandoResposta || !textoResposta.trim()}
+                          className="btn-primary py-2 px-6 text-xs sm:text-sm font-bold disabled:opacity-50 cursor-pointer shadow-md w-full sm:w-auto"
+                        >
+                          {enviandoResposta ? "Enviando resposta..." : "Enviar Resposta 🚀"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-bat-text-muted text-xs p-8 text-center space-y-2">
-                  <span className="text-3xl block">🎫</span>
-                  <p>Selecione um chamado ao lado para visualizar os detalhes, histórico e responder o aluno.</p>
+                <div className="flex flex-col items-center justify-center h-full text-bat-text-muted text-xs p-8 text-center space-y-3">
+                  <span className="text-4xl block">🎫</span>
+                  <p className="font-bold text-bat-text text-sm">Nenhum chamado selecionado</p>
+                  <p className="max-w-xs text-bat-text-muted">
+                    Selecione um chamado na lista ao lado para abrir a conversa ao vivo, consultar o perfil do aluno e responder.
+                  </p>
                 </div>
               )}
             </div>
@@ -2126,77 +2284,269 @@ export default function AdminPage() {
       )}
 
       {aba === "moderacao" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-6">
-          <div>
-            <h2 className="heading text-xl text-bat-text">Moderação de Conversas & Palavras Ofensivas</h2>
-            <p className="text-bat-text-secondary text-xs">
-              Visualize conversas entre alunos e mensagens que foram sinalizadas pelo filtro automático de termos impróprios.
-            </p>
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-4 sm:p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-bat-border/60">
+            <div>
+              <h2 className="heading text-xl text-bat-text flex items-center gap-2">
+                <span>🛡️</span> Moderação de Conversas & Palavras Ofensivas
+              </h2>
+              <p className="text-bat-text-secondary text-xs mt-0.5">
+                Auditoria de mensagens entre alunos: identifique assédio, termos ofensivos ou comportamento inapropriado.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-bat-bg-secondary text-bat-text-secondary border border-bat-border font-bold">
+                {conversasModeracao.length} conversa(s)
+              </span>
+              <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-bat-error/15 text-bat-error border border-bat-error/30 font-bold">
+                {conversasModeracao.filter((c) => c.mensagens_sinalizadas > 0).length} com alerta(s)
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5 space-y-2">
-              {conversasModeracao.length === 0 ? (
-                <p className="text-xs text-bat-text-muted p-4 bg-bat-bg-primary rounded-xl border border-bat-border">
-                  Nenhuma conversa encontrada.
-                </p>
-              ) : (
-                conversasModeracao.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setConversaModeracaoAtivaId(c.id)}
-                    className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
-                      c.id === conversaModeracaoAtivaId
-                        ? "bg-bat-gold-400/10 border-bat-gold-400/50"
-                        : "bg-bat-bg-primary border-bat-border"
-                    }`}
-                  >
-                    <div className="flex justify-between text-xs font-bold text-bat-text">
-                      <span>{c.user_a?.apelido} ↔ {c.user_b?.apelido}</span>
-                      {c.mensagens_sinalizadas > 0 && (
-                        <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px]">
-                          ⚠️ {c.mensagens_sinalizadas} flag
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-bat-text-muted mt-1">{c.total_mensagens} mensagens</p>
-                  </button>
-                ))
-              )}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[520px]">
+            {/* COLUNA ESQUERDA: LISTA DE CONVERSAS */}
+            <div className="lg:col-span-5 space-y-3 flex flex-col">
+              {/* Barra de Busca e Filtro */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Buscar combatente por nome ou apelido..."
+                  value={buscaConversasModeracao}
+                  onChange={(e) => setBuscaConversasModeracao(e.target.value)}
+                  className="input-field text-xs py-2 px-3 w-full"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFiltroApenasSinalizadas(!filtroApenasSinalizadas)}
+                  className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-2 cursor-pointer ${
+                    filtroApenasSinalizadas
+                      ? "bg-bat-error/20 text-bat-error border-bat-error/40 shadow-xs"
+                      : "bg-bat-bg-primary text-bat-text-secondary border-bat-border hover:text-bat-text"
+                  }`}
+                >
+                  <span>⚠️</span>
+                  <span>{filtroApenasSinalizadas ? "Mostrando apenas conversas com flags" : "Filtrar apenas com mensagens sinalizadas"}</span>
+                </button>
+              </div>
+
+              {/* Lista */}
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                {(() => {
+                  const conversasFiltradas = conversasModeracao.filter((c) => {
+                    const termo = buscaConversasModeracao.toLowerCase().trim();
+                    const matchBusca =
+                      !termo ||
+                      c.user_a?.apelido?.toLowerCase().includes(termo) ||
+                      c.user_a?.nome?.toLowerCase().includes(termo) ||
+                      c.user_b?.apelido?.toLowerCase().includes(termo) ||
+                      c.user_b?.nome?.toLowerCase().includes(termo);
+
+                    const matchFlag = filtroApenasSinalizadas ? c.mensagens_sinalizadas > 0 : true;
+
+                    return matchBusca && matchFlag;
+                  });
+
+                  if (conversasFiltradas.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-bat-text-muted bg-bat-bg-primary rounded-xl border border-bat-border space-y-1">
+                        <span className="text-2xl block">💬</span>
+                        <p>Nenhuma conversa encontrada com esses filtros.</p>
+                      </div>
+                    );
+                  }
+
+                  return conversasFiltradas.map((c) => {
+                    const ativa = c.id === conversaModeracaoAtivaId;
+                    const temFlag = c.mensagens_sinalizadas > 0;
+
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setConversaModeracaoAtivaId(c.id)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+                          ativa
+                            ? "bg-bat-gold-400/15 border-bat-gold-400 shadow-md ring-1 ring-bat-gold-400/40"
+                            : temFlag
+                            ? "bg-bat-bg-primary border-bat-error/40 hover:border-bat-error/70"
+                            : "bg-bat-bg-primary border-bat-border/80 hover:border-bat-gold-400/40 hover:bg-bat-bg-elevated/40"
+                        }`}
+                      >
+                        {ativa && <div className="absolute left-0 top-0 bottom-0 w-1 bg-bat-gold-400" />}
+
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-xs font-bold text-bat-text truncate">
+                              @{c.user_a?.apelido || "Aluno A"}
+                            </span>
+                            <span className="text-bat-gold-400 text-xs font-bold">↔</span>
+                            <span className="text-xs font-bold text-bat-text truncate">
+                              @{c.user_b?.apelido || "Aluno B"}
+                            </span>
+                          </div>
+                          {temFlag && (
+                            <span className="px-2 py-0.5 rounded-full bg-bat-error/20 text-bat-error border border-bat-error/30 text-[10px] font-bold shrink-0 animate-pulse">
+                              ⚠️ {c.mensagens_sinalizadas} flag(s)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-bat-text-muted mt-2 pt-2 border-t border-bat-border/40">
+                          <span>{c.total_mensagens || 0} mensagens trocadas</span>
+                          <span className="font-mono text-[10px]">
+                            {c.ultima_mensagem_em ? formatarTempoRelativo(c.ultima_mensagem_em) : ""}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
             </div>
 
-            <div className="lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-4 min-h-[350px]">
-              {conversaModeracaoAtivaId ? (
-                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                  {mensagensModeracao.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`p-3 rounded-xl border text-xs flex justify-between items-start gap-3 ${
-                        m.sinalizada_para_revisao
-                          ? "bg-red-950/30 border-red-500/40 text-red-200"
-                          : "bg-bat-bg-card border-bat-border text-bat-text"
-                      }`}
-                    >
-                      <div>
-                        <span className="font-bold text-bat-gold-400 block mb-0.5">
-                          {m.autor?.apelido} ({m.autor?.nome})
-                        </span>
-                        <p>{m.conteudo_texto || m.tipo?.toUpperCase()}</p>
-                      </div>
-                      <button
-                        onClick={() => handleToggleFlagMensagem(m.id, m.sinalizada_para_revisao)}
-                        className="text-[10px] px-2 py-1 rounded bg-bat-bg-secondary border border-bat-border text-bat-text-muted hover:text-bat-text cursor-pointer"
-                      >
-                        {m.sinalizada_para_revisao ? "Desmarcar ✕" : "Sinalizar ⚠️"}
-                      </button>
+            {/* COLUNA DIREITA: VISUALIZADOR DE CONVERSA */}
+            <div className="lg:col-span-7 bg-bat-bg-primary border border-bat-border rounded-xl p-4 sm:p-5 flex flex-col justify-between min-h-[520px]">
+              {(() => {
+                const conversaAtiva = conversasModeracao.find((c) => c.id === conversaModeracaoAtivaId);
+
+                if (!conversaModeracaoAtivaId || !conversaAtiva) {
+                  return (
+                    <div className="flex flex-col items-center justify-center h-full text-bat-text-muted text-xs p-8 text-center space-y-2 my-auto">
+                      <span className="text-3xl block">🛡️</span>
+                      <p className="font-bold text-bat-text text-sm">Selecione uma conversa ao lado</p>
+                      <p>Escolha um diálogo para auditar o histórico de mensagens e termos sinalizados.</p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full text-bat-text-muted text-xs">
-                  Selecione uma conversa ao lado para inspecionar mensagens.
-                </div>
-              )}
+                  );
+                }
+
+                return (
+                  <div className="space-y-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      {/* Header com os Dois Alunos e Atalhos para Dossiê */}
+                      <div className="p-3.5 rounded-xl bg-bat-bg-card border border-bat-border mb-3.5 shadow-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          {/* Aluno A */}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center font-bold text-cyan-400 shrink-0 text-xs">
+                              {conversaAtiva.user_a?.apelido?.[0]?.toUpperCase() || "A"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-bat-text text-xs truncate">
+                                {conversaAtiva.user_a?.nome || conversaAtiva.user_a?.apelido}
+                              </p>
+                              <p className="text-[10px] text-cyan-400 font-mono">@{conversaAtiva.user_a?.apelido}</p>
+                            </div>
+                            {conversaAtiva.user_a && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const u = usuarios.find((user) => user.id === conversaAtiva.user_a?.id);
+                                  if (u) setSoldadoDossie(u);
+                                }}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-bat-bg-secondary hover:bg-bat-bg-elevated text-bat-text-secondary border border-bat-border cursor-pointer transition-colors shrink-0"
+                              >
+                                👁️ Dossiê
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="hidden sm:flex text-bat-gold-400 font-bold text-sm px-2">↔</div>
+
+                          {/* Aluno B */}
+                          <div className="flex items-center gap-2.5 min-w-0 justify-end">
+                            {conversaAtiva.user_b && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const u = usuarios.find((user) => user.id === conversaAtiva.user_b?.id);
+                                  if (u) setSoldadoDossie(u);
+                                }}
+                                className="px-2 py-1 rounded-lg text-[10px] font-bold bg-bat-bg-secondary hover:bg-bat-bg-elevated text-bat-text-secondary border border-bat-border cursor-pointer transition-colors shrink-0"
+                              >
+                                👁️ Dossiê
+                              </button>
+                            )}
+                            <div className="min-w-0 text-right">
+                              <p className="font-bold text-bat-text text-xs truncate">
+                                {conversaAtiva.user_b?.nome || conversaAtiva.user_b?.apelido}
+                              </p>
+                              <p className="text-[10px] text-amber-400 font-mono">@{conversaAtiva.user_b?.apelido}</p>
+                            </div>
+                            <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center font-bold text-amber-400 shrink-0 text-xs">
+                              {conversaAtiva.user_b?.apelido?.[0]?.toUpperCase() || "B"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Feed de Mensagens */}
+                      <div className="space-y-3 h-[380px] sm:h-[420px] overflow-y-auto pr-2 p-3.5 bg-bat-bg-card/40 rounded-2xl border border-bat-border/60 custom-scrollbar">
+                        {mensagensModeracao.length === 0 ? (
+                          <div className="text-center text-bat-text-muted text-xs py-10">
+                            Nenhuma mensagem registrada nesta conversa.
+                          </div>
+                        ) : (
+                          mensagensModeracao.map((m) => {
+                            const isUserA = m.autor?.id === conversaAtiva.user_a?.id;
+                            const horaFormatada = m.enviado_em
+                              ? new Date(m.enviado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                              : "";
+
+                            return (
+                              <div
+                                key={m.id}
+                                className={`flex flex-col ${isUserA ? "items-start mr-auto" : "items-end ml-auto"} max-w-[85%] sm:max-w-[75%]`}
+                              >
+                                <span className="text-[10px] text-bat-text-muted font-semibold mb-1 flex items-center gap-1">
+                                  <span className={isUserA ? "text-cyan-400" : "text-amber-400"}>
+                                    @{m.autor?.apelido || "Aluno"}
+                                  </span>
+                                  <span>· {horaFormatada}</span>
+                                </span>
+
+                                <div
+                                  className={`p-3.5 rounded-2xl border transition-all ${
+                                    m.sinalizada_para_revisao
+                                      ? "bg-red-950/40 border-red-500/70 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.25)] ring-1 ring-red-500/50"
+                                      : isUserA
+                                      ? "bg-bat-bg-card rounded-tl-xs border-cyan-500/25 text-bat-text"
+                                      : "bg-bat-bg-card rounded-tr-xs border-amber-500/25 text-bat-text"
+                                  }`}
+                                >
+                                  {m.sinalizada_para_revisao && (
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-red-400 mb-1.5 uppercase tracking-wider">
+                                      <span>🚨</span>
+                                      <span>Sinalizada para revisão</span>
+                                    </div>
+                                  )}
+                                  <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed select-text">
+                                    {m.conteudo_texto || m.tipo?.toUpperCase() || "(Mensagem sem texto)"}
+                                  </p>
+                                </div>
+
+                                <div className="mt-1 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleFlagMensagem(m.id, m.sinalizada_para_revisao)}
+                                    className={`text-[10px] px-2 py-0.5 rounded-md font-semibold cursor-pointer border transition-colors ${
+                                      m.sinalizada_para_revisao
+                                        ? "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/30"
+                                        : "bg-bat-bg-secondary text-bat-text-muted border-bat-border hover:text-bat-text"
+                                    }`}
+                                  >
+                                    {m.sinalizada_para_revisao ? "Desmarcar ✕" : "Sinalizar ⚠️"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

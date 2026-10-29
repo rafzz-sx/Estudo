@@ -15,6 +15,9 @@ export interface VariacaoProva {
   questoes: number;
   minutos: number;
   descricao: string;
+  diaProvaNumero?: number; // 1 ou 2
+  materiasPermitidas?: string[]; // Nomes das matérias exclusivas deste dia/variação
+  pesosFixos?: { nome: string; peso: number }[];
 }
 
 export interface FormatoConcursoReal {
@@ -28,6 +31,7 @@ export interface FormatoConcursoReal {
   temRedacaoNaProvaReal: boolean;
   materiasEsperadas: { nome: string; peso: number }[];
   variacoes?: VariacaoProva[];
+  variacaoAtiva?: VariacaoProva | null;
 }
 
 export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
@@ -101,18 +105,17 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
     ],
     variacoes: [
       {
-        id: 'completa',
-        nome: 'Prova Completa (2 Dias Unificados)',
-        questoes: 90,
-        minutos: 300,
-        descricao: '90 questões de todas as disciplinas do Colégio Naval',
-      },
-      {
         id: 'dia1',
         nome: '1º Dia Real (Matemática + Inglês)',
         questoes: 40,
         minutos: 300,
         descricao: '40 questões · 5h00min (20 Mat + 20 Ing)',
+        diaProvaNumero: 1,
+        materiasPermitidas: ['Matemática', 'Inglês'],
+        pesosFixos: [
+          { nome: 'Matemática', peso: 20 },
+          { nome: 'Inglês', peso: 20 },
+        ],
       },
       {
         id: 'dia2',
@@ -120,6 +123,34 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
         questoes: 50,
         minutos: 300,
         descricao: '50 questões · 5h00min (20 Port + 12 Sociais + 18 Ciências)',
+        diaProvaNumero: 2,
+        materiasPermitidas: [
+          'Português',
+          'História',
+          'História do Brasil',
+          'Geografia',
+          'Geografia do Brasil',
+          'Ciências da Natureza',
+          'Ciências Humanas',
+          'Física',
+          'Química',
+          'Biologia',
+        ],
+        pesosFixos: [
+          { nome: 'Português', peso: 20 },
+          { nome: 'História', peso: 6 },
+          { nome: 'Geografia', peso: 6 },
+          { nome: 'Física', peso: 6 },
+          { nome: 'Química', peso: 6 },
+          { nome: 'Biologia', peso: 6 },
+        ],
+      },
+      {
+        id: 'completa',
+        nome: 'Prova Completa (2 Dias Unificados)',
+        questoes: 90,
+        minutos: 300,
+        descricao: '90 questões de todas as disciplinas do Colégio Naval',
       },
     ],
   },
@@ -141,18 +172,17 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
     ],
     variacoes: [
       {
-        id: 'completa',
-        nome: 'Prova Completa (80 questões)',
-        questoes: 80,
-        minutos: 240,
-        descricao: '80 questões unificadas das 4 disciplinas da EFOMM',
-      },
-      {
         id: 'dia1',
         nome: '1º Dia Real (Português + Inglês)',
         questoes: 40,
         minutos: 240,
         descricao: '40 questões · 4h00min (20 Port + 20 Ing)',
+        diaProvaNumero: 1,
+        materiasPermitidas: ['Português', 'Inglês'],
+        pesosFixos: [
+          { nome: 'Português', peso: 20 },
+          { nome: 'Inglês', peso: 20 },
+        ],
       },
       {
         id: 'dia2',
@@ -160,6 +190,19 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
         questoes: 40,
         minutos: 240,
         descricao: '40 questões · 4h00min (20 Mat + 20 Fís)',
+        diaProvaNumero: 2,
+        materiasPermitidas: ['Matemática', 'Física'],
+        pesosFixos: [
+          { nome: 'Matemática', peso: 20 },
+          { nome: 'Física', peso: 20 },
+        ],
+      },
+      {
+        id: 'completa',
+        nome: 'Prova Completa (80 questões)',
+        questoes: 80,
+        minutos: 240,
+        descricao: '80 questões unificadas das 4 disciplinas da EFOMM',
       },
     ],
   },
@@ -184,18 +227,18 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
     ],
     variacoes: [
       {
-        id: 'completa',
-        nome: 'Prova Completa (100 questões)',
-        questoes: 100,
-        minutos: 270,
-        descricao: '100 questões objetivas de todas as disciplinas da EsPCEx',
-      },
-      {
         id: 'dia1',
         nome: '1º Dia Real (Português + Física + Química)',
         questoes: 44,
         minutos: 270,
         descricao: '44 questões · 4h30min (20 Port + 12 Fís + 12 Quím)',
+        diaProvaNumero: 1,
+        materiasPermitidas: ['Português', 'Física', 'Química'],
+        pesosFixos: [
+          { nome: 'Português', peso: 20 },
+          { nome: 'Física', peso: 12 },
+          { nome: 'Química', peso: 12 },
+        ],
       },
       {
         id: 'dia2',
@@ -203,6 +246,28 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
         questoes: 56,
         minutos: 270,
         descricao: '56 questões · 4h30min (20 Mat + 12 Hist + 12 Geo + 12 Ing)',
+        diaProvaNumero: 2,
+        materiasPermitidas: [
+          'Matemática',
+          'História do Brasil',
+          'Geografia do Brasil',
+          'História',
+          'Geografia',
+          'Inglês',
+        ],
+        pesosFixos: [
+          { nome: 'Matemática', peso: 20 },
+          { nome: 'História do Brasil', peso: 12 },
+          { nome: 'Geografia do Brasil', peso: 12 },
+          { nome: 'Inglês', peso: 12 },
+        ],
+      },
+      {
+        id: 'completa',
+        nome: 'Prova Completa (100 questões)',
+        questoes: 100,
+        minutos: 270,
+        descricao: '100 questões objetivas de todas as disciplinas da EsPCEx',
       },
     ],
   },
@@ -212,28 +277,69 @@ export const FORMATOS_OFICIAIS: Record<string, FormatoConcursoReal> = {
     questoes: 90,
     minutos: 300, // 5h00
     duracaoHorasTexto: '5h00min',
-    descricao: '90 questões objetivas · 1 Dia Oficial (sem redação)',
+    descricao: '90 questões objetivas · 2º Dia Oficial (Matemática + Natureza)',
     detalhesEdital:
-      'O ENEM aplica 90 questões por dia: 1º dia com 45 Linguagens e 45 Humanas (5h30 c/ redação); 2º dia com 45 Matemática e 45 Natureza (5h00). A redação é descartada.',
+      'O ENEM aplica 90 questões por dia: 1º dia com 45 Linguagens e 45 Humanas (sem redação); 2º dia com 45 Matemática e 45 Natureza (Física, Química e Biologia). Redação descartada.',
     temRedacaoNaProvaReal: true,
     materiasEsperadas: [
-      { nome: 'Linguagens', peso: 45 },
-      { nome: 'Ciências Humanas', peso: 45 },
+      { nome: 'Matemática', peso: 45 },
+      { nome: 'Física', peso: 15 },
+      { nome: 'Química', peso: 15 },
+      { nome: 'Biologia', peso: 15 },
     ],
     variacoes: [
-      {
-        id: 'dia1',
-        nome: '1º Dia Oficial (Linguagens + Humanas)',
-        questoes: 90,
-        minutos: 300,
-        descricao: '90 questões · 5h00min (45 Linguagens + 45 Ciências Humanas)',
-      },
       {
         id: 'dia2',
         nome: '2º Dia Oficial (Matemática + Natureza)',
         questoes: 90,
         minutos: 300,
         descricao: '90 questões · 5h00min (45 Matemática + 45 Ciências da Natureza)',
+        diaProvaNumero: 2,
+        materiasPermitidas: [
+          'Matemática',
+          'Física',
+          'Química',
+          'Biologia',
+          'Ciências da Natureza',
+        ],
+        pesosFixos: [
+          { nome: 'Matemática', peso: 45 },
+          { nome: 'Física', peso: 15 },
+          { nome: 'Química', peso: 15 },
+          { nome: 'Biologia', peso: 15 },
+        ],
+      },
+      {
+        id: 'dia1',
+        nome: '1º Dia Oficial (Linguagens + Humanas)',
+        questoes: 90,
+        minutos: 300,
+        descricao: '90 questões · 5h00min (45 Linguagens + 45 Ciências Humanas)',
+        diaProvaNumero: 1,
+        materiasPermitidas: [
+          'Português',
+          'Literatura',
+          'Inglês',
+          'Artes',
+          'Educação Física',
+          'História',
+          'Geografia',
+          'Filosofia',
+          'Sociologia',
+          'Ciências Humanas',
+          'Atualidades',
+        ],
+        pesosFixos: [
+          { nome: 'Português', peso: 20 },
+          { nome: 'Literatura', peso: 10 },
+          { nome: 'Inglês', peso: 5 },
+          { nome: 'Artes', peso: 5 },
+          { nome: 'Educação Física', peso: 5 },
+          { nome: 'História', peso: 15 },
+          { nome: 'Geografia', peso: 15 },
+          { nome: 'Filosofia', peso: 8 },
+          { nome: 'Sociologia', peso: 7 },
+        ],
       },
       {
         id: 'completa',
@@ -324,7 +430,6 @@ export function obterFormatoConcurso(
   const base = FORMATOS_OFICIAIS[chave];
 
   if (!base) {
-    // Formato padrão de contingência
     return {
       sigla: chave || 'GERAL',
       nome: 'Simulado Geral',
@@ -335,21 +440,29 @@ export function obterFormatoConcurso(
       detalhesEdital: 'Formato padrão de 50 questões com duração de 4 horas.',
       temRedacaoNaProvaReal: false,
       materiasEsperadas: [],
+      variacaoAtiva: null,
     };
   }
 
-  if (variacaoId && base.variacoes) {
-    const v = base.variacoes.find((item) => item.id === variacaoId);
+  // Se houver variações e nenhuma variação específica foi pedida,
+  // selecionamos a primeira variação padrão (ex: Dia 2 para ENEM)
+  const varId = variacaoId || (base.variacoes && base.variacoes.length > 0 ? base.variacoes[0].id : null);
+
+  if (varId && base.variacoes) {
+    const v = base.variacoes.find((item) => item.id === varId);
     if (v) {
       return {
         ...base,
         questoes: v.questoes,
         minutos: v.minutos,
         descricao: v.descricao,
+        variacaoAtiva: v,
       };
     }
   }
 
-  return base;
+  return {
+    ...base,
+    variacaoAtiva: null,
+  };
 }
-

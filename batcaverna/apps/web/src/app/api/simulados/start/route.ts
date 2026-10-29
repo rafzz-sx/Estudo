@@ -123,11 +123,24 @@ export async function POST(req: NextRequest) {
           }
         : undefined;
 
-    // ─── 4. Filtros Adicionais ───────────────────────────────
+    // ─── 4. Filtros Adicionais & Inéditas ─────────────────────
     const materiaId = uuidOuNulo(body?.materia_id);
     const anoNum = Number(body?.ano);
     const ano =
       Number.isInteger(anoNum) && anoNum > 1990 && anoNum < 2100 ? anoNum : null;
+    const apenasIneditas = Boolean(body?.apenas_ineditas);
+
+    let idsExcluir: Set<string> | undefined;
+    if (apenasIneditas) {
+      const { data: respondidas } = await supabase
+        .from('user_questao_respostas')
+        .select('questao_id')
+        .eq('user_id', user.id);
+
+      if (respondidas && respondidas.length > 0) {
+        idsExcluir = new Set(respondidas.map((r) => r.questao_id));
+      }
+    }
 
     // ─── 5. Modo "Erros em Aberto" ───────────────────────────
     let idsErrados: string[] | null = null;
@@ -183,6 +196,10 @@ export async function POST(req: NextRequest) {
       medio: 0,
       dificil: 0,
     };
+    let totalIneditasCount = 0;
+    let totalRepetidasCount = 0;
+
+    const diaProvaNumero = formatoOficial.variacaoAtiva?.diaProvaNumero ?? null;
 
     if (tipo === 'erros' && idsErrados) {
       // No modo erros, sorteamos do pool de erros do próprio aluno
@@ -190,8 +207,16 @@ export async function POST(req: NextRequest) {
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(quantidadeFinal, idsErrados.length));
     } else if (tipo === 'oficial' && !materiaId && !ano) {
-      // Modo oficial: repartição fatiada por matéria conforme edital/banco
-      const fatias = await distribuicaoDaProva(supabase, concursoId);
+      // Modo oficial: repartição fatiada por matéria conforme variação/edital/banco
+      const opcoesDist = formatoOficial.variacaoAtiva
+        ? {
+            materiasPermitidas: formatoOficial.variacaoAtiva.materiasPermitidas,
+            pesosFixos: formatoOficial.variacaoAtiva.pesosFixos,
+            diaProvaNumero: formatoOficial.variacaoAtiva.diaProvaNumero,
+          }
+        : undefined;
+
+      const fatias = await distribuicaoDaProva(supabase, concursoId, opcoesDist);
       const vagasPorMateria = repartirVagas(quantidadeFinal, fatias);
 
       if (vagasPorMateria.size > 0) {
@@ -202,10 +227,14 @@ export async function POST(req: NextRequest) {
           customProporcao,
           vagasPorMateria,
           ano,
+          idsExcluir,
+          diaProvaNumero,
         });
 
         ids = resultadoSelecao.ids;
         distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
+        totalIneditasCount = resultadoSelecao.totalIneditas;
+        totalRepetidasCount = resultadoSelecao.totalRepetidas;
 
         const nomePorId = new Map(fatias.map((f) => [f.materia_id, f.nome]));
         distribuicaoMateriasUsada = [...vagasPorMateria.entries()]
@@ -223,10 +252,14 @@ export async function POST(req: NextRequest) {
         customProporcao,
         materiaId,
         ano,
+        idsExcluir,
+        diaProvaNumero,
       });
 
       ids = resultadoSelecao.ids;
       distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
+      totalIneditasCount = resultadoSelecao.totalIneditas;
+      totalRepetidasCount = resultadoSelecao.totalRepetidas;
     }
 
     if (ids.length === 0) {
@@ -290,6 +323,14 @@ export async function POST(req: NextRequest) {
           temRedacaoNaProvaReal: formatoOficial.temRedacaoNaProvaReal,
           redacaoDescartada: formatoOficial.temRedacaoNaProvaReal,
           adaptadoEstoque: totalDisponivel < quantidadeDesejada,
+          variacaoAtiva: formatoOficial.variacaoAtiva,
+        },
+        ineditas_info: {
+          solicitado: apenasIneditas,
+          total_ineditas: totalIneditasCount,
+          total_repetidas: totalRepetidasCount,
+          percentual_ineditas:
+            ids.length > 0 ? Math.round((totalIneditasCount / ids.length) * 100) : 100,
         },
       },
     });

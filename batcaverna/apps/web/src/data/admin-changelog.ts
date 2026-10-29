@@ -8,7 +8,7 @@
  * 2. Registramos as novidades técnicas no `ADMIN_CHANGELOG_HISTORY`.
  * 3. NUNCA vazamos informações administrativas no `changelog.ts` público dos alunos.
  */
-export const CURRENT_ADMIN_VERSION = '2.1.0';
+export const CURRENT_ADMIN_VERSION = '2.2.0';
 
 export interface AdminAlteracao {
   modulo: string;
@@ -24,6 +24,35 @@ export interface AdminReleaseItem {
 }
 
 export const ADMIN_CHANGELOG_HISTORY: AdminReleaseItem[] = [
+  {
+    versao: '2.2.0',
+    dataLancamento: '2026-10-29T20:30:00-03:00',
+    titulo: 'Live Chat de Suporte de Elite & Moderação Tática de Mensagens',
+    resumo:
+      'Nova interface tática do Chat de Atendimento ao Aluno: decriptografia ponta a ponta na visualização do administrador, balões conversacionais de alto contraste (aluno e admin com gradiente dourado e recibo de leitura), respostas rápidas em 1 clique (canned responses), atalho de envio rápido (Ctrl+Enter), marcação automática de resolvido e painel avançado de moderação de diálogos com atalho para o Dossiê Tático dos envolvidos.',
+    alteracoes: [
+      {
+        modulo: 'Suporte & Tickets',
+        descricao:
+          'Decriptografia em tempo real no GET /api/tickets/[id], corrigindo a exibição de texto cifrado no painel administrativo.',
+      },
+      {
+        modulo: 'Chat de Atendimento',
+        descricao:
+          'Interface moderna de chat com balões distintos, carimbo de data/hora, confirmação visual de entrega e auto-scroll para a mensagem mais recente.',
+      },
+      {
+        modulo: 'Respostas Rápidas (Canned)',
+        descricao:
+          'Barra de respostas rápidas com chips para agilizar o suporte (Resolvido, Em Análise, Pedir Print, Sugestão Anotada, Dúvida Esclarecida).',
+      },
+      {
+        modulo: 'Moderação de Diálogos',
+        descricao:
+          'Auditoria de conversas entre estudantes com identificação visual dos interlocutores, sinalização luminosa de termos impróprios e acesso ao Dossiê Tático dos envolvidos.',
+      },
+    ],
+  },
   {
     versao: '2.1.0',
     dataLancamento: '2026-10-19T18:25:00-03:00',

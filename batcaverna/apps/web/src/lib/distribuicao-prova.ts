@@ -66,6 +66,12 @@ interface LinhaMateria {
  * muda nada para o aluno. Cache por instância serverless, como o das frases
  * motivacionais — é leitura, várias cópias não fazem mal.
  */
+export interface OpcoesDistribuicao {
+  materiasPermitidas?: string[] | null;
+  pesosFixos?: { nome: string; peso: number }[] | null;
+  diaProvaNumero?: number | null;
+}
+
 const CACHE_MS = 30 * 60 * 1000;
 const cacheDistribuicao = new Map<
   string,
@@ -75,67 +81,85 @@ const promessasDistribuicao = new Map<string, Promise<FatiaMateria[]>>();
 
 export function limparCacheDistribuicao(concursoId?: string) {
   if (concursoId) {
-    cacheDistribuicao.delete(concursoId);
-    promessasDistribuicao.delete(concursoId);
+    for (const key of cacheDistribuicao.keys()) {
+      if (key === concursoId || key.startsWith(`${concursoId}_`)) {
+        cacheDistribuicao.delete(key);
+      }
+    }
+    for (const key of promessasDistribuicao.keys()) {
+      if (key === concursoId || key.startsWith(`${concursoId}_`)) {
+        promessasDistribuicao.delete(key);
+      }
+    }
   } else {
     cacheDistribuicao.clear();
     promessasDistribuicao.clear();
   }
 }
 
+function gerarChaveCache(concursoId: string, opcoes?: OpcoesDistribuicao): string {
+  if (!opcoes) return concursoId;
+  const partes = [concursoId];
+  if (opcoes.diaProvaNumero != null) partes.push(`dia${opcoes.diaProvaNumero}`);
+  if (opcoes.materiasPermitidas && opcoes.materiasPermitidas.length > 0) {
+    partes.push(`mat_${[...opcoes.materiasPermitidas].sort().join('-')}`);
+  }
+  if (opcoes.pesosFixos && opcoes.pesosFixos.length > 0) {
+    partes.push(`pesos_${opcoes.pesosFixos.map((p) => `${p.nome}:${p.peso}`).join('-')}`);
+  }
+  return partes.join('_');
+}
+
+function materiaPermitida(nomeMateria: string, permitidas?: string[] | null): boolean {
+  if (!permitidas || permitidas.length === 0) return true;
+  const n = nomeMateria.toLowerCase().trim();
+  return permitidas.some((p) => {
+    const perm = p.toLowerCase().trim();
+    if (n === perm) return true;
+    if (perm === 'física' && /educa[cç][aã]o/i.test(n)) return false;
+    return n.startsWith(perm) || perm.startsWith(n);
+  });
+}
+
 export async function distribuicaoDaProva(
   supabase: SupabaseClient,
-  concursoId: string
+  concursoId: string,
+  opcoes?: OpcoesDistribuicao
 ): Promise<FatiaMateria[]> {
   const agora = Date.now();
-  const guardado = cacheDistribuicao.get(concursoId);
+  const cacheKey = gerarChaveCache(concursoId, opcoes);
+  const guardado = cacheDistribuicao.get(cacheKey);
   if (guardado && guardado.validoAte > agora) return guardado.fatias;
 
-  const emAndamento = promessasDistribuicao.get(concursoId);
+  const emAndamento = promessasDistribuicao.get(cacheKey);
   if (emAndamento) return emAndamento;
 
   const promessa = (async () => {
     try {
-      const fatias = await calcularDistribuicao(supabase, concursoId);
+      const fatias = await calcularDistribuicao(supabase, concursoId, opcoes);
 
       // Só guarda resultado útil: um erro passageiro de rede não pode deixar o
       // concurso sem distribuição por meia hora.
       if (fatias.length > 0) {
-        cacheDistribuicao.set(concursoId, { fatias, validoAte: Date.now() + CACHE_MS });
+        cacheDistribuicao.set(cacheKey, { fatias, validoAte: Date.now() + CACHE_MS });
       }
 
       return fatias;
     } finally {
-      promessasDistribuicao.delete(concursoId);
+      promessasDistribuicao.delete(cacheKey);
     }
   })();
 
-  promessasDistribuicao.set(concursoId, promessa);
+  promessasDistribuicao.set(cacheKey, promessa);
   return promessa;
 }
 
 async function calcularDistribuicao(
   supabase: SupabaseClient,
-  concursoId: string
+  concursoId: string,
+  opcoes?: OpcoesDistribuicao
 ): Promise<FatiaMateria[]> {
-  // ─── Quantas questões existem por matéria ────────────────
-  const questoes = await lerTudo<LinhaQuestao>(() =>
-    supabase
-      .from('questoes')
-      .select('materia_id')
-      .eq('concurso_id', concursoId)
-      .eq('ativa', true)
-  );
-
-  const disponiveis = new Map<string, number>();
-  for (const q of questoes) {
-    if (!q.materia_id) continue;
-    disponiveis.set(q.materia_id, (disponiveis.get(q.materia_id) ?? 0) + 1);
-  }
-
-  if (disponiveis.size === 0) return [];
-
-  // ─── Pesos declarados, se houver ─────────────────────────
+  // ─── 1. Matérias do concurso (vínculos) ───────────────────
   const { data: vinculos } = await supabase
     .from('concurso_materias')
     .select('materia_id, peso_na_prova, peso_edital, materias (id, nome, icone_emoji)')
@@ -154,11 +178,118 @@ async function calcularDistribuicao(
     }
   }
 
-  // Só vale como "edital" se houver peso para TODAS as matérias que têm
-  // questão. Usa preferencialmente peso_edital (calibrado) ou peso_na_prova.
+  // ─── 2. Quantas questões existem por matéria ──────────────
+  let qQuery = supabase
+    .from('questoes')
+    .select('materia_id, dia_prova')
+    .eq('concurso_id', concursoId)
+    .eq('ativa', true);
+
+  if (opcoes?.diaProvaNumero != null) {
+    qQuery = qQuery.eq('dia_prova', opcoes.diaProvaNumero);
+  }
+
+  const questoes = await lerTudo<{ materia_id: string | null; dia_prova: number | null }>(() => qQuery);
+
+  const disponiveis = new Map<string, number>();
+  for (const q of questoes) {
+    if (!q.materia_id) continue;
+    disponiveis.set(q.materia_id, (disponiveis.get(q.materia_id) ?? 0) + 1);
+  }
+
+  // Fallback: se filtragem por dia_prova não retornou nada (ex: banco sem dia_prova preenchido),
+  // lê todas as ativas do concurso
+  if (disponiveis.size === 0 && opcoes?.diaProvaNumero != null) {
+    const todasQuestoes = await lerTudo<LinhaQuestao>(() =>
+      supabase
+        .from('questoes')
+        .select('materia_id')
+        .eq('concurso_id', concursoId)
+        .eq('ativa', true)
+    );
+    for (const q of todasQuestoes) {
+      if (!q.materia_id) continue;
+      disponiveis.set(q.materia_id, (disponiveis.get(q.materia_id) ?? 0) + 1);
+    }
+  }
+
+  if (disponiveis.size === 0) return [];
+
+  // Faltando o nome (matéria com questão mas sem vínculo em concurso_materias)
+  const semNome = [...disponiveis.keys()].filter((id) => !info.has(id));
+  if (semNome.length) {
+    const { data } = await supabase
+      .from('materias')
+      .select('id, nome, icone_emoji')
+      .in('id', semNome);
+
+    for (const m of data ?? []) {
+      if (/redação|redacao/i.test(m.nome)) continue;
+      info.set(m.id, { nome: m.nome, emoji: m.icone_emoji });
+    }
+  }
+
+  // ─── 3. Filtro Estrito de Matérias Permitidas ─────────────
+  if (opcoes?.materiasPermitidas && opcoes.materiasPermitidas.length > 0) {
+    for (const mid of [...disponiveis.keys()]) {
+      const nome = info.get(mid)?.nome ?? '';
+      if (!materiaPermitida(nome, opcoes.materiasPermitidas)) {
+        disponiveis.delete(mid);
+      }
+    }
+  }
+
+  if (disponiveis.size === 0) return [];
+
+  // ─── 4. Pesos Fixos de Variação Oficial (Ex: ENEM Dia 2) ───
+  if (opcoes?.pesosFixos && opcoes.pesosFixos.length > 0) {
+    const fatiasFixas: FatiaMateria[] = [];
+    const somaPesosFixos = opcoes.pesosFixos.reduce((a, b) => a + b.peso, 0);
+
+    for (const pf of opcoes.pesosFixos) {
+      let entry = [...info.entries()].find(
+        ([_, inf]) => inf.nome.toLowerCase().trim() === pf.nome.toLowerCase().trim()
+      );
+      if (!entry) {
+        entry = [...info.entries()].find(([_, inf]) => {
+          const n = inf.nome.toLowerCase().trim();
+          const alvo = pf.nome.toLowerCase().trim();
+          if (alvo === 'física' && /educa[cç][aã]o/i.test(n)) return false;
+          return n.startsWith(alvo) || alvo.startsWith(n);
+        });
+      }
+
+      if (entry) {
+        const [mid, inf] = entry;
+        const disp = disponiveis.get(mid) ?? 0;
+        if (disp > 0) {
+          fatiasFixas.push({
+            materia_id: mid,
+            nome: inf.nome,
+            emoji: inf.emoji,
+            disponiveis: disp,
+            peso: pf.peso / somaPesosFixos,
+            origem: 'edital',
+          });
+        }
+      }
+    }
+
+    if (fatiasFixas.length > 0) {
+      const somaReal = fatiasFixas.reduce((a, b) => a + b.peso, 0);
+      return fatiasFixas
+        .map((f) => ({ ...f, peso: f.peso / somaReal }))
+        .sort((a, b) => b.peso - a.peso);
+    }
+  }
+
+  // ─── 5. Pesos Declarados (Edital) ou Contagem Real (Banco) ──
   const pesoDeclarado = new Map<string, number>();
   for (const v of linhas) {
     if (v.materias && /redação|redacao/i.test(v.materias.nome)) continue;
+    if (opcoes?.materiasPermitidas && !materiaPermitida(v.materias?.nome ?? '', opcoes.materiasPermitidas)) {
+      continue;
+    }
     const peso =
       v.peso_edital != null && Number(v.peso_edital) > 0
         ? Number(v.peso_edital)
@@ -181,20 +312,6 @@ async function calcularDistribuicao(
 
   const soma = [...bruto.values()].reduce((a, b) => a + b, 0);
   if (soma <= 0) return [];
-
-  // Faltando o nome (matéria com questão mas sem vínculo em
-  // `concurso_materias`), buscamos direto — melhor que exibir "—".
-  const semNome = [...disponiveis.keys()].filter((id) => !info.has(id));
-  if (semNome.length) {
-    const { data } = await supabase
-      .from('materias')
-      .select('id, nome, icone_emoji')
-      .in('id', semNome);
-
-    for (const m of data ?? []) {
-      info.set(m.id, { nome: m.nome, emoji: m.icone_emoji });
-    }
-  }
 
   return [...bruto.entries()]
     .map(([materiaId, valor]) => ({

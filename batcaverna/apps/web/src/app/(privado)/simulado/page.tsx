@@ -22,6 +22,7 @@ import {
   type FormatoConcursoReal,
 } from "@/lib/formatos-concursos";
 import { type VagasDificuldade } from "@/lib/balanceamento-simulado";
+import { type ResultadoTRI } from "@/lib/tri-enem";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface QuestaoSim {
@@ -89,6 +90,13 @@ interface Resultado {
   desempenho_dificuldade?: DesempenhoDificuldade[];
   desempenho_materias?: DesempenhoMateria[];
   referencia_corte?: ReferenciaCorte | null;
+  resultado_tri?: ResultadoTRI | null;
+  ineditas_info?: {
+    solicitado: boolean;
+    total_ineditas: number;
+    total_repetidas: number;
+    percentual_ineditas: number;
+  } | null;
   detalhes: Detalhe[];
 }
 
@@ -181,6 +189,7 @@ function Simulado() {
     ano: "",
     total_questoes: 20,
     duracao_minutos: 45,
+    apenas_ineditas: false,
   });
 
   const [materias, setMaterias] = useState<MateriaOpcao[]>([]);
@@ -202,6 +211,13 @@ function Simulado() {
     temRedacaoNaProvaReal: boolean;
     redacaoDescartada: boolean;
     adaptadoEstoque?: boolean;
+    variacaoAtiva?: any;
+  } | null>(null);
+  const [ineditasInfo, setIneditasInfo] = useState<{
+    solicitado: boolean;
+    total_ineditas: number;
+    total_repetidas: number;
+    percentual_ineditas: number;
   } | null>(null);
 
   const [respostas, setRespostas] = useState<Record<string, string>>({});
@@ -295,6 +311,7 @@ function Simulado() {
               : undefined,
           total_questoes: quantidade,
           duracao_minutos: minutos,
+          apenas_ineditas: config.apenas_ineditas,
           ...(config.materia_id ? { materia_id: config.materia_id } : {}),
           ...(config.ano ? { ano: Number(config.ano) } : {}),
         }),
@@ -311,6 +328,7 @@ function Simulado() {
       setDistribuicao(json.data.distribuicao ?? null);
       setDistribuicaoDificuldade(json.data.distribuicao_dificuldade ?? null);
       setFormatoInfo(json.data.formato_info ?? null);
+      setIneditasInfo(json.data.ineditas_info ?? null);
       setSegundosRestantes(json.data.duracao_minutos * 60);
       setRespostas({});
       setIndice(0);
@@ -412,6 +430,9 @@ function Simulado() {
 
       apagarProvaSalva();
       const r: Resultado = json.data;
+      if (ineditasInfo) {
+        r.ineditas_info = ineditasInfo;
+      }
       setResultado(r);
       setFase("resultado");
 
@@ -927,12 +948,44 @@ function Simulado() {
             </div>
           )}
 
+          {/* 4. OPÇÃO DE QUESTÕES INÉDITAS (ANTI-REPETIÇÃO) */}
+          <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/40 p-4 transition-all hover:border-bat-gold-400/30">
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={config.apenas_ineditas}
+                onChange={(e) =>
+                  setConfig({ ...config, apenas_ineditas: e.target.checked })
+                }
+                className="mt-0.5 h-4 w-4 rounded border-bat-border text-bat-gold-400 focus:ring-bat-gold-400/40 bg-bat-bg-card cursor-pointer accent-bat-gold-400"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-bat-text flex items-center gap-1.5">
+                    <span>✨</span> Apenas questões inéditas
+                  </span>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                    Anti-repetição
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-snug">
+                  Gera o simulado priorizando exclusivamente questões que você <strong>ainda não respondeu</strong> na plataforma, evitando qualquer repetição de treinos anteriores.
+                </p>
+              </div>
+            </label>
+          </div>
+
           {/* RESUMO DOS PARÂMETROS DE EXECUÇÃO */}
           <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/60 px-4 py-3 text-xs leading-relaxed text-bat-text-secondary">
             ⏱️ Você terá <strong className="text-bat-gold-400">{min} minutos</strong>{" "}
             para resolver <strong>{qtd} questões</strong> — média de{" "}
             <strong>{Math.round((min * 60) / qtd)} segundos</strong> por questão.
             Quando o tempo acabar, a prova é entregue automaticamente.
+            {config.apenas_ineditas && (
+              <span className="mt-2 block text-emerald-400 font-medium flex items-center gap-1.5">
+                <span>✨</span> Filtro ativo: seleção com foco em questões que você ainda não respondeu.
+              </span>
+            )}
             {vaiAdaptarEstoque && (
               <span className="mt-2 block text-bat-warning font-medium">
                 ⚠️ O banco de questões possui {disponiveis.toLocaleString("pt-BR")} questões
@@ -1235,6 +1288,18 @@ function Simulado() {
           +{resultado.xp_ganho} XP Conquistados
         </p>
 
+        {/* INÉDITAS STATUS */}
+        {resultado.ineditas_info?.solicitado && (
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-1 text-xs font-semibold text-emerald-400">
+            <span>✨</span>
+            <span>
+              {resultado.ineditas_info.percentual_ineditas === 100
+                ? "Simulado 100% Inédito (sem repetição de questões)"
+                : `Simulado com ${resultado.ineditas_info.total_ineditas} questões inéditas (${resultado.ineditas_info.percentual_ineditas}%)`}
+            </span>
+          </div>
+        )}
+
         {resultado.badges_novas.length > 0 && (
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             {resultado.badges_novas.map((b) => (
@@ -1271,6 +1336,154 @@ function Simulado() {
           </Link>
         </div>
       </div>
+
+      {/* PAINEL OFICIAL DE TRI — ENEM */}
+      {resultado.resultado_tri && (
+        <section className="rounded-2xl border border-bat-gold-400/40 bg-gradient-to-b from-bat-bg-card via-bat-bg-card to-bat-bg-secondary/40 p-5 shadow-lg relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-bat-border/60 pb-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎓</span>
+                <h2 className="heading text-lg font-bold text-bat-gold-400">
+                  Estimativa Oficial de TRI (ENEM)
+                </h2>
+                <span className="rounded-full bg-bat-gold-400/20 px-2 py-0.5 text-[10px] font-extrabold uppercase text-bat-gold-400">
+                  Teoria de Resposta ao Item
+                </span>
+              </div>
+              <p className="text-xs text-bat-text-muted mt-0.5">
+                Cálculo calibrado com penalização por chute e validação de coerência pedagógica na Escala Guttman.
+              </p>
+            </div>
+            <div className="text-left sm:text-right">
+              <span className="text-[11px] text-bat-text-muted block">Faixa ENEM SiSU</span>
+              <span className="text-xs font-bold text-bat-text">
+                {resultado.resultado_tri.notaGeral >= 750
+                  ? "Altamente Competitivo (Medicina/Direito)"
+                  : resultado.resultado_tri.notaGeral >= 680
+                  ? "Competitivo (Engenharias/Saúde)"
+                  : resultado.resultado_tri.notaGeral >= 600
+                  ? "Acesso Geral Superior"
+                  : "Desenvolvimento de Base"}
+              </span>
+            </div>
+          </div>
+
+          {/* PLACAR GERAL TRI & COERÊNCIA */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {/* NOTA TRI GERAL */}
+            <div className="rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/10 p-4 text-center flex flex-col justify-center">
+              <span className="text-xs font-bold uppercase tracking-wider text-bat-gold-400">
+                Sua Nota TRI Estimada
+              </span>
+              <p className="heading text-5xl font-black text-bat-gold-400 my-1">
+                {resultado.resultado_tri.notaGeral}
+                <span className="text-base text-bat-text-muted font-normal"> / 1000</span>
+              </p>
+              <p className="text-xs text-bat-text-secondary">
+                Média calibrada das áreas presentes neste simulado
+              </p>
+            </div>
+
+            {/* COERÊNCIA PEDAGÓGICA */}
+            <div className="rounded-xl border border-bat-border bg-bat-bg-secondary/70 p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-bat-text">
+                    Coerência Pedagógica
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      resultado.resultado_tri.coerenciaGeral === "alta"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : resultado.resultado_tri.coerenciaGeral === "media"
+                        ? "bg-amber-500/20 text-amber-400"
+                        : "bg-rose-500/20 text-rose-400"
+                    }`}
+                  >
+                    {resultado.resultado_tri.coerenciaGeral === "alta"
+                      ? "Alta Coerência"
+                      : resultado.resultado_tri.coerenciaGeral === "media"
+                      ? "Coerência Média"
+                      : "Alerta de Inconsistência"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 h-2 rounded-full bg-bat-bg-card overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        resultado.resultado_tri.coerenciaGeralPercentual >= 85
+                          ? "bg-emerald-400"
+                          : resultado.resultado_tri.coerenciaGeralPercentual >= 72
+                          ? "bg-amber-400"
+                          : "bg-rose-400"
+                      }`}
+                      style={{ width: `${resultado.resultado_tri.coerenciaGeralPercentual}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-bat-text">
+                    {resultado.resultado_tri.coerenciaGeralPercentual}%
+                  </span>
+                </div>
+                <p className="text-xs text-bat-text-secondary leading-snug">
+                  {resultado.resultado_tri.explicacaoGeral}
+                </p>
+              </div>
+              <p className="mt-2 text-[10px] text-bat-text-muted border-t border-bat-border/50 pt-1.5">
+                💡 <strong>Como a TRI funciona:</strong> se você errar questões fáceis e acertar difíceis, o algoritmo do ENEM deduz que houve chute casual e diminui sua pontuação. Garantir as fáceis e médias é o segredo para notas 800+.
+              </p>
+            </div>
+          </div>
+
+          {/* DESEMPENHO TRI POR ÁREA */}
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-bat-text-muted mb-2.5">
+              Detalhamento TRI por Grande Área do Conhecimento
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {resultado.resultado_tri.areas.map((area) => (
+                <div
+                  key={area.codigo}
+                  className="rounded-xl border border-bat-border bg-bat-bg-card p-3.5 flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{area.emoji}</span>
+                      <div>
+                        <p className="text-xs font-bold text-bat-text">
+                          {area.nome}
+                        </p>
+                        <p className="text-[11px] text-bat-text-muted">
+                          {area.acertos} de {area.totalQuestoes} acertos ({Math.round((area.acertos / area.totalQuestoes) * 100)}%)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="heading text-xl font-black text-bat-gold-400">
+                        {area.notaTRI}
+                      </p>
+                      <span
+                        className={`text-[9px] font-bold ${
+                          area.coerencia === "alta"
+                            ? "text-emerald-400"
+                            : area.coerencia === "media"
+                            ? "text-amber-400"
+                            : "text-rose-400"
+                        }`}
+                      >
+                        Coerência {area.coerenciaPercentual}%
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-bat-text-secondary bg-bat-bg-secondary/50 rounded-lg p-2 leading-tight">
+                    {area.explicacaoCoerencia}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* DESEMPENHO POR DIFICULDADE (REVELADO APÓS O FIM) */}
       {resultado.desempenho_dificuldade && (

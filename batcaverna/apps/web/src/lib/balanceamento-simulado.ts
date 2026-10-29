@@ -179,21 +179,36 @@ export function calcularVagasDificuldade(
  * 1. A proporção de matérias (quando fornecida)
  * 2. O balanceamento de dificuldade configurado (garantindo diversidade)
  */
-export async function selecionarQuestoesBalanceadas(
-  supabase: SupabaseClient,
-  opcoes: {
-    concursoId: string;
-    quantidadeTotal: number;
-    modoDificuldade: ModoDificuldade;
-    customProporcao?: Partial<ProporcaoDificuldade>;
-    vagasPorMateria?: Map<string, number> | null;
-    materiaId?: string | null;
-    ano?: number | null;
-  }
-): Promise<{
+export interface OpcoesSelecaoQuestoes {
+  concursoId: string;
+  quantidadeTotal: number;
+  modoDificuldade: ModoDificuldade;
+  customProporcao?: Partial<ProporcaoDificuldade>;
+  vagasPorMateria?: Map<string, number> | null;
+  materiaId?: string | null;
+  ano?: number | null;
+  idsExcluir?: Set<string>;
+  diaProvaNumero?: number | null;
+}
+
+export interface ResultadoSelecaoQuestoes {
   ids: string[];
   distribuicaoDificuldade: VagasDificuldade;
-}> {
+  totalIneditas: number;
+  totalRepetidas: number;
+}
+
+/**
+ * Seleciona IDs de questões respeitando concomitantemente:
+ * 1. A proporção de matérias (quando fornecida)
+ * 2. O balanceamento de dificuldade configurado (garantindo diversidade)
+ * 3. A preferência por questões inéditas (quando solicitado)
+ * 4. A filtragem por dia da prova (quando aplicável)
+ */
+export async function selecionarQuestoesBalanceadas(
+  supabase: SupabaseClient,
+  opcoes: OpcoesSelecaoQuestoes
+): Promise<ResultadoSelecaoQuestoes> {
   const {
     concursoId,
     quantidadeTotal,
@@ -202,7 +217,20 @@ export async function selecionarQuestoesBalanceadas(
     vagasPorMateria,
     materiaId,
     ano,
+    idsExcluir,
+    diaProvaNumero,
   } = opcoes;
+
+  const priorizarIneditas = (
+    lista: { id: string; dificuldade?: string | null }[]
+  ): string[] => {
+    if (!idsExcluir || idsExcluir.size === 0) {
+      return embaralhar(lista.map((q) => q.id));
+    }
+    const ineditas = lista.filter((q) => !idsExcluir.has(q.id)).map((q) => q.id);
+    const repetidas = lista.filter((q) => idsExcluir.has(q.id)).map((q) => q.id);
+    return [...embaralhar(ineditas), ...embaralhar(repetidas)];
+  };
 
   // ─── CASO A: Simulado Multidisciplinar (Vagas por Matéria) ───
   if (vagasPorMateria && vagasPorMateria.size > 0 && !materiaId) {
@@ -219,19 +247,28 @@ export async function selecionarQuestoesBalanceadas(
 
       let qQuery = supabase
         .from('questoes')
-        .select('id, dificuldade')
+        .select('id, dificuldade, dia_prova')
         .eq('concurso_id', concursoId)
         .eq('ativa', true)
         .eq('materia_id', mid);
 
       if (ano) qQuery = qQuery.eq('ano', ano);
 
-      const { data: questoesMateria } = await qQuery.limit(Math.max(qtdMateria * 5, 200));
+      const { data: questoesMateria } = await qQuery.limit(Math.max(qtdMateria * 8, 400));
+      const todasBrutas = questoesMateria ?? [];
 
-      const todas = questoesMateria ?? [];
-      const faceis = todas.filter((q) => q.dificuldade === 'facil').map((q) => q.id);
-      const medias = todas.filter((q) => q.dificuldade === 'medio' || !q.dificuldade).map((q) => q.id);
-      const dificeis = todas.filter((q) => q.dificuldade === 'dificil').map((q) => q.id);
+      // Se foi especificado o dia da prova (ex: ENEM Dia 2), prioriza questões daquele dia
+      let todas = todasBrutas;
+      if (diaProvaNumero != null) {
+        const doDia = todasBrutas.filter((q) => q.dia_prova === diaProvaNumero);
+        if (doDia.length >= qtdMateria) {
+          todas = doDia;
+        }
+      }
+
+      const faceis = todas.filter((q) => q.dificuldade === 'facil');
+      const medias = todas.filter((q) => q.dificuldade === 'medio' || !q.dificuldade);
+      const dificeis = todas.filter((q) => q.dificuldade === 'dificil');
 
       const estoqueMateria: EstoqueDificuldade = {
         facil: faceis.length,
@@ -246,10 +283,10 @@ export async function selecionarQuestoesBalanceadas(
         estoqueMateria
       );
 
-      // Embaralhar e fatiar cada dificuldade
-      const selFacil = embaralhar(faceis).slice(0, vagasMatDiff.facil);
-      const selMedio = embaralhar(medias).slice(0, vagasMatDiff.medio);
-      const selDificil = embaralhar(dificeis).slice(0, vagasMatDiff.dificil);
+      // Priorizar inéditas em cada faixa de dificuldade antes de repetir
+      const selFacil = priorizarIneditas(faceis).slice(0, vagasMatDiff.facil);
+      const selMedio = priorizarIneditas(medias).slice(0, vagasMatDiff.medio);
+      const selDificil = priorizarIneditas(dificeis).slice(0, vagasMatDiff.dificil);
 
       idsFinais.push(...selFacil, ...selMedio, ...selDificil);
 
@@ -258,28 +295,42 @@ export async function selecionarQuestoesBalanceadas(
       contagemTotalDificuldade.dificil += selDificil.length;
     }
 
+    const totalIneditas = idsExcluir
+      ? idsFinais.filter((id) => !idsExcluir.has(id)).length
+      : idsFinais.length;
+
     return {
       ids: embaralhar(idsFinais),
       distribuicaoDificuldade: contagemTotalDificuldade,
+      totalIneditas,
+      totalRepetidas: idsFinais.length - totalIneditas,
     };
   }
 
   // ─── CASO B: Pool Geral ou Matéria Única ──────────────────────
   let query = supabase
     .from('questoes')
-    .select('id, dificuldade')
+    .select('id, dificuldade, dia_prova')
     .eq('concurso_id', concursoId)
     .eq('ativa', true);
 
   if (materiaId) query = query.eq('materia_id', materiaId);
   if (ano) query = query.eq('ano', ano);
 
-  const { data: todasQuestoes } = await query.limit(Math.max(quantidadeTotal * 6, 800));
-  const pool = todasQuestoes ?? [];
+  const { data: todasQuestoes } = await query.limit(Math.max(quantidadeTotal * 8, 1000));
+  const poolBruto = todasQuestoes ?? [];
 
-  const faceis = pool.filter((q) => q.dificuldade === 'facil').map((q) => q.id);
-  const medias = pool.filter((q) => q.dificuldade === 'medio' || !q.dificuldade).map((q) => q.id);
-  const dificeis = pool.filter((q) => q.dificuldade === 'dificil').map((q) => q.id);
+  let pool = poolBruto;
+  if (diaProvaNumero != null) {
+    const doDia = poolBruto.filter((q) => q.dia_prova === diaProvaNumero);
+    if (doDia.length >= quantidadeTotal) {
+      pool = doDia;
+    }
+  }
+
+  const faceis = pool.filter((q) => q.dificuldade === 'facil');
+  const medias = pool.filter((q) => q.dificuldade === 'medio' || !q.dificuldade);
+  const dificeis = pool.filter((q) => q.dificuldade === 'dificil');
 
   const estoque: EstoqueDificuldade = {
     facil: faceis.length,
@@ -294,11 +345,14 @@ export async function selecionarQuestoesBalanceadas(
     estoque
   );
 
-  const selFacil = embaralhar(faceis).slice(0, vagas.facil);
-  const selMedio = embaralhar(medias).slice(0, vagas.medio);
-  const selDificil = embaralhar(dificeis).slice(0, vagas.dificil);
+  const selFacil = priorizarIneditas(faceis).slice(0, vagas.facil);
+  const selMedio = priorizarIneditas(medias).slice(0, vagas.medio);
+  const selDificil = priorizarIneditas(dificeis).slice(0, vagas.dificil);
 
   const idsFinais = embaralhar([...selFacil, ...selMedio, ...selDificil]);
+  const totalIneditas = idsExcluir
+    ? idsFinais.filter((id) => !idsExcluir.has(id)).length
+    : idsFinais.length;
 
   return {
     ids: idsFinais,
@@ -307,6 +361,8 @@ export async function selecionarQuestoesBalanceadas(
       medio: selMedio.length,
       dificil: selDificil.length,
     },
+    totalIneditas,
+    totalRepetidas: idsFinais.length - totalIneditas,
   };
 }
 
