@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { buscarPrimeiroVideoYouTube } from '@/lib/youtube';
 
 /**
  * Extrai o ID da playlist a partir de URLs do Spotify como:
@@ -26,7 +27,7 @@ interface FaixaSpotify {
 
 /**
  * POST /api/musicas/spotify/importar
- * Importa faixas de uma playlist pública do Spotify e cria uma playlist na BatCaverna.
+ * Importa faixas de uma playlist pública do Spotify, descobre o áudio via YouTube e cria a playlist pessoal do aluno.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
           duracao_segundos: 180,
           capa_url: null,
         });
-        if (faixas.length >= 30) break;
+        if (faixas.length >= 25) break;
       }
     }
 
@@ -141,29 +142,54 @@ export async function POST(req: NextRequest) {
 
     // 3. Cadastrar as faixas em `musicas` e associar em `playlist_itens`
     let faixasAdicionadas = 0;
-    const faixasProcessadas = faixas.slice(0, 30); // Limita em 30 faixas por importação para não sobrecarregar
+    const faixasProcessadas = faixas.slice(0, 20); // Processa até 20 faixas por importação
 
     for (let i = 0; i < faixasProcessadas.length; i++) {
       const f = faixasProcessadas[i];
       try {
-        // Áudio: se o Spotify fornecer preview MP3, usa o preview oficial; senão gera o link de busca no YouTube
-        const audioUrl = f.preview_url || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${f.titulo} ${f.artista}`)}`;
+        // Tenta encontrar correspondente no YouTube para tocar a faixa completa
+        const yt = await buscarPrimeiroVideoYouTube(f.titulo, f.artista);
 
-        const { data: musicaSalva, error: errMusica } = await supabase
-          .from('musicas')
-          .insert({
-            titulo: f.titulo.slice(0, 200),
-            artista: f.artista.slice(0, 200),
-            capa_url: f.capa_url || null,
-            audio_url: audioUrl,
-            duracao_segundos: f.duracao_segundos || 180,
-            fonte: 'spotify',
-            fonte_id: playlistId,
-          })
-          .select()
-          .single();
+        let audioUrl = f.preview_url;
+        let fonte = 'spotify';
+        let fonteId = playlistId;
+        let capaUrl = f.capa_url;
+        let duracao = f.duracao_segundos || 180;
 
-        if (musicaSalva) {
+        if (yt && yt.videoId) {
+          audioUrl = `https://www.youtube.com/watch?v=${yt.videoId}`;
+          fonte = 'youtube';
+          fonteId = yt.videoId;
+          capaUrl = yt.capa_url || f.capa_url;
+          duracao = yt.duracao_segundos || duracao;
+        }
+
+        if (!audioUrl) continue;
+
+        // Tenta salvar com user_id para garantir privacidade
+        let payload: any = {
+          user_id: user.id,
+          titulo: f.titulo.slice(0, 200),
+          artista: f.artista.slice(0, 200),
+          capa_url: capaUrl || null,
+          audio_url: audioUrl,
+          duracao_segundos: duracao,
+          fonte,
+          fonte_id: fonteId,
+        };
+
+        let musicaSalva: any = null;
+        const resInsert = await supabase.from('musicas').insert(payload).select().single();
+        if (resInsert.error && resInsert.error.code === '42703') {
+          // Caso user_id ainda não exista antes da migração
+          delete payload.user_id;
+          const retry = await supabase.from('musicas').insert(payload).select().single();
+          musicaSalva = retry.data;
+        } else {
+          musicaSalva = resInsert.data;
+        }
+
+        if (musicaSalva?.id) {
           await supabase.from('playlist_itens').insert({
             playlist_id: novaPlaylist.id,
             musica_id: musicaSalva.id,

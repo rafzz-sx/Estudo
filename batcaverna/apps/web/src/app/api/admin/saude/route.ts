@@ -136,6 +136,19 @@ export async function GET(req: NextRequest) {
       `${teoriaLigada ?? 0} de ${teoriaTotal ?? 0} textos ligados a um assunto`
     );
 
+    // ─── migration 037: isolamento de músicas por aluno ───────
+    const { error: errMusicasUserId } = await supabase
+      .from('musicas')
+      .select('user_id')
+      .limit(1);
+    add(
+      'migration 037 · privacidade de músicas (user_id)',
+      !errMusicasUserId,
+      errMusicasUserId
+        ? 'coluna ausente — execute 037_musicas_user_id_e_privacidade.sql no Supabase'
+        : 'coluna presente (músicas privadas ativadas)'
+    );
+
     // ─── Conteúdo ────────────────────────────────────────────
     const [videos, musicas, bizus, frases] = await Promise.all([
       contar(supabase, 'videoaulas', { ativa: true }),

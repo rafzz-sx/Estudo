@@ -11,6 +11,7 @@ import {
 interface MusicaLista extends Musica {
   genero: string | null;
   favorita: boolean;
+  ehMinha?: boolean;
 }
 
 interface Playlist {
@@ -21,6 +22,7 @@ interface Playlist {
 }
 
 type Aba = "acervo" | "favoritas" | "playlists";
+type OrigemAcervo = "todas" | "minhas" | "batcaverna";
 
 export default function MusicaPage() {
   const tocarFila = usePlayerStore((s) => s.tocarFila);
@@ -30,12 +32,13 @@ export default function MusicaPage() {
   const alternarPlay = usePlayerStore((s) => s.alternarPlay);
 
   const [aba, setAba] = useState<Aba>("acervo");
+  const [origemAcervo, setOrigemAcervo] = useState<OrigemAcervo>("todas");
   const [busca, setBusca] = useState("");
   const [musicas, setMusicas] = useState<MusicaLista[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [mostrarAjuda, setMostrarAjuda] = useState(true);
+  const [mostrarAjuda, setMostrarAjuda] = useState(false);
 
   // Modal com abas inteligentes
   type AbaModal = "youtube" | "spotify" | "manual";
@@ -48,6 +51,14 @@ export default function MusicaPage() {
     audio_url: "",
     capa_url: "",
   });
+
+  // Modal Criar Playlist dedicada
+  const [modalCriarPlaylist, setModalCriarPlaylist] = useState(false);
+  const [formPlaylist, setFormPlaylist] = useState({ nome: "", descricao: "" });
+  const [criandoPlaylistDedicada, setCriandoPlaylistDedicada] = useState(false);
+
+  // Modal de Adicionar Músicas a uma Playlist específica
+  const [playlistGerenciando, setPlaylistGerenciando] = useState<Playlist | null>(null);
 
   // Busca no YouTube
   const [ytBusca, setYtBusca] = useState("");
@@ -63,6 +74,7 @@ export default function MusicaPage() {
   >([]);
   const [ytBuscando, setYtBuscando] = useState(false);
   const [adicionadasYt, setAdicionadasYt] = useState<Record<string, boolean>>({});
+  const [menuYtPlaylist, setMenuYtPlaylist] = useState<string | null>(null);
 
   // Importador Spotify
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -83,6 +95,7 @@ export default function MusicaPage() {
       const qs = new URLSearchParams();
       if (busca.trim().length >= 2) qs.set("busca", busca.trim());
       if (aba === "favoritas") qs.set("favoritas", "1");
+      if (aba === "acervo") qs.set("origem", origemAcervo);
 
       const res = await fetchWithAuth(`/api/musicas?${qs}`);
       const json = await res.json();
@@ -92,7 +105,7 @@ export default function MusicaPage() {
     } finally {
       setCarregando(false);
     }
-  }, [busca, aba]);
+  }, [busca, aba, origemAcervo]);
 
   /** Recarrega as playlists (com as faixas de cada uma). */
   const carregarPlaylists = useCallback(async () => {
@@ -105,29 +118,27 @@ export default function MusicaPage() {
     }
   }, []);
 
-  // As playlists são carregadas SEMPRE, não só na aba delas: o botão de
-  // "adicionar à playlist" fica em cada faixa do acervo e precisa da lista
-  // para oferecer o destino.
   useEffect(() => {
     carregarPlaylists();
   }, [carregarPlaylists]);
 
   // Menu de playlists fecha ao clicar fora ou apertar Esc.
   useEffect(() => {
-    if (!menuPara) return;
-    const fechar = () => setMenuPara(null);
-    const porTecla = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuPara(null);
+    if (!menuPara && !menuYtPlaylist) return;
+    const fechar = () => {
+      setMenuPara(null);
+      setMenuYtPlaylist(null);
     };
-    // `click` no documento dispara depois do onClick do botão, então abrir
-    // não fecha em seguida.
+    const porTecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") fechar();
+    };
     document.addEventListener("click", fechar);
     document.addEventListener("keydown", porTecla);
     return () => {
       document.removeEventListener("click", fechar);
       document.removeEventListener("keydown", porTecla);
     };
-  }, [menuPara]);
+  }, [menuPara, menuYtPlaylist]);
 
   useEffect(() => {
     if (aba === "playlists") {
@@ -135,8 +146,7 @@ export default function MusicaPage() {
       carregarPlaylists();
       return;
     }
-    // Busca só dispara depois que o usuário para de digitar.
-    const t = setTimeout(carregar, 300);
+    const t = setTimeout(carregar, 250);
     return () => clearTimeout(t);
   }, [carregar, aba, carregarPlaylists]);
 
@@ -148,6 +158,23 @@ export default function MusicaPage() {
     await fetchWithAuth(`/api/musicas/${m.id}/favoritar`, {
       method: "POST",
     }).catch(() => undefined);
+  };
+
+  const excluirMusica = async (m: MusicaLista) => {
+    if (!confirm(`Remover "${m.titulo}" do seu acervo pessoal?`)) return;
+    try {
+      const res = await fetchWithAuth(`/api/musicas/${m.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setMusicas((atual) => atual.filter((x) => x.id !== m.id));
+        setAviso(`"${m.titulo}" removida.`);
+        await carregarPlaylists();
+      } else {
+        setAviso(json.error || "Não foi possível remover a música.");
+      }
+    } catch {
+      setAviso("Erro de conexão ao remover música.");
+    }
   };
 
   const buscarYouTube = async () => {
@@ -181,6 +208,7 @@ export default function MusicaPage() {
     playlistIdDestino?: string
   ) => {
     setAdicionadasYt((prev) => ({ ...prev, [item.videoId]: true }));
+    setMenuYtPlaylist(null);
     try {
       const res = await fetchWithAuth("/api/musicas", {
         method: "POST",
@@ -223,7 +251,7 @@ export default function MusicaPage() {
       return;
     }
     setSpotifyImportando(true);
-    setSpotifyProgresso("Extraindo faixas e metadados da playlist pública...");
+    setSpotifyProgresso("Extraindo faixas e conectando com o áudio do YouTube...");
     try {
       const res = await fetchWithAuth("/api/musicas/spotify/importar", {
         method: "POST",
@@ -231,9 +259,9 @@ export default function MusicaPage() {
       });
       const json = await res.json();
       if (json.success) {
-        const qtd = json.data?.total_importadas || 0;
-        const nome = json.data?.playlist?.nome || "do Spotify";
-        setAviso(`✅ Playlist "${nome}" importada com sucesso (${qtd} faixas)!`);
+        const qtd = json.data?.total_faixas || 0;
+        const nome = json.data?.nome || "do Spotify";
+        setAviso(`✅ Playlist "${nome}" importada com sucesso (${qtd} faixas conectadas)!`);
         setSpotifyUrl("");
         setModalNova(false);
         await carregarPlaylists();
@@ -263,10 +291,42 @@ export default function MusicaPage() {
     if (json.success) {
       setModalNova(false);
       setNovaFaixa({ titulo: "", artista: "", audio_url: "", capa_url: "" });
-      setAviso("✅ Faixa adicionada ao acervo.");
+      setAviso("✅ Faixa adicionada ao seu acervo.");
       carregar();
     } else {
       setAviso(json.error ?? "Não consegui adicionar.");
+    }
+  };
+
+  const salvarNovaPlaylist = async () => {
+    const nomeLimpo = formPlaylist.nome.trim();
+    if (nomeLimpo.length < 2) {
+      setAviso("O nome da playlist deve ter pelo menos 2 caracteres.");
+      return;
+    }
+    setCriandoPlaylistDedicada(true);
+    try {
+      const res = await fetchWithAuth("/api/playlists", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: nomeLimpo,
+          descricao: formPlaylist.descricao.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPlaylists((p) => [{ musicas: [], ...json.data }, ...p]);
+        setFormPlaylist({ nome: "", descricao: "" });
+        setModalCriarPlaylist(false);
+        setAviso(`✅ Playlist "${nomeLimpo}" criada com sucesso!`);
+        setAba("playlists");
+      } else {
+        setAviso(json.error || "Não foi possível criar a playlist.");
+      }
+    } catch {
+      setAviso("Erro de conexão ao criar playlist.");
+    } finally {
+      setCriandoPlaylistDedicada(false);
     }
   };
 
@@ -291,8 +351,7 @@ export default function MusicaPage() {
       } else {
         setAviso(json.error || "Não foi possível criar a playlist.");
       }
-    } catch (err) {
-      console.error("Erro ao criar playlist:", err);
+    } catch {
       setAviso("Erro de conexão ao criar playlist. Tente novamente.");
     } finally {
       setCriandoPlaylist(false);
@@ -310,21 +369,11 @@ export default function MusicaPage() {
       } else {
         setAviso(json.error || "Erro ao apagar playlist.");
       }
-    } catch (err) {
-      console.error("Erro ao apagar playlist:", err);
+    } catch {
       setAviso("Erro ao conectar com o servidor.");
     }
   };
 
-  /**
-   * Põe (ou tira) uma faixa numa playlist.
-   *
-   * `POST /api/playlists/[id]` existia completa — valida dono, trata
-   * duplicata, calcula a ordem — e NÃO TINHA UM ÚNICO CHAMADOR. Dava para
-   * criar playlist, e ela ficava vazia para sempre; o texto do estado vazio
-   * ainda instruía a "ir adicionando faixas do acervo", coisa que a interface
-   * não permitia. Este é o gatilho que faltava.
-   */
   const mexerNaPlaylist = async (
     playlistId: string,
     musica: Musica,
@@ -343,7 +392,6 @@ export default function MusicaPage() {
       return;
     }
 
-    // Reflete na tela sem esperar o servidor devolver tudo de novo.
     setPlaylists((atual) =>
       atual.map((p) => {
         if (p.id !== playlistId) return p;
@@ -358,7 +406,7 @@ export default function MusicaPage() {
     const nome = playlists.find((p) => p.id === playlistId)?.nome ?? "playlist";
     setAviso(
       acao === "adicionar"
-        ? `✅ "${musica.titulo}" foi para ${nome}.`
+        ? `✅ "${musica.titulo}" foi adicionada a ${nome}.`
         : `Removida de ${nome}.`
     );
   };
@@ -392,17 +440,33 @@ export default function MusicaPage() {
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="heading flex items-center gap-3 text-2xl font-bold text-bat-text sm:text-3xl">
-          <span>🎧</span> Trilha sonora
-        </h1>
-        <p className="mt-1 text-sm text-bat-text-secondary">
-          A música continua tocando enquanto você navega pela plataforma — os
-          controles ficam no topo, em qualquer página.
-        </p>
+      <header className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="heading flex items-center gap-3 text-2xl font-bold text-bat-text sm:text-3xl">
+            <span>🎧</span> Trilha Sonora & Playlists
+          </h1>
+          <p className="mt-1 text-sm text-bat-text-secondary">
+            Música ininterrupta enquanto você resolve questões, simulados ou lê resumos.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setModalCriarPlaylist(true)}
+            className="btn-secondary px-4 py-2.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>📚</span> + Nova Playlist
+          </button>
+          <button
+            onClick={() => setModalNova(true)}
+            className="btn-primary px-4 py-2.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>⚡</span> + Adicionar Música
+          </button>
+        </div>
       </header>
 
-      {/* ═══ LEGENDA DIDÁTICA: COMO FUNCIONA A TRILHA SONORA ═══ */}
+      {/* ═══ GUIA DIDÁTICO ═══ */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-bat-gold-400/25 bg-bat-bg-card/90 p-4 shadow-xl backdrop-blur-md">
         <div className="flex items-center justify-between gap-3 border-b border-bat-border/50 pb-3">
           <div className="flex items-center gap-2.5">
@@ -411,10 +475,10 @@ export default function MusicaPage() {
             </span>
             <div>
               <h3 className="text-sm font-bold text-bat-text">
-                Central da Trilha Sonora — Como Funciona?
+                Central da Trilha Sonora — Privacidade & Foco Total
               </h3>
               <p className="text-xs text-bat-text-muted">
-                Foco profundo com trilha contínua e integração multiplataforma
+                Suas músicas importadas são 100% privadas. Crie suas playlists e estude com o melhor do YouTube e Spotify.
               </p>
             </div>
           </div>
@@ -430,66 +494,107 @@ export default function MusicaPage() {
           <div className="mt-3 grid grid-cols-1 gap-3 pt-1 text-xs text-bat-text-secondary sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
               <p className="mb-1 flex items-center gap-1.5 font-bold text-bat-gold-400">
-                <span>🎧</span> Player Contínuo
+                <span>🔒</span> Acervo Pessoal & Privado
               </p>
               <p className="leading-relaxed text-bat-text-muted">
-                A música nunca para. Você pode resolver questões, simulados, ler resumos e usar o chat sem o áudio recomeçar.
+                As músicas que você adiciona ficam visíveis exclusivamente para você no seu acervo pessoal.
               </p>
             </div>
             <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
               <p className="mb-1 flex items-center gap-1.5 font-bold text-red-400">
-                <span>▶️</span> Busca no YouTube
+                <span>▶️</span> YouTube Sem Interrupções
               </p>
               <p className="leading-relaxed text-bat-text-muted">
-                Pesquise qualquer música ou artista pelo nome. Veja miniatura, canal e duração antes de adicionar ao acervo ou playlists.
+                Pesquise por nome, artista ou link. O áudio toca em segundo plano e você pode abrir o vídeo em miniatura a qualquer momento.
               </p>
             </div>
             <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
               <p className="mb-1 flex items-center gap-1.5 font-bold text-emerald-400">
-                <span>🟢</span> Importador Spotify
+                <span>🟢</span> Playlists do Spotify
               </p>
               <p className="leading-relaxed text-bat-text-muted">
-                Cole o link de uma playlist pública do Spotify para importar as faixas e criar sua playlist automaticamente na BatCaverna.
+                Cole o link de uma playlist pública do Spotify para conectar automaticamente todas as faixas e criar sua playlist na BatCaverna.
               </p>
             </div>
             <div className="rounded-xl border border-bat-border/40 bg-bat-bg-secondary/40 p-3">
               <p className="mb-1 flex items-center gap-1.5 font-bold text-cyan-400">
-                <span>🧠</span> Dica de Foco
+                <span>📚</span> Gestão de Playlists
               </p>
               <p className="leading-relaxed text-bat-text-muted">
-                Trilhas instrumentais, lo-fi e clássicas potencializam a concentração sem disputar atenção verbal durante a leitura das questões.
+                Organize suas faixas por matéria ou momento: Playlists para Foco Pesado, Simulados, Manhãs e Descanso.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* ═══ ABAS ═══ */}
-      <div className="mb-5 flex flex-wrap gap-2">
-        {(
-          [
-            ["acervo", "🎵 Acervo"],
-            ["favoritas", "⭐ Favoritas"],
-            ["playlists", "📚 Playlists"],
-          ] as [Aba, string][]
-        ).map(([valor, rotulo]) => (
-          <button
-            key={valor}
-            onClick={() => setAba(valor)}
-            className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
-              aba === valor
-                ? "border-bat-gold-400/40 bg-bat-gold-400/15 text-bat-gold-400"
-                : "border-bat-border bg-bat-bg-card text-bat-text-secondary hover:border-bat-gold-400/25"
-            }`}
-          >
-            {rotulo}
-          </button>
-        ))}
+      {/* ═══ ABAS PRINCIPAIS ═══ */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["acervo", "🎵 Acervo Geral"],
+              ["favoritas", "⭐ Favoritas"],
+              ["playlists", "📚 Minhas Playlists"],
+            ] as [Aba, string][]
+          ).map(([valor, rotulo]) => (
+            <button
+              key={valor}
+              onClick={() => setAba(valor)}
+              className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                aba === valor
+                  ? "border-bat-gold-400/40 bg-bat-gold-400/15 text-bat-gold-400 shadow-sm"
+                  : "border-bat-border bg-bat-bg-card text-bat-text-secondary hover:border-bat-gold-400/25"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub-filtros de origem quando no Acervo */}
+        {aba === "acervo" && (
+          <div className="flex items-center rounded-xl border border-bat-border bg-bat-bg-card p-1 text-xs">
+            <button
+              onClick={() => setOrigemAcervo("todas")}
+              className={`cursor-pointer rounded-lg px-3 py-1 font-medium transition-all ${
+                origemAcervo === "todas"
+                  ? "bg-bat-gold-400 text-black font-bold"
+                  : "text-bat-text-secondary hover:text-white"
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setOrigemAcervo("minhas")}
+              className={`cursor-pointer rounded-lg px-3 py-1 font-medium transition-all ${
+                origemAcervo === "minhas"
+                  ? "bg-bat-gold-400 text-black font-bold"
+                  : "text-bat-text-secondary hover:text-white"
+              }`}
+            >
+              👤 Minhas Músicas
+            </button>
+            <button
+              onClick={() => setOrigemAcervo("batcaverna")}
+              className={`cursor-pointer rounded-lg px-3 py-1 font-medium transition-all ${
+                origemAcervo === "batcaverna"
+                  ? "bg-bat-gold-400 text-black font-bold"
+                  : "text-bat-text-secondary hover:text-white"
+              }`}
+            >
+              🦇 Acervo BatCaverna
+            </button>
+          </div>
+        )}
       </div>
 
       {aviso && (
-        <p className="mb-4 rounded-xl border border-bat-border bg-bat-bg-secondary/60 px-4 py-2.5 text-sm text-bat-text-secondary">
-          {aviso}
+        <p className="mb-4 rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/10 px-4 py-2.5 text-xs sm:text-sm font-bold text-bat-gold-400 flex items-center justify-between">
+          <span>{aviso}</span>
+          <button onClick={() => setAviso(null)} className="cursor-pointer text-xs hover:underline">
+            ✕
+          </button>
         </p>
       )}
 
@@ -503,16 +608,10 @@ export default function MusicaPage() {
               placeholder="Buscar por título, artista ou álbum..."
               className="input-field min-w-0 flex-1"
             />
-            <button
-              onClick={() => setModalNova(true)}
-              className="btn-secondary shrink-0 px-5 py-2.5 text-sm"
-            >
-              + Adicionar faixa
-            </button>
             {musicas.length > 0 && (
               <button
                 onClick={() => tocarFila(musicas, 0)}
-                className="btn-primary shrink-0 px-5 py-2.5 text-sm"
+                className="btn-primary shrink-0 px-5 py-2.5 text-sm cursor-pointer"
               >
                 ▶ Tocar tudo
               </button>
@@ -528,6 +627,7 @@ export default function MusicaPage() {
           ) : musicas.length === 0 ? (
             <VazioAcervo
               favoritas={aba === "favoritas"}
+              origemMinhas={origemAcervo === "minhas"}
               temBusca={busca.trim().length >= 2}
               onAdicionar={() => setModalNova(true)}
             />
@@ -567,7 +667,7 @@ export default function MusicaPage() {
                       <div className="flex items-center gap-1.5">
                         <p
                           className={`truncate text-sm font-medium ${
-                            ehAtual ? "text-bat-gold-400" : "text-bat-text"
+                            ehAtual ? "text-bat-gold-400 font-bold" : "text-bat-text"
                           }`}
                         >
                           {ehAtual && tocando ? "▶ " : ""}
@@ -581,6 +681,11 @@ export default function MusicaPage() {
                         {m.fonte === "spotify" && (
                           <span className="shrink-0 rounded bg-emerald-600/20 border border-emerald-500/30 px-1 py-0.2 text-[9px] font-bold text-emerald-400">
                             Spotify
+                          </span>
+                        )}
+                        {m.ehMinha && (
+                          <span className="shrink-0 rounded bg-bat-gold-400/15 border border-bat-gold-400/30 px-1 py-0.2 text-[9px] font-bold text-bat-gold-400">
+                            Minha
                           </span>
                         )}
                       </div>
@@ -600,18 +705,14 @@ export default function MusicaPage() {
                       onClick={() => favoritar(m)}
                       className="shrink-0 cursor-pointer px-1 text-lg transition-transform hover:scale-110"
                       aria-label={m.favorita ? "Desfavoritar" : "Favoritar"}
+                      title={m.favorita ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                     >
                       {m.favorita ? "⭐" : "☆"}
                     </button>
 
-                    {/* Adicionar à playlist. A rota existia desde sempre e
-                        nunca teve este botão: dava para criar playlist e ela
-                        ficava vazia para sempre. */}
+                    {/* Adicionar à playlist */}
                     <div
                       className="relative shrink-0"
-                      // O ouvinte de "clicou fora" vive no document, que fica
-                      // acima da raiz do React: sem parar aqui, o mesmo clique
-                      // que abre o menu chegaria lá e o fecharia na sequência.
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
@@ -620,7 +721,7 @@ export default function MusicaPage() {
                         }
                         className="cursor-pointer rounded-lg px-2 py-1 text-sm text-bat-text-muted transition-colors hover:bg-bat-bg-secondary hover:text-bat-gold-400"
                         aria-label={`Adicionar ${m.titulo} a uma playlist`}
-                        aria-expanded={menuPara === m.id}
+                        title="Adicionar à playlist"
                       >
                         ＋
                       </button>
@@ -657,7 +758,7 @@ export default function MusicaPage() {
                                       <span
                                         className={
                                           jaTem
-                                            ? "shrink-0 text-bat-success"
+                                            ? "shrink-0 text-bat-success font-bold"
                                             : "shrink-0 text-bat-text-muted"
                                         }
                                       >
@@ -689,7 +790,7 @@ export default function MusicaPage() {
                               <button
                                 onClick={() => criarPlaylistRapidaParaMusica(m)}
                                 disabled={criandoPlaylistMenu || novaPlaylistMenu.trim().length < 2}
-                                className="btn-primary text-xs px-2.5 py-1 h-7 shrink-0 disabled:opacity-40"
+                                className="btn-primary text-xs px-2.5 py-1 h-7 shrink-0 disabled:opacity-40 cursor-pointer"
                                 title="Criar playlist e adicionar esta música"
                               >
                                 {criandoPlaylistMenu ? "..." : "＋"}
@@ -699,6 +800,17 @@ export default function MusicaPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Excluir da biblioteca (se for uma faixa que o aluno importou) */}
+                    {m.ehMinha && (
+                      <button
+                        onClick={() => excluirMusica(m)}
+                        className="shrink-0 cursor-pointer text-xs text-bat-text-muted hover:text-red-400 p-1 transition-colors"
+                        title="Remover música do seu acervo"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -715,46 +827,57 @@ export default function MusicaPage() {
               value={novaPlaylist}
               onChange={(e) => setNovaPlaylist(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !criandoPlaylist && criarPlaylist()}
-              placeholder="Nome da nova playlist..."
+              placeholder="Criar nova playlist (ex: Foco Pesado, Matemática, Noturna)..."
               disabled={criandoPlaylist}
               className="input-field min-w-0 flex-1"
             />
             <button
               onClick={criarPlaylist}
               disabled={criandoPlaylist || novaPlaylist.trim().length < 2}
-              className="btn-primary shrink-0 px-5 py-2.5 text-sm disabled:opacity-40"
+              className="btn-primary shrink-0 px-5 py-2.5 text-sm disabled:opacity-40 cursor-pointer"
             >
-              {criandoPlaylist ? "Criando..." : "Criar playlist"}
+              {criandoPlaylist ? "Criando..." : "＋ Criar Playlist"}
             </button>
           </div>
 
           {playlists.length === 0 ? (
             <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-10 text-center">
               <span className="mb-3 block text-4xl">📚</span>
-              <p className="text-sm text-bat-text-secondary">
-                Você ainda não tem playlists. Crie uma acima e depois, no
-                acervo, toque em{" "}
-                <span className="text-bat-gold-400">＋</span> na faixa que
-                quiser guardar.
+              <h3 className="heading text-lg font-bold text-bat-text mb-1">
+                Você ainda não criou nenhuma playlist
+              </h3>
+              <p className="text-xs text-bat-text-secondary max-w-md mx-auto mb-4">
+                Organize suas faixas favoritas para cada disciplina ou fase de estudo.
               </p>
+              <button
+                onClick={() => setModalCriarPlaylist(true)}
+                className="btn-primary px-5 py-2 text-xs font-bold cursor-pointer"
+              >
+                + Criar Minha Primeira Playlist
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {playlists.map((p) => (
                 <div
                   key={p.id}
-                  className="rounded-2xl border border-bat-border bg-bat-bg-card p-4"
+                  className="rounded-2xl border border-bat-border bg-bat-bg-card p-4 transition-all hover:border-bat-gold-400/30"
                 >
-                  <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="mb-3 flex items-start justify-between gap-2 border-b border-bat-border/50 pb-3">
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-bold text-bat-text">
                         {p.nome}
                       </h3>
-                      <p className="text-xs text-bat-text-muted">
-                        {p.musicas.length} faixa
-                        {p.musicas.length !== 1 ? "s" : ""}
+                      {p.descricao && (
+                        <p className="text-[11px] text-bat-text-secondary truncate mt-0.5">
+                          {p.descricao}
+                        </p>
+                      )}
+                      <p className="text-xs text-bat-text-muted mt-0.5">
+                        {p.musicas.length} faixa{p.musicas.length !== 1 ? "s" : ""}
                       </p>
                     </div>
+
                     <div className="flex items-center gap-1.5 shrink-0">
                       {p.musicas.length > 0 && (
                         <button
@@ -764,6 +887,13 @@ export default function MusicaPage() {
                           ▶ Tocar
                         </button>
                       )}
+                      <button
+                        onClick={() => setPlaylistGerenciando(p)}
+                        className="cursor-pointer rounded-lg border border-bat-border px-2.5 py-1.5 text-xs font-bold text-bat-text-secondary hover:bg-bat-bg-secondary transition-colors"
+                        title="Adicionar ou gerenciar músicas nesta playlist"
+                      >
+                        ＋ Adicionar Faixas
+                      </button>
                       <button
                         onClick={() => apagarPlaylist(p.id, p.nome)}
                         title="Excluir playlist"
@@ -776,25 +906,31 @@ export default function MusicaPage() {
                   </div>
 
                   {p.musicas.length > 0 ? (
-                    <ul className="space-y-1">
+                    <ul className="space-y-1 max-h-56 overflow-y-auto pr-1">
                       {p.musicas.map((m, i) => (
                         <li
                           key={m.id}
-                          className="group flex items-center gap-2 text-xs text-bat-text-secondary"
+                          className="group flex items-center gap-2 text-xs text-bat-text-secondary p-1 rounded-lg hover:bg-bat-bg-secondary/60"
                         >
-                          <span className="w-4 shrink-0 text-bat-text-muted">
+                          <span className="w-4 shrink-0 text-bat-text-muted text-[11px]">
                             {i + 1}.
                           </span>
                           <button
                             onClick={() => tocarFila(p.musicas, i)}
                             className="min-w-0 flex-1 cursor-pointer truncate text-left hover:text-bat-gold-400"
                           >
-                            {m.titulo}
+                            <span className="font-medium text-bat-text">{m.titulo}</span>
+                            {m.artista && (
+                              <span className="text-[11px] text-bat-text-muted ml-1.5">
+                                • {m.artista}
+                              </span>
+                            )}
                           </button>
                           <button
                             onClick={() => mexerNaPlaylist(p.id, m, "remover")}
                             className="shrink-0 cursor-pointer px-1 text-bat-text-muted opacity-0 transition-opacity hover:text-bat-error focus:opacity-100 group-hover:opacity-100"
                             aria-label={`Tirar ${m.titulo} de ${p.nome}`}
+                            title="Remover desta playlist"
                           >
                             ✕
                           </button>
@@ -802,17 +938,193 @@ export default function MusicaPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-bat-text-muted">
-                      Playlist vazia. Vá ao acervo e toque em{" "}
-                      <span className="text-bat-gold-400">＋</span> na faixa que
-                      quiser.
-                    </p>
+                    <div className="py-4 text-center">
+                      <p className="text-xs text-bat-text-muted mb-2">
+                        Esta playlist está vazia.
+                      </p>
+                      <button
+                        onClick={() => setPlaylistGerenciando(p)}
+                        className="btn-secondary px-3 py-1 text-xs cursor-pointer font-bold"
+                      >
+                        + Escolher Músicas para Incluir
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
             </div>
           )}
         </>
+      )}
+
+      {/* ═══ MODAL GERENCIAR MÚSICAS DA PLAYLIST ═══ */}
+      {playlistGerenciando && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+          onClick={() => setPlaylistGerenciando(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-3xl border border-bat-gold-400/30 bg-bat-bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-bat-border/60 shrink-0">
+              <div>
+                <h3 className="heading text-base font-bold text-bat-text">
+                  📚 {playlistGerenciando.nome}
+                </h3>
+                <p className="text-xs text-bat-text-muted">
+                  Toque para adicionar ou remover faixas desta playlist
+                </p>
+              </div>
+              <button
+                onClick={() => setPlaylistGerenciando(null)}
+                className="cursor-pointer text-sm text-bat-text-muted hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="my-3 flex-1 overflow-y-auto space-y-1.5 pr-1">
+              {musicas.length === 0 ? (
+                <p className="text-xs text-bat-text-muted py-6 text-center">
+                  Nenhuma música no seu acervo no momento.
+                </p>
+              ) : (
+                musicas.map((m) => {
+                  const jaEstaNaPlaylist = playlistGerenciando.musicas.some(
+                    (x) => x.id === m.id
+                  );
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border text-xs transition-colors ${
+                        jaEstaNaPlaylist
+                          ? "bg-bat-gold-400/10 border-bat-gold-400/30"
+                          : "bg-bat-bg-secondary/40 border-bat-border/60 hover:border-bat-gold-400/25"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-bat-text truncate">{m.titulo}</p>
+                        <p className="text-[11px] text-bat-text-muted truncate">
+                          {m.artista || "Desconhecido"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await mexerNaPlaylist(
+                            playlistGerenciando.id,
+                            m,
+                            jaEstaNaPlaylist ? "remover" : "adicionar"
+                          );
+                          // Atualiza o estado local do modal
+                          setPlaylistGerenciando((prev) => {
+                            if (!prev) return null;
+                            const sem = prev.musicas.filter((x) => x.id !== m.id);
+                            return {
+                              ...prev,
+                              musicas: jaEstaNaPlaylist ? sem : [...sem, m],
+                            };
+                          });
+                        }}
+                        className={`cursor-pointer px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          jaEstaNaPlaylist
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 hover:bg-bat-gold-400/30"
+                        }`}
+                      >
+                        {jaEstaNaPlaylist ? "✓ Na Playlist" : "+ Adicionar"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-bat-border/60 flex justify-end shrink-0">
+              <button
+                onClick={() => setPlaylistGerenciando(null)}
+                className="btn-primary px-5 py-2 text-xs font-bold cursor-pointer"
+              >
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL CRIAR PLAYLIST DEDICADA ═══ */}
+      {modalCriarPlaylist && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+          onClick={() => setModalCriarPlaylist(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-bat-gold-400/30 bg-bat-bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-bat-border/60">
+              <h2 className="heading text-base font-bold text-bat-text flex items-center gap-2">
+                <span>📚</span> Nova Playlist de Estudo
+              </h2>
+              <button
+                onClick={() => setModalCriarPlaylist(false)}
+                className="cursor-pointer text-sm text-bat-text-muted hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-xs font-bold text-bat-text block mb-1">
+                  Nome da Playlist *
+                </label>
+                <input
+                  value={formPlaylist.nome}
+                  onChange={(e) =>
+                    setFormPlaylist({ ...formPlaylist, nome: e.target.value })
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && salvarNovaPlaylist()}
+                  placeholder="Ex: Foco Pesado, Simulados, Instrumental..."
+                  className="input-field text-sm w-full"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-bat-text block mb-1">
+                  Descrição (Opcional)
+                </label>
+                <input
+                  value={formPlaylist.descricao}
+                  onChange={(e) =>
+                    setFormPlaylist({ ...formPlaylist, descricao: e.target.value })
+                  }
+                  placeholder="Ex: Músicas sem vocal para resolver provas..."
+                  className="input-field text-sm w-full"
+                />
+              </div>
+
+              <div className="pt-3 flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setModalCriarPlaylist(false)}
+                  className="btn-secondary px-4 py-2 text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={criandoPlaylistDedicada || formPlaylist.nome.trim().length < 2}
+                  onClick={salvarNovaPlaylist}
+                  className="btn-primary px-5 py-2 text-xs font-bold disabled:opacity-50 cursor-pointer"
+                >
+                  {criandoPlaylistDedicada ? "Criando..." : "Criar Playlist"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ═══ MODAL INTELIGENTE: ADICIONAR MÚSICA / IMPORTAR PLAYLIST ═══ */}
@@ -875,7 +1187,7 @@ export default function MusicaPage() {
             {abaModal === "youtube" && (
               <div className="space-y-4">
                 <p className="text-xs text-bat-text-muted leading-relaxed">
-                  Digite o nome da música ou artista. O sistema pesquisa no YouTube com miniatura, canal e duração para você adicionar diretamente ao seu acervo ou playlist.
+                  Digite o nome da música ou artista. As músicas adicionadas ficam salvas exclusivamente no seu acervo pessoal ou playlist.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -888,7 +1200,7 @@ export default function MusicaPage() {
                   <button
                     onClick={buscarYouTube}
                     disabled={ytBuscando || ytBusca.trim().length < 2}
-                    className="btn-primary shrink-0 px-4 py-2 text-xs font-bold disabled:opacity-50"
+                    className="btn-primary shrink-0 px-4 py-2 text-xs font-bold disabled:opacity-50 cursor-pointer"
                   >
                     {ytBuscando ? "Buscando..." : "🔍 Buscar"}
                   </button>
@@ -924,7 +1236,7 @@ export default function MusicaPage() {
                               {item.artista} • {item.duracao_formatada}
                             </p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => adicionarDoYouTube(item)}
                               disabled={jaAdd}
@@ -934,8 +1246,44 @@ export default function MusicaPage() {
                                   : "bg-bat-gold-400/20 text-bat-gold-400 hover:bg-bat-gold-400/30 border border-bat-gold-400/40"
                               }`}
                             >
-                              {jaAdd ? "✓ Adicionada" : "+ Adicionar"}
+                              {jaAdd ? "✓ Adicionada" : "+ Acervo"}
                             </button>
+
+                            {playlists.length > 0 && (
+                              <div>
+                                <button
+                                  onClick={() =>
+                                    setMenuYtPlaylist((curr) =>
+                                      curr === item.videoId ? null : item.videoId
+                                    )
+                                  }
+                                  className="cursor-pointer rounded-lg border border-bat-border px-2 py-1.5 text-xs font-bold text-bat-text-muted hover:text-white"
+                                  title="Adicionar diretamente a uma playlist"
+                                >
+                                  ＋ Playlist
+                                </button>
+
+                                {menuYtPlaylist === item.videoId && (
+                                  <div className="absolute right-0 top-full z-40 mt-1 w-56 rounded-xl border border-bat-border bg-bat-bg-elevated p-1 shadow-2xl">
+                                    <p className="px-2 py-1 text-[10px] font-bold text-bat-text-muted uppercase">
+                                      Escolha a Playlist:
+                                    </p>
+                                    <ul className="max-h-40 overflow-y-auto py-1">
+                                      {playlists.map((pl) => (
+                                        <li key={pl.id}>
+                                          <button
+                                            onClick={() => adicionarDoYouTube(item, pl.id)}
+                                            className="w-full text-left px-2.5 py-1.5 text-xs text-bat-text hover:bg-bat-bg-secondary rounded truncate cursor-pointer"
+                                          >
+                                            {pl.nome}
+                                          </button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -955,7 +1303,7 @@ export default function MusicaPage() {
                   <ol className="list-decimal list-inside space-y-1 text-emerald-200/80 text-[11px]">
                     <li>Abra sua playlist pública no Spotify.</li>
                     <li>Clique nos 3 pontos (...) &gt; Compartilhar &gt; <strong>Copiar link da playlist</strong>.</li>
-                    <li>Cole o link abaixo e clique no botão de importar.</li>
+                    <li>Cole o link abaixo e clique no botão de importar. O sistema conectará com o áudio completo no YouTube.</li>
                   </ol>
                 </div>
 
@@ -980,7 +1328,7 @@ export default function MusicaPage() {
                 <button
                   onClick={importarDoSpotify}
                   disabled={spotifyImportando || !spotifyUrl.trim()}
-                  className="btn-primary w-full py-2.5 text-xs font-bold disabled:opacity-40"
+                  className="btn-primary w-full py-2.5 text-xs font-bold disabled:opacity-40 cursor-pointer"
                 >
                   {spotifyImportando ? "Importando..." : "Importar Playlist para a BatCaverna"}
                 </button>
@@ -991,7 +1339,7 @@ export default function MusicaPage() {
             {abaModal === "manual" && (
               <div className="space-y-3">
                 <p className="text-xs text-bat-text-muted leading-relaxed">
-                  Informe o link direto de um arquivo de áudio (.mp3, .ogg, .m4a) ao qual você tem direito de acesso.
+                  Informe o link de um vídeo do YouTube ou arquivo direto (.mp3, .ogg) para adicionar ao seu acervo.
                 </p>
                 <input
                   value={novaFaixa.titulo}
@@ -1014,7 +1362,7 @@ export default function MusicaPage() {
                   onChange={(e) =>
                     setNovaFaixa({ ...novaFaixa, audio_url: e.target.value })
                   }
-                  placeholder="URL do áudio (https://...mp3) *"
+                  placeholder="URL do áudio (YouTube ou link .mp3) *"
                   className="input-field text-sm"
                 />
                 <input
@@ -1025,8 +1373,8 @@ export default function MusicaPage() {
                   placeholder="URL da capa (opcional)"
                   className="input-field text-sm"
                 />
-                <button onClick={adicionarFaixa} className="btn-primary w-full py-2.5 text-xs font-bold mt-2">
-                  Adicionar ao Acervo
+                <button onClick={adicionarFaixa} className="btn-primary w-full py-2.5 text-xs font-bold mt-2 cursor-pointer">
+                  Adicionar ao Meu Acervo
                 </button>
               </div>
             )}
@@ -1034,7 +1382,7 @@ export default function MusicaPage() {
             <div className="mt-5 border-t border-bat-border/40 pt-3 flex justify-end">
               <button
                 onClick={() => setModalNova(false)}
-                className="btn-secondary px-5 py-2 text-xs"
+                className="btn-secondary px-5 py-2 text-xs cursor-pointer"
               >
                 Fechar
               </button>
@@ -1048,19 +1396,25 @@ export default function MusicaPage() {
 
 function VazioAcervo({
   favoritas,
+  origemMinhas,
   temBusca,
   onAdicionar,
 }: {
   favoritas: boolean;
+  origemMinhas: boolean;
   temBusca: boolean;
   onAdicionar: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-10 text-center">
-      <span className="mb-3 block text-4xl">{favoritas ? "⭐" : "🎵"}</span>
+      <span className="mb-3 block text-4xl">
+        {favoritas ? "⭐" : origemMinhas ? "👤" : "🎵"}
+      </span>
       <h2 className="heading mb-2 text-lg text-bat-text">
         {favoritas
           ? "Nenhuma favorita ainda"
+          : origemMinhas
+          ? "Você ainda não adicionou músicas particulares"
           : temBusca
           ? "Nada encontrado"
           : "O acervo está vazio"}
@@ -1068,13 +1422,15 @@ function VazioAcervo({
       <p className="mx-auto mb-5 max-w-md text-sm leading-relaxed text-bat-text-secondary">
         {favoritas
           ? "Toque na estrela ao lado de uma faixa no acervo para guardá-la aqui."
+          : origemMinhas
+          ? "Adicione faixas do YouTube ou Spotify. Elas serão visíveis apenas para você!"
           : temBusca
           ? "Tente outro termo, ou adicione a faixa ao acervo."
-          : "Adicione faixas por link direto de áudio. Instrumental e lo-fi funcionam melhor para estudar — música com letra compete com a leitura."}
+          : "Adicione faixas do YouTube ou Spotify para estudar com foco total."}
       </p>
       {!favoritas && (
-        <button onClick={onAdicionar} className="btn-primary px-6 py-2.5">
-          + Adicionar a primeira faixa
+        <button onClick={onAdicionar} className="btn-primary px-6 py-2.5 cursor-pointer">
+          + Adicionar Música
         </button>
       )}
     </div>

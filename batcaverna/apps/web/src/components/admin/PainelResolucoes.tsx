@@ -20,7 +20,7 @@ const FILAS: { chave: Fila; rotulo: string; emoji: string; badge: string; ajuda:
     rotulo: "Questões Sem Ilustração",
     emoji: "📐",
     badge: "Desenhos / Figuras",
-    ajuda: "Questões de Geometria ou Física que dependem de desenho ou gráfico. Adicione ou edite o desenho SVG da questão.",
+    ajuda: "Questões com figuras ausentes extraídas de provas (desenhos de geometria, física, ou tirinhas e charges de português).",
   },
 ];
 
@@ -68,7 +68,11 @@ export function PainelResolucoes() {
   const [pagina, setPagina] = useState(1);
   const [carregando, setCarregando] = useState(true);
   const [fila, setFila] = useState<Fila>("resolucao");
-  const [filtros, setFiltros] = useState({ concurso: "todos", ordem: "erradas" });
+  const [filtros, setFiltros] = useState({
+    concurso: "todos",
+    materia: "todas",
+    ordem: "erradas",
+  });
   const [busca, setBusca] = useState("");
 
   const [abertaId, setAbertaId] = useState<string | null>(null);
@@ -81,11 +85,17 @@ export function PainelResolucoes() {
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [concursos, setConcursos] = useState<{ sigla: string }[]>([]);
+  const [materias, setMaterias] = useState<{ id: string; nome: string; icone_emoji: string | null }[]>([]);
 
   useEffect(() => {
-    fetchWithAuth("/api/concursos")
+    fetchWithAuth("/api/questoes/filtros")
       .then((r) => r.json())
-      .then((j) => j.success && setConcursos(j.data))
+      .then((j) => {
+        if (j.success && j.data) {
+          if (j.data.concursos) setConcursos(j.data.concursos);
+          if (j.data.materias) setMaterias(j.data.materias);
+        }
+      })
       .catch(() => undefined);
   }, []);
 
@@ -99,6 +109,7 @@ export function PainelResolucoes() {
         filtro: fila,
       });
       if (filtros.concurso !== "todos") qs.set("concurso", filtros.concurso);
+      if (filtros.materia !== "todas") qs.set("materia", filtros.materia);
 
       const res = await fetchWithAuth(`/api/admin/questoes/pendentes?${qs}`);
       const json = await res.json();
@@ -218,25 +229,28 @@ export function PainelResolucoes() {
 
   return (
     <div className="space-y-6">
-      {/* ═══ CARTÃO GUIA DIDÁTICO ═══ */}
+      {/* ═══ CARTÃO GUIA DIDÁTICO ADAPTÁVEL ═══ */}
       <div className="rounded-3xl border border-bat-border bg-gradient-to-br from-bat-bg-card via-bat-bg-card to-bat-bg-secondary p-6 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-5 border-b border-bat-border/60">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-bat-gold-400/10 border border-bat-gold-400/25 text-bat-gold-400 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-              <span>✍️</span> Moderação de Conteúdo Pedagógico
+              <span>{fila === "figura" ? "📐" : "✍️"}</span>{" "}
+              {fila === "figura" ? "Ilustração Técnica & Artes Visuais" : "Moderação de Conteúdo Pedagógico"}
             </div>
             <h2 className="heading text-2xl font-black text-white">
-              Comentar Questões & Ilustrações
+              {fila === "figura" ? "Questões com Figuras & Ilustrações Pendentes" : "Comentar Questões & Gabaritos"}
             </h2>
             <p className="text-bat-text-secondary text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
-              Aqui você resolve as pendências do banco de questões: escreva a explicação passo a passo ou adicione a imagem/figura para que os alunos não fiquem apenas com a letra seca do gabarito.
+              {fila === "figura"
+                ? "Adicione ilustrações em vetor (SVG) para questões de Geometria, Física ou Tirinhas/Charges de Português extraídas das provas que não vieram com imagem renderizada."
+                : "Escreva explicações e resoluções passo a passo com fórmulas matemáticas para que os soldados da BatCaverna não fiquem apenas com a letra seca do gabarito."}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-bat-gold-400/30 bg-bat-gold-400/10 px-5 py-3 text-center shadow-xs">
               <span className="text-[10px] font-bold text-bat-text-muted uppercase tracking-wider block">
-                Total na Fila
+                {fila === "figura" ? "Figuras na Fila" : "Resoluções na Fila"}
               </span>
               <span className="heading text-2xl font-black text-bat-gold-400">
                 {total.toLocaleString("pt-BR")}
@@ -245,24 +259,36 @@ export function PainelResolucoes() {
           </div>
         </div>
 
-        {/* 3 Passos Rápidos de Uso */}
+        {/* 3 Passos Rápidos de Uso Adaptados */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-5">
           <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/40 border border-bat-border/60">
-            <span className="text-base mb-1 block">1️⃣ Escolha a Questão</span>
+            <span className="text-base mb-1 block font-bold text-bat-gold-400">
+              1️⃣ Escolha a Questão
+            </span>
             <p className="text-[11px] text-bat-text-secondary leading-relaxed">
-              A lista mostra primeiro as questões que os alunos mais erram nos simulados e questões avulsas.
+              {fila === "figura"
+                ? "Filtre por concurso e matéria (ex: Matemática para geometria, Português para charges/tirinhas)."
+                : "A lista prioriza as questões que os alunos mais erram em simulados e provas oficiais."}
             </p>
           </div>
           <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/40 border border-bat-border/60">
-            <span className="text-base mb-1 block">2️⃣ Escreva a Explicação</span>
+            <span className="text-base mb-1 block font-bold text-bat-gold-400">
+              {fila === "figura" ? "2️⃣ Insira o Desenho / SVG" : "2️⃣ Escreva a Explicação"}
+            </span>
             <p className="text-[11px] text-bat-text-secondary leading-relaxed">
-              Explique o raciocínio em texto e divida o cálculo em passos simples com as fórmulas utilizadas.
+              {fila === "figura"
+                ? "Cole o código vetorial <svg> correspondente à descrição extraída da prova para renderização nítida."
+                : "Explique o raciocínio em texto simples e divida o desenvolvimento do cálculo em etapas."}
             </p>
           </div>
           <div className="p-3.5 rounded-2xl bg-bat-bg-elevated/40 border border-bat-border/60">
-            <span className="text-base mb-1 block">3️⃣ Salve & Publique</span>
+            <span className="text-base mb-1 block font-bold text-bat-gold-400">
+              3️⃣ Salve & Publique
+            </span>
             <p className="text-[11px] text-bat-text-secondary leading-relaxed">
-              Ao clicar em salvar, a resolução entra imediatamente para todos os alunos que abrirem o gabarito.
+              {fila === "figura"
+                ? "Ao salvar, o desenho é exibido imediatamente no enunciado da questão para todos os estudantes."
+                : "A resolução entra no ar imediatamente no gabarito comentado acessado pelos alunos."}
             </p>
           </div>
         </div>
@@ -305,7 +331,7 @@ export function PainelResolucoes() {
             })}
           </div>
 
-          {/* Filtro por Concurso e Ordem */}
+          {/* Filtros por Concurso, Matéria e Ordem */}
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={filtros.concurso}
@@ -313,12 +339,28 @@ export function PainelResolucoes() {
                 setPagina(1);
                 setFiltros({ ...filtros, concurso: e.target.value });
               }}
-              className="input-field text-xs py-2 px-3 min-w-[150px]"
+              className="input-field text-xs py-2 px-3 min-w-[140px]"
             >
               <option value="todos">Todos os Concursos</option>
               {concursos.map((c) => (
                 <option key={c.sigla} value={c.sigla}>
                   {c.sigla}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filtros.materia}
+              onChange={(e) => {
+                setPagina(1);
+                setFiltros({ ...filtros, materia: e.target.value });
+              }}
+              className="input-field text-xs py-2 px-3 min-w-[140px]"
+            >
+              <option value="todas">Todas as Matérias</option>
+              {materias.map((m) => (
+                <option key={m.id} value={m.nome}>
+                  {m.icone_emoji ? `${m.icone_emoji} ` : ""}{m.nome}
                 </option>
               ))}
             </select>
@@ -341,29 +383,32 @@ export function PainelResolucoes() {
         <div className="relative">
           <input
             type="text"
-            placeholder="Buscar por palavra no enunciado ou disciplina..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            className="w-full bg-bat-bg-elevated/80 border border-bat-border/80 rounded-xl px-3.5 py-2 text-xs text-bat-text placeholder-bat-text-muted focus:outline-none focus:border-bat-gold-400/60"
+            placeholder="Buscar por palavra no enunciado, disciplina, assunto..."
+            className="input-field text-xs py-2 px-3 w-full"
           />
           {busca && (
             <button
               onClick={() => setBusca("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-bat-text-muted hover:text-white"
+              className="absolute right-3 top-2.5 text-xs text-bat-text-muted hover:text-white cursor-pointer"
             >
-              Limpar
+              ✕
             </button>
           )}
         </div>
-
-        {aviso && (
-          <p className="rounded-xl border border-bat-border bg-bat-bg-elevated p-3 text-xs font-semibold text-bat-gold-400 animate-pulse">
-            {aviso}
-          </p>
-        )}
       </div>
 
-      {/* ═══ LISTA DE QUESTÕES ═══ */}
+      {aviso && (
+        <div className="p-3.5 rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/10 text-xs font-bold text-bat-gold-400 flex items-center justify-between">
+          <span>{aviso}</span>
+          <button onClick={() => setAviso(null)} className="text-xs hover:underline cursor-pointer">
+            ✕ Fechar
+          </button>
+        </div>
+      )}
+
+      {/* ═══ LISTA DE QUESTÕES PENDENTES ═══ */}
       {carregando ? (
         <div className="space-y-3">
           {[0, 1, 2, 3].map((i) => (
@@ -371,25 +416,34 @@ export function PainelResolucoes() {
           ))}
         </div>
       ) : itensFiltrados.length === 0 ? (
-        <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-12 text-center space-y-2">
-          <span className="text-4xl block mb-2">🎉</span>
-          <h3 className="heading text-lg font-bold text-emerald-400">
-            Excelente! Nenhuma pendência encontrada
-          </h3>
-          <p className="text-xs text-emerald-300/80 max-w-md mx-auto">
+        <div className="rounded-2xl border border-bat-border bg-bat-bg-card p-12 text-center">
+          <span className="text-4xl mb-3 block">{fila === "figura" ? "🎨" : "🎉"}</span>
+          <h3 className="heading text-lg font-bold text-bat-text">
             {fila === "figura"
-              ? "Todas as questões com este filtro já contam com ilustrações completas."
-              : "Todas as questões deste filtro já possuem resolução passo a passo cadastrada."}
+              ? "Nenhuma questão pendente de ilustração nesta categoria!"
+              : "Nenhuma questão pendente de resolução nesta categoria!"}
+          </h3>
+          <p className="text-xs text-bat-text-secondary mt-1">
+            {busca.trim()
+              ? "Tente ajustar o termo de busca ou limpar os filtros."
+              : "Todas as questões selecionadas já possuem o conteúdo cadastrado."}
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {itensFiltrados.map((q) => {
             const aberta = abertaId === q.id;
             const taxa =
               q.vezes_respondida && q.vezes_respondida > 0
                 ? Math.round(((q.vezes_acertada ?? 0) / q.vezes_respondida) * 100)
                 : null;
+
+            const ehPortuguesOuHumanas =
+              q.materias?.nome === "Português" ||
+              q.materias?.nome === "Linguagens" ||
+              q.materias?.nome === "Literatura" ||
+              q.materias?.nome === "História" ||
+              q.materias?.nome === "Geografia";
 
             return (
               <article
@@ -417,7 +471,20 @@ export function PainelResolucoes() {
                         </span>
                       )}
 
-                      {q.precisa_resolucao && (
+                      {/* Identificação Didática da Figura para tirar dúvidas do Admin */}
+                      {fila === "figura" && (
+                        <span
+                          className={`rounded-lg px-2 py-0.5 text-[11px] font-bold border ${
+                            ehPortuguesOuHumanas
+                              ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                              : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                          }`}
+                        >
+                          {ehPortuguesOuHumanas ? "📰 Tirinha / Charge Visual" : "📐 Geometria / Gráfico"}
+                        </span>
+                      )}
+
+                      {q.precisa_resolucao && fila !== "figura" && (
                         <span className="rounded-lg bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[11px] font-bold text-cyan-400">
                           Exige Cálculo
                         </span>
@@ -436,6 +503,18 @@ export function PainelResolucoes() {
                       )}
                     </div>
 
+                    {/* Resumo da Descrição da Figura para orientar o admin */}
+                    {fila === "figura" && q.figura_descricao && (
+                      <div className="rounded-lg bg-bat-bg-secondary/70 border border-bat-border/70 px-3 py-1.5 text-xs text-bat-gold-400/90 font-mono">
+                        <span className="font-bold text-bat-text-muted uppercase text-[10px] block mb-0.5">
+                          Descrição Extraída da Prova Original:
+                        </span>
+                        <p className="line-clamp-2 italic font-sans text-bat-text-secondary text-[11px]">
+                          &ldquo;{q.figura_descricao}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
                     <div className="line-clamp-2 text-xs sm:text-sm text-bat-text/90 leading-relaxed font-sans">
                       <MathText>{q.enunciado}</MathText>
                     </div>
@@ -443,7 +522,11 @@ export function PainelResolucoes() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-bold text-bat-gold-400 bg-bat-gold-400/10 px-2.5 py-1 rounded-lg border border-bat-gold-400/20">
-                      {aberta ? "Fechar Editor" : "Escrever Resolução"}
+                      {aberta
+                        ? "Fechar Editor"
+                        : fila === "figura"
+                        ? "📐 Adicionar Ilustração"
+                        : "Escrever Resolução"}
                     </span>
                     <span
                       className={`text-bat-text-muted transition-transform duration-200 ${
@@ -470,7 +553,7 @@ export function PainelResolucoes() {
                         </div>
                       )}
 
-                      <QuadroFigura descricao={q.figura_descricao} svg={q.figura_svg} />
+                      <QuadroFigura descricao={q.figura_descricao} svg={rascunho.figura_svg || q.figura_svg} />
 
                       <p className="text-xs sm:text-sm text-bat-text font-medium leading-relaxed whitespace-pre-line">
                         <MathText>{q.enunciado}</MathText>
@@ -502,14 +585,60 @@ export function PainelResolucoes() {
                       </div>
                     </div>
 
-                    {/* Campo 1: Explicação Geral / Conceitual */}
+                    {/* SE ESTIVER NA FILA DE FIGURAS: O CAMPO DE ILUSTRAÇÃO FICA EM PRIMEIRO LUGAR! */}
+                    {fila === "figura" && (
+                      <div className="space-y-3 rounded-2xl border border-bat-gold-400/40 bg-bat-gold-400/5 p-4.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-bat-gold-400 flex items-center gap-1.5">
+                            <span>📐</span> Inserir Ilustração Técnica ou Arte (SVG)
+                          </label>
+                          <span className="text-[11px] text-bat-text-muted">
+                            Cole o código &lt;svg&gt; do desenho geométrico, gráfico ou tirinha
+                          </span>
+                        </div>
+
+                        {q.figura_descricao && (
+                          <div className="rounded-xl border border-bat-gold-400/25 bg-bat-bg-card p-3 text-xs text-bat-text-secondary">
+                            <span className="font-bold text-bat-gold-400 block mb-1">
+                              💡 Descrição original identificada na prova:
+                            </span>
+                            <p className="italic leading-relaxed">{q.figura_descricao}</p>
+                          </div>
+                        )}
+
+                        <textarea
+                          value={rascunho.figura_svg}
+                          onChange={(e) =>
+                            setRascunho({ ...rascunho, figura_svg: e.target.value })
+                          }
+                          rows={6}
+                          placeholder="<svg viewBox='0 0 400 300' xmlns='http://www.w3.org/2000/svg'> ... </svg>"
+                          className="input-field text-xs font-mono w-full"
+                        />
+
+                        {/* Pré-visualização do SVG em tempo real */}
+                        {rascunho.figura_svg && (
+                          <div className="mt-3 p-4 rounded-xl border border-bat-border bg-bat-bg-card">
+                            <span className="text-[10px] font-mono font-bold uppercase text-bat-text-muted block mb-2">
+                              Prévia em Tempo Real da Imagem:
+                            </span>
+                            <div
+                              className="w-full flex justify-center items-center overflow-x-auto max-h-64"
+                              dangerouslySetInnerHTML={{ __html: rascunho.figura_svg }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Campo: Explicação Geral / Conceitual */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold uppercase tracking-wider text-bat-text flex items-center gap-1.5">
                           <span>💡</span> Explicação Geral do Gabarito
                         </label>
                         <span className="text-[11px] text-bat-text-muted">
-                          Explicação em texto direto para o aluno entender a alternativa
+                          Explicação em texto para o aluno entender a alternativa
                         </span>
                       </div>
                       <textarea
@@ -517,17 +646,17 @@ export function PainelResolucoes() {
                         onChange={(e) =>
                           setRascunho({ ...rascunho, explicacao: e.target.value })
                         }
-                        rows={4}
+                        rows={3}
                         placeholder="Escreva de forma clara por que a alternativa correta é a certa e por que as outras estão incorretas..."
                         className="input-field w-full text-xs sm:text-sm resize-y"
                       />
                     </div>
 
-                    {/* Campo 2: Passos Detalhados de Resolução */}
+                    {/* Campo: Passos Detalhados de Resolução */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold uppercase tracking-wider text-bat-text flex items-center gap-1.5">
-                          <span>🪜</span> Resolução Passo a Passo
+                          <span>🪜</span> Resolução Passo a Passo (Opcional)
                         </label>
                         <button
                           type="button"
@@ -565,7 +694,7 @@ export function PainelResolucoes() {
                                     passos: r.passos.filter((_, idx) => idx !== i),
                                   }))
                                 }
-                                className="text-xs text-bat-text-muted hover:text-red-400 p-1"
+                                className="text-xs text-bat-text-muted hover:text-red-400 p-1 cursor-pointer"
                                 title="Excluir este passo"
                               >
                                 ✕
@@ -592,26 +721,28 @@ export function PainelResolucoes() {
                       </div>
                     </div>
 
-                    {/* Campo 3: Ilustração / Figura SVG (Se a questão precisar) */}
-                    <div className="space-y-2 pt-2 border-t border-bat-border/50">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold uppercase tracking-wider text-bat-text flex items-center gap-1.5">
-                          <span>📐</span> Código SVG da Ilustração (Opcional)
-                        </label>
-                        <span className="text-[11px] text-bat-text-muted">
-                          Cole o código &lt;svg&gt; do desenho geométrico ou físico
-                        </span>
+                    {/* SE ESTIVER NA FILA DE RESOLUÇÃO: O CAMPO DE SVG FICA ABAIXO */}
+                    {fila === "resolucao" && (
+                      <div className="space-y-2 pt-2 border-t border-bat-border/50">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold uppercase tracking-wider text-bat-text flex items-center gap-1.5">
+                            <span>📐</span> Código SVG da Ilustração (Opcional)
+                          </label>
+                          <span className="text-[11px] text-bat-text-muted">
+                            Cole o código &lt;svg&gt; se a questão depender de um desenho
+                          </span>
+                        </div>
+                        <textarea
+                          value={rascunho.figura_svg}
+                          onChange={(e) =>
+                            setRascunho({ ...rascunho, figura_svg: e.target.value })
+                          }
+                          rows={3}
+                          placeholder="<svg viewBox='0 0 300 200' ...> ... </svg>"
+                          className="input-field text-xs font-mono w-full"
+                        />
                       </div>
-                      <textarea
-                        value={rascunho.figura_svg}
-                        onChange={(e) =>
-                          setRascunho({ ...rascunho, figura_svg: e.target.value })
-                        }
-                        rows={3}
-                        placeholder="<svg viewBox='0 0 300 200' ...> ... </svg>"
-                        className="input-field text-xs font-mono w-full"
-                      />
-                    </div>
+                    )}
 
                     {/* Botões de Ação */}
                     <div className="flex items-center justify-end gap-3 pt-3 border-t border-bat-border/60">
@@ -626,10 +757,15 @@ export function PainelResolucoes() {
                         type="button"
                         disabled={salvando}
                         onClick={() => salvar(q)}
-                        className="btn-primary py-2.5 px-6 text-xs font-bold disabled:opacity-50 flex items-center gap-2"
+                        className="btn-primary py-2.5 px-6 text-xs font-bold disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                       >
-                        <span>{salvando ? "Publicando..." : "Salvar & Publicar Resolução"}</span>
-                        <span>⚡</span>
+                        <span>
+                          {salvando
+                            ? "Salvando..."
+                            : fila === "figura"
+                            ? "Salvar Ilustração & Publicar 📐"
+                            : "Salvar & Publicar Resolução ⚡"}
+                        </span>
                       </button>
                     </div>
                   </div>

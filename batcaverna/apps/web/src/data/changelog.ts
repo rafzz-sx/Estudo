@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.0';
+export const CURRENT_APP_VERSION = '3.7.1';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,50 @@ export const CURRENT_APP_VERSION = '3.7.0';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.1',
+    dataLancamento: '2026-10-29T21:55:00-03:00',
+    titulo: 'Trilha Sonora Turbo: Player YouTube Contínuo, Biblioteca Pessoal Privada & Criador de Playlists',
+    resumo:
+      'Reformulação completa da Central de Música da BatCaverna: áudio contínuo sem travamentos ou pausas em navegadores e WebView, isolamento de privacidade total no acervo pessoal de cada aluno, sincronização automática de playlists públicas do Spotify com o YouTube e novo gestor ágil de playlists de estudo.',
+    destaque: true,
+    impacto: 'patch',
+    classificacao: 'pequena',
+    alteracoes: [
+      {
+        id: 'player-youtube-continuo',
+        tipo: 'correcao',
+        titulo: 'Reprodução Contínua sem Congelamento',
+        descricao:
+          'Eliminação do throttling de renderização em Chromium e Android WebView: áudio do YouTube toca continuamente em segundo plano sem pausas enquanto o aluno estuda, com suporte a Shorts, vídeos ao vivo e opção de mini-player flutuante para assistir ao clipe.',
+        tag: 'Player & Áudio',
+      },
+      {
+        id: 'acervo-privado-aluno',
+        tipo: 'novo',
+        titulo: 'Acervo de Músicas Privado & Pessoal',
+        descricao:
+          'Agora cada estudante possui sua própria biblioteca isolada: as músicas importadas por você ficam visíveis exclusivamente na sua conta, além de manter o acesso às faixas clássicas de foco da BatCaverna.',
+        tag: 'Privacidade & Estudo',
+      },
+      {
+        id: 'criador-playlists-agil',
+        tipo: 'novo',
+        titulo: 'Gestor Ágil de Playlists de Foco',
+        descricao:
+          'Crie playlists personalizadas para cada momento de estudo diretamente do acervo, da busca do YouTube ou do card da playlist, com seleção rápida e remoção de faixas.',
+        tag: 'Playlists',
+      },
+      {
+        id: 'importador-spotify-turbo',
+        tipo: 'melhoria',
+        titulo: 'Importação Inteligente do Spotify',
+        descricao:
+          'Ao colar o link de uma playlist pública do Spotify, o sistema localiza automaticamente as versões completas no YouTube para tocar cada faixa na íntegra sem cortes.',
+        tag: 'Integrações',
+      },
+    ],
+  },
   {
     versao: '3.7.0',
     dataLancamento: '2026-10-29T20:30:00-03:00',

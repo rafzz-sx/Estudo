@@ -251,6 +251,7 @@ export function DynamicIsland() {
   const [arrastando, setArrastando] = useState<number | null>(null);
 
   const [avisoPlayer, setAvisoPlayer] = useState<string | null>(null);
+  const [mostrarVideo, setMostrarVideo] = useState(false);
 
   const ytPlayerRef = useRef<any>(null);
   const prontoRef = useRef(false);
@@ -270,18 +271,17 @@ export function DynamicIsland() {
 
       try {
         ytPlayerRef.current = new (window as any).YT.Player("batcaverna-youtube-iframe-player", {
-          height: "180",
-          width: "280",
+          height: "100%",
+          width: "100%",
           playerVars: {
             autoplay: 1,
-            controls: 0,
-            disablekb: 1,
+            controls: 1,
+            disablekb: 0,
             fs: 0,
             modestbranding: 1,
             rel: 0,
             playsinline: 1,
             enablejsapi: 1,
-            origin: typeof window !== "undefined" ? window.location.origin : undefined,
           },
           events: {
             onReady: () => {
@@ -531,11 +531,28 @@ export function DynamicIsland() {
 
   return (
     <>
+      {/* Container do YouTube Player: posicionado no viewport com opacity mínima para evitar throttling em Chromium */}
       <div
-        id="batcaverna-youtube-iframe-player"
-        className="pointer-events-none fixed top-0 -left-[9999px] h-48 w-64 overflow-hidden"
-        aria-hidden="true"
-      />
+        className={
+          mostrarVideo && ehYouTube
+            ? "fixed bottom-5 right-5 z-50 w-80 h-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-bat-gold-400 bg-black transition-all"
+            : "fixed bottom-1 right-1 z-0 w-12 h-12 opacity-[0.01] pointer-events-none overflow-hidden"
+        }
+        aria-hidden={!mostrarVideo}
+      >
+        {mostrarVideo && ehYouTube && (
+          <div className="absolute top-2 right-2 z-10">
+            <button
+              onClick={() => setMostrarVideo(false)}
+              className="rounded-full bg-black/80 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-black cursor-pointer shadow-md border border-white/20"
+              title="Voltar para reprodução em segundo plano"
+            >
+              ✕ Ocultar Vídeo
+            </button>
+          </div>
+        )}
+        <div id="batcaverna-youtube-iframe-player" className="w-full h-full" />
+      </div>
 
       {!musica ? null : minimizado ? (
         <div className="fixed top-14 right-3 z-40 sm:top-15 sm:right-4 lg:top-4 lg:right-6">
@@ -732,6 +749,19 @@ export function DynamicIsland() {
               <span className="text-[10px] text-white/40">
                 {indice + 1}/{fila.length}
               </span>
+
+              {ehYouTube && (
+                <button
+                  onClick={() => setMostrarVideo(!mostrarVideo)}
+                  className={`cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors flex items-center gap-1 ${
+                    mostrarVideo ? "text-bat-gold-400 bg-bat-gold-400/20" : "text-white/40 hover:text-white"
+                  }`}
+                  aria-label={mostrarVideo ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
+                  title={mostrarVideo ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
+                >
+                  <span>📺</span>
+                </button>
+              )}
 
               <Link
                 href="/musica"

@@ -29,7 +29,9 @@ export function extrairVideoIdYouTube(urlOuId?: string | null): string | null {
   if (!urlOuId) return null;
   const str = urlOuId.trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
-  const match = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  const match = str.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|live\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+  );
   return match ? match[1] : null;
 }
 
@@ -156,7 +158,7 @@ function carregarEtocar(musica: Musica, volume: number) {
   const ytId =
     musica.fonte === 'youtube' && musica.fonte_id
       ? musica.fonte_id
-      : extrairVideoIdYouTube(musica.audio_url);
+      : extrairVideoIdYouTube(musica.fonte_id || musica.audio_url);
 
   if (ytId) {
     // É YouTube: desliga o áudio padrão HTML5 para evitar conflitos
