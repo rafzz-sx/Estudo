@@ -10,6 +10,7 @@ import { StudySessionBadge, StudySessionTracker } from "@/components/StudySessio
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { XpToast } from "@/components/XpToast";
 import { DynamicIsland } from "@/components/DynamicIsland";
+import { YouTubeGlobalPlayer } from "@/components/musica/YouTubeGlobalPlayer";
 import { usePlayerStore } from "@/stores/player-store";
 import { ConviteFeedback } from "@/components/ConviteFeedback";
 import { MissedUpdatesModal } from "@/components/novidades/MissedUpdatesModal";
@@ -291,6 +292,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Player global: fica fora da árvore de páginas para a música não
           parar a cada navegação. Só aparece quando há algo tocando. */}
       <DynamicIsland />
+      <YouTubeGlobalPlayer />
 
       {/* Alerta inteligente de atualizações perdidas para soldados que retornam */}
       <MissedUpdatesModal />

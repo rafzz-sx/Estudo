@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.1';
+export const CURRENT_APP_VERSION = '3.7.2';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,42 @@ export const CURRENT_APP_VERSION = '3.7.1';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.2',
+    dataLancamento: '2026-10-30T17:58:00-03:00',
+    titulo: 'Motor YouTube Global Desacoplado, Resolução de Faixas Privadas & Criação Ágil de Playlists',
+    resumo:
+      'Solução definitiva para reprodução de áudio e vídeo do YouTube sem engasgos ou pausas em segundo plano, desacoplamento do iframe para o AppShell com Picture-in-Picture moderno, isolamento estrito de músicas pessoais por usuário e criação instantânea de playlists a partir da busca do YouTube.',
+    destaque: true,
+    impacto: 'patch',
+    classificacao: 'pequena',
+    alteracoes: [
+      {
+        id: 'motor-youtube-global-appshell',
+        tipo: 'correcao',
+        titulo: 'Motor Global de Reprodução do YouTube',
+        descricao:
+          'O iframe do YouTube foi migrado para o AppShell com persistência em todas as rotas privadas. Fim dos bloqueios de autoplay ou interrupção do áudio por reconciliação do React ou throttling do navegador.',
+        tag: 'Áudio & Estudo',
+      },
+      {
+        id: 'isolamento-privacidade-musicas',
+        tipo: 'melhoria',
+        titulo: 'Privacidade Rigorosa do Acervo Pessoal',
+        descricao:
+          'Limpeza de faixas genéricas sem dono e garantia de que cada música importada pertence exclusivamente à conta do aluno, sem jamais vazar para outros estudantes.',
+        tag: 'Privacidade',
+      },
+      {
+        id: 'playlists-instantaneas-youtube',
+        tipo: 'novo',
+        titulo: 'Criar Playlists no Modal do YouTube',
+        descricao:
+          'Agora é possível criar novas playlists instantaneamente direto nos resultados de busca do YouTube ou no menu do acervo, organizando trilhas de estudo com 1 clique.',
+        tag: 'Playlists',
+      },
+    ],
+  },
   {
     versao: '3.7.1',
     dataLancamento: '2026-10-29T21:55:00-03:00',

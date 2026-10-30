@@ -66,6 +66,7 @@ interface PlayerState {
    * de fechar o player e perder a fila inteira.
    */
   minimizado: boolean;
+  videoVisivel: boolean;
   // Cores extraídas da capa — alimentam o gradiente do Dynamic Island
   corPrimaria: string;
   corSecundaria: string;
@@ -80,6 +81,8 @@ interface PlayerState {
   alternarRepetir: () => void;
   definirExpandido: (v: boolean) => void;
   alternarMinimizado: () => void;
+  alternarVideoVisivel: () => void;
+  definirVideoVisivel: (v: boolean) => void;
   definirCores: (primaria: string, secundaria: string) => void;
   _sincronizar: (posicao: number, duracao: number) => void;
   _aoTerminar: () => void;
@@ -202,17 +205,23 @@ export const usePlayerStore = create<PlayerState>()(
       repetir: 'nao',
       expandido: false,
       minimizado: false,
+      videoVisivel: true,
       corPrimaria: '#F5C518',
       corSecundaria: '#0B0B0F',
 
       tocarFila: (musicas, indiceInicial = 0) => {
         if (!musicas.length) return;
         const musica = musicas[indiceInicial];
+        const ehYT = Boolean(
+          musica.fonte === 'youtube' ||
+          extrairVideoIdYouTube(musica.fonte_id || musica.audio_url)
+        );
         set({
           fila: musicas,
           indice: indiceInicial,
           tocando: true,
           posicao: 0,
+          videoVisivel: ehYT,
           corPrimaria: musica.cor_primaria ?? '#F5C518',
           corSecundaria: musica.cor_secundaria ?? '#0B0B0F',
         });
@@ -361,6 +370,9 @@ export const usePlayerStore = create<PlayerState>()(
       // para os controles secundários.
       alternarMinimizado: () =>
         set((e) => ({ minimizado: !e.minimizado, expandido: false })),
+
+      alternarVideoVisivel: () => set((s) => ({ videoVisivel: !s.videoVisivel })),
+      definirVideoVisivel: (v) => set({ videoVisivel: v }),
 
       definirCores: (primaria, secundaria) =>
         set({ corPrimaria: primaria, corSecundaria: secundaria }),

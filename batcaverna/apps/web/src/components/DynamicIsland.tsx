@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   usePlayerStore,
   formatarTempoMusica,
-  registrarControladorYouTube,
   extrairVideoIdYouTube,
 } from "@/stores/player-store";
 
@@ -243,6 +242,8 @@ export function DynamicIsland() {
   const alternarRepetir = usePlayerStore((s) => s.alternarRepetir);
   const definirExpandido = usePlayerStore((s) => s.definirExpandido);
   const alternarMinimizado = usePlayerStore((s) => s.alternarMinimizado);
+  const videoVisivel = usePlayerStore((s) => s.videoVisivel);
+  const alternarVideoVisivel = usePlayerStore((s) => s.alternarVideoVisivel);
   const definirCores = usePlayerStore((s) => s.definirCores);
   const fechar = usePlayerStore((s) => s.fechar);
 
@@ -251,192 +252,6 @@ export function DynamicIsland() {
   const [arrastando, setArrastando] = useState<number | null>(null);
 
   const [avisoPlayer, setAvisoPlayer] = useState<string | null>(null);
-  const [mostrarVideo, setMostrarVideo] = useState(false);
-
-  const ytPlayerRef = useRef<any>(null);
-  const prontoRef = useRef(false);
-  const intervalSyncRef = useRef<number | null>(null);
-  const pendenteRef = useRef<{ videoId: string; vol: number; pos: number } | null>(null);
-
-  // Integração com a API do YouTube Iframe para tocar faixas do YouTube sem parar
-  useEffect(() => {
-    let intervaloPoll: NodeJS.Timeout | null = null;
-
-    const inicializarYT = () => {
-      if (ytPlayerRef.current) return;
-      if (typeof window === "undefined" || !(window as any).YT || !(window as any).YT.Player) return;
-
-      const containerEl = document.getElementById("batcaverna-youtube-iframe-player");
-      if (!containerEl) return;
-
-      try {
-        ytPlayerRef.current = new (window as any).YT.Player("batcaverna-youtube-iframe-player", {
-          height: "100%",
-          width: "100%",
-          playerVars: {
-            autoplay: 1,
-            controls: 1,
-            disablekb: 0,
-            fs: 0,
-            modestbranding: 1,
-            rel: 0,
-            playsinline: 1,
-            enablejsapi: 1,
-          },
-          events: {
-            onReady: () => {
-              prontoRef.current = true;
-              if (pendenteRef.current) {
-                const { videoId, vol, pos } = pendenteRef.current;
-                pendenteRef.current = null;
-                controlador.tocar(videoId, vol, pos);
-              }
-            },
-            onStateChange: (event: any) => {
-              // 1 = PLAYING
-              if (event.data === 1) {
-                usePlayerStore.setState({ tocando: true });
-                if (!intervalSyncRef.current) {
-                  intervalSyncRef.current = window.setInterval(() => {
-                    try {
-                      if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === "function") {
-                        const pos = ytPlayerRef.current.getCurrentTime() || 0;
-                        const dur = ytPlayerRef.current.getDuration() || 0;
-                        usePlayerStore.getState()._sincronizar(pos, dur);
-                      }
-                    } catch {}
-                  }, 500);
-                }
-              } else if (event.data === 2) {
-                // 2 = PAUSED
-                usePlayerStore.setState({ tocando: false });
-                if (intervalSyncRef.current) {
-                  clearInterval(intervalSyncRef.current);
-                  intervalSyncRef.current = null;
-                }
-              } else {
-                if (intervalSyncRef.current && event.data !== 3) {
-                  clearInterval(intervalSyncRef.current);
-                  intervalSyncRef.current = null;
-                }
-              }
-
-              // 0 = ENDED
-              if (event.data === 0) {
-                usePlayerStore.getState()._aoTerminar();
-              }
-            },
-            onError: (err: any) => {
-              console.warn("YouTube Player error:", err?.data);
-              const cod = err?.data;
-              if (cod === 150 || cod === 101) {
-                setAvisoPlayer("⚠️ Faixa com restrição no YouTube. Pulando para a próxima...");
-                setTimeout(() => setAvisoPlayer(null), 4000);
-              }
-              const s = usePlayerStore.getState();
-              if (s.fila.length > 1) {
-                setTimeout(() => s.proxima(), 1500);
-              } else {
-                usePlayerStore.setState({ tocando: false, posicao: 0 });
-              }
-            },
-          },
-        });
-      } catch (err) {
-        console.warn("Erro ao instanciar YouTube Player:", err);
-      }
-    };
-
-    const controlador = {
-      tocar: (videoId: string, vol: number, pos = 0) => {
-        if (!prontoRef.current || !ytPlayerRef.current || typeof ytPlayerRef.current.loadVideoById !== "function") {
-          pendenteRef.current = { videoId, vol, pos };
-          return;
-        }
-        try {
-          ytPlayerRef.current.loadVideoById({ videoId, startSeconds: pos });
-          if (typeof ytPlayerRef.current.unMute === "function") {
-            ytPlayerRef.current.unMute();
-          }
-          if (typeof ytPlayerRef.current.setVolume === "function") {
-            ytPlayerRef.current.setVolume(vol * 100);
-          }
-          if (typeof ytPlayerRef.current.playVideo === "function") {
-            ytPlayerRef.current.playVideo();
-          }
-        } catch (err) {
-          console.warn("Erro ao tocar vídeo no YouTube Player:", err);
-        }
-      },
-      pausar: () => {
-        try {
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
-            ytPlayerRef.current.pauseVideo();
-          }
-        } catch {}
-      },
-      retomar: () => {
-        try {
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
-            ytPlayerRef.current.playVideo();
-          }
-        } catch {}
-      },
-      buscar: (segundos: number) => {
-        try {
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-            ytPlayerRef.current.seekTo(segundos, true);
-          }
-        } catch {}
-      },
-      definirVolume: (vol: number) => {
-        try {
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
-            ytPlayerRef.current.setVolume(vol * 100);
-          }
-        } catch {}
-      },
-      estaPronto: () => prontoRef.current,
-    };
-
-    registrarControladorYouTube(controlador);
-
-    if (typeof window !== "undefined") {
-      if ((window as any).YT && (window as any).YT.Player) {
-        inicializarYT();
-      } else {
-        const callbackAnterior = (window as any).onYouTubeIframeAPIReady;
-        (window as any).onYouTubeIframeAPIReady = () => {
-          if (typeof callbackAnterior === "function") callbackAnterior();
-          inicializarYT();
-        };
-
-        if (!document.getElementById("batcaverna-yt-script")) {
-          const tag = document.createElement("script");
-          tag.id = "batcaverna-yt-script";
-          tag.src = "https://www.youtube.com/iframe_api";
-          document.body.appendChild(tag);
-        }
-
-        // Poll de segurança caso a API já tenha carregado mas o callback não disparou
-        intervaloPoll = setInterval(() => {
-          if ((window as any).YT && (window as any).YT.Player) {
-            if (intervaloPoll) clearInterval(intervaloPoll);
-            inicializarYT();
-          }
-        }, 200);
-      }
-    }
-
-    return () => {
-      if (intervaloPoll) clearInterval(intervaloPoll);
-      if (intervalSyncRef.current) {
-        clearInterval(intervalSyncRef.current);
-        intervalSyncRef.current = null;
-      }
-      registrarControladorYouTube(null);
-    };
-  }, []);
 
   // O `onMouseUp`/`onTouchEnd` ficava só no <input>. Quem arrastava e soltava
   // o dedo fora da barra — o normal num celular, a barra tem 4px de altura —
@@ -531,29 +346,6 @@ export function DynamicIsland() {
 
   return (
     <>
-      {/* Container do YouTube Player: posicionado no viewport com opacity mínima para evitar throttling em Chromium */}
-      <div
-        className={
-          mostrarVideo && ehYouTube
-            ? "fixed bottom-5 right-5 z-50 w-80 h-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-bat-gold-400 bg-black transition-all"
-            : "fixed bottom-1 right-1 z-0 w-12 h-12 opacity-[0.01] pointer-events-none overflow-hidden"
-        }
-        aria-hidden={!mostrarVideo}
-      >
-        {mostrarVideo && ehYouTube && (
-          <div className="absolute top-2 right-2 z-10">
-            <button
-              onClick={() => setMostrarVideo(false)}
-              className="rounded-full bg-black/80 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-black cursor-pointer shadow-md border border-white/20"
-              title="Voltar para reprodução em segundo plano"
-            >
-              ✕ Ocultar Vídeo
-            </button>
-          </div>
-        )}
-        <div id="batcaverna-youtube-iframe-player" className="w-full h-full" />
-      </div>
-
       {!musica ? null : minimizado ? (
         <div className="fixed top-14 right-3 z-40 sm:top-15 sm:right-4 lg:top-4 lg:right-6">
           <button
@@ -752,12 +544,12 @@ export function DynamicIsland() {
 
               {ehYouTube && (
                 <button
-                  onClick={() => setMostrarVideo(!mostrarVideo)}
+                  onClick={alternarVideoVisivel}
                   className={`cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors flex items-center gap-1 ${
-                    mostrarVideo ? "text-bat-gold-400 bg-bat-gold-400/20" : "text-white/40 hover:text-white"
+                    videoVisivel ? "text-bat-gold-400 bg-bat-gold-400/20" : "text-white/40 hover:text-white"
                   }`}
-                  aria-label={mostrarVideo ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
-                  title={mostrarVideo ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
+                  aria-label={videoVisivel ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
+                  title={videoVisivel ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
                 >
                   <span>📺</span>
                 </button>

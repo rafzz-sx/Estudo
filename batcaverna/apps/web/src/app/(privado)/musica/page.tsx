@@ -245,6 +245,29 @@ export default function MusicaPage() {
     }
   };
 
+  const criarPlaylistComItemYouTube = async (item: any) => {
+    const nomeLimpo = novaPlaylistMenu.trim();
+    if (nomeLimpo.length < 2) return;
+    try {
+      const res = await fetchWithAuth("/api/playlists", {
+        method: "POST",
+        body: JSON.stringify({ nome: nomeLimpo }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        const nova = { musicas: [], ...json.data };
+        setPlaylists((p) => [nova, ...p]);
+        setNovaPlaylistMenu("");
+        setMenuYtPlaylist(null);
+        await adicionarDoYouTube(item, nova.id);
+      } else {
+        setAviso(json.error || "Não foi possível criar a playlist.");
+      }
+    } catch {
+      setAviso("Erro ao criar playlist.");
+    }
+  };
+
   const importarDoSpotify = async () => {
     if (!spotifyUrl.trim()) {
       setAviso("Cole o link da playlist do Spotify.");
@@ -719,11 +742,12 @@ export default function MusicaPage() {
                         onClick={() =>
                           setMenuPara((atual) => (atual === m.id ? null : m.id))
                         }
-                        className="cursor-pointer rounded-lg px-2 py-1 text-sm text-bat-text-muted transition-colors hover:bg-bat-bg-secondary hover:text-bat-gold-400"
+                        className="cursor-pointer rounded-lg border border-bat-border/50 px-2 py-1 text-xs text-bat-text-secondary transition-colors hover:bg-bat-bg-secondary hover:text-bat-gold-400 flex items-center gap-1"
                         aria-label={`Adicionar ${m.titulo} a uma playlist`}
                         title="Adicionar à playlist"
                       >
-                        ＋
+                        <span>📚</span>
+                        <span className="hidden sm:inline text-[11px] font-medium">+ Playlist</span>
                       </button>
 
                       {menuPara === m.id && (
@@ -1249,41 +1273,76 @@ export default function MusicaPage() {
                               {jaAdd ? "✓ Adicionada" : "+ Acervo"}
                             </button>
 
-                            {playlists.length > 0 && (
-                              <div>
-                                <button
-                                  onClick={() =>
-                                    setMenuYtPlaylist((curr) =>
-                                      curr === item.videoId ? null : item.videoId
-                                    )
-                                  }
-                                  className="cursor-pointer rounded-lg border border-bat-border px-2 py-1.5 text-xs font-bold text-bat-text-muted hover:text-white"
-                                  title="Adicionar diretamente a uma playlist"
-                                >
-                                  ＋ Playlist
-                                </button>
+                            <div>
+                              <button
+                                onClick={() =>
+                                  setMenuYtPlaylist((curr) =>
+                                    curr === item.videoId ? null : item.videoId
+                                  )
+                                }
+                                className="cursor-pointer rounded-lg border border-bat-border px-2 py-1.5 text-xs font-bold text-bat-text-muted hover:text-white"
+                                title="Adicionar à playlist"
+                              >
+                                ＋ Playlist
+                              </button>
 
-                                {menuYtPlaylist === item.videoId && (
-                                  <div className="absolute right-0 top-full z-40 mt-1 w-56 rounded-xl border border-bat-border bg-bat-bg-elevated p-1 shadow-2xl">
-                                    <p className="px-2 py-1 text-[10px] font-bold text-bat-text-muted uppercase">
-                                      Escolha a Playlist:
-                                    </p>
-                                    <ul className="max-h-40 overflow-y-auto py-1">
+                              {menuYtPlaylist === item.videoId && (
+                                <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-bat-border bg-bat-bg-elevated p-2 shadow-2xl">
+                                  <p className="px-2 py-1 text-[10px] font-bold text-bat-text-muted uppercase">
+                                    Adicionar à Playlist:
+                                  </p>
+                                  {playlists.length > 0 ? (
+                                    <ul className="max-h-40 overflow-y-auto py-1 space-y-0.5">
                                       {playlists.map((pl) => (
                                         <li key={pl.id}>
                                           <button
-                                            onClick={() => adicionarDoYouTube(item, pl.id)}
-                                            className="w-full text-left px-2.5 py-1.5 text-xs text-bat-text hover:bg-bat-bg-secondary rounded truncate cursor-pointer"
+                                            onClick={() => {
+                                              adicionarDoYouTube(item, pl.id);
+                                              setMenuYtPlaylist(null);
+                                            }}
+                                            className="w-full text-left px-2.5 py-1.5 text-xs text-bat-text hover:bg-bat-bg-secondary rounded truncate cursor-pointer flex items-center justify-between"
                                           >
-                                            {pl.nome}
+                                            <span className="truncate">{pl.nome}</span>
+                                            <span className="text-[10px] text-bat-text-muted shrink-0">＋</span>
                                           </button>
                                         </li>
                                       ))}
                                     </ul>
+                                  ) : (
+                                    <p className="px-2 py-1 text-xs text-bat-text-muted">
+                                      Nenhuma playlist criada ainda.
+                                    </p>
+                                  )}
+
+                                  {/* Criar nova playlist inline */}
+                                  <div className="mt-1.5 pt-1.5 border-t border-bat-border/60">
+                                    <div className="flex gap-1">
+                                      <input
+                                        type="text"
+                                        placeholder="Nova playlist..."
+                                        value={novaPlaylistMenu}
+                                        onChange={(e) => setNovaPlaylistMenu(e.target.value)}
+                                        onKeyDown={async (e) => {
+                                          if (e.key === "Enter" && novaPlaylistMenu.trim().length >= 2) {
+                                            e.preventDefault();
+                                            await criarPlaylistComItemYouTube(item);
+                                          }
+                                        }}
+                                        className="input-field text-xs py-1 px-2 flex-1 h-7"
+                                      />
+                                      <button
+                                        onClick={() => criarPlaylistComItemYouTube(item)}
+                                        disabled={novaPlaylistMenu.trim().length < 2}
+                                        className="btn-primary text-xs px-2 py-1 h-7 shrink-0 cursor-pointer disabled:opacity-40"
+                                        title="Criar playlist e adicionar esta música"
+                                      >
+                                        ＋
+                                      </button>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
