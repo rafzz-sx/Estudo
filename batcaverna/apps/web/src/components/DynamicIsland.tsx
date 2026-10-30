@@ -242,8 +242,6 @@ export function DynamicIsland() {
   const alternarRepetir = usePlayerStore((s) => s.alternarRepetir);
   const definirExpandido = usePlayerStore((s) => s.definirExpandido);
   const alternarMinimizado = usePlayerStore((s) => s.alternarMinimizado);
-  const videoVisivel = usePlayerStore((s) => s.videoVisivel);
-  const alternarVideoVisivel = usePlayerStore((s) => s.alternarVideoVisivel);
   const definirCores = usePlayerStore((s) => s.definirCores);
   const fechar = usePlayerStore((s) => s.fechar);
 
@@ -541,19 +539,6 @@ export function DynamicIsland() {
               <span className="text-[10px] text-white/40">
                 {indice + 1}/{fila.length}
               </span>
-
-              {ehYouTube && (
-                <button
-                  onClick={alternarVideoVisivel}
-                  className={`cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors flex items-center gap-1 ${
-                    videoVisivel ? "text-bat-gold-400 bg-bat-gold-400/20" : "text-white/40 hover:text-white"
-                  }`}
-                  aria-label={videoVisivel ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
-                  title={videoVisivel ? "Ocultar tela do vídeo" : "Exibir vídeo do YouTube"}
-                >
-                  <span>📺</span>
-                </button>
-              )}
 
               <Link
                 href="/musica"

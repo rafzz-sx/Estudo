@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.2';
+export const CURRENT_APP_VERSION = '3.7.3';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,34 @@ export const CURRENT_APP_VERSION = '3.7.2';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.3',
+    dataLancamento: '2026-10-30T18:35:00-03:00',
+    titulo: 'Dynamic Island Foco Puro: Cronômetro Ativo & Experiência Minimalista sem Widgets',
+    resumo:
+      'Aprimoramento do Dynamic Island com contagem e avanço contínuo do cronômetro da música, eliminação total do player flutuante no canto e operação do motor de áudio 100% invisível em segundo plano.',
+    destaque: true,
+    impacto: 'patch',
+    classificacao: 'pequena',
+    alteracoes: [
+      {
+        id: 'dynamic-island-cronometro-ativo',
+        tipo: 'correcao',
+        titulo: 'Cronômetro & Progresso Ativos no Dynamic Island',
+        descricao:
+          'Correção do cronômetro congelado: o tempo decorrido e a barra de progresso agora avançam segundo a segundo com precisão milimétrica, sincronizados à duração real da música.',
+        tag: 'Player & UI',
+      },
+      {
+        id: 'remocao-widget-canto-player',
+        tipo: 'melhoria',
+        titulo: 'Foco Visual Exclusivo no Dynamic Island',
+        descricao:
+          'Remoção completa do mini-player flutuante do canto da tela. O áudio do YouTube toca em segundo plano de forma 100% invisível, mantendo o ambiente de estudo limpo e focado.',
+        tag: 'Design & UX',
+      },
+    ],
+  },
   {
     versao: '3.7.2',
     dataLancamento: '2026-10-30T17:58:00-03:00',

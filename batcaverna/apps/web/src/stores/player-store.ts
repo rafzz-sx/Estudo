@@ -66,7 +66,6 @@ interface PlayerState {
    * de fechar o player e perder a fila inteira.
    */
   minimizado: boolean;
-  videoVisivel: boolean;
   // Cores extraídas da capa — alimentam o gradiente do Dynamic Island
   corPrimaria: string;
   corSecundaria: string;
@@ -81,8 +80,6 @@ interface PlayerState {
   alternarRepetir: () => void;
   definirExpandido: (v: boolean) => void;
   alternarMinimizado: () => void;
-  alternarVideoVisivel: () => void;
-  definirVideoVisivel: (v: boolean) => void;
   definirCores: (primaria: string, secundaria: string) => void;
   _sincronizar: (posicao: number, duracao: number) => void;
   _aoTerminar: () => void;
@@ -92,6 +89,40 @@ interface PlayerState {
 // ─── Elemento de áudio singleton ─────────────────────────────
 let audio: HTMLAudioElement | null = null;
 let errosSeguidos = 0;
+let timerPosicao: ReturnType<typeof setInterval> | null = null;
+
+function iniciarTimerPosicao() {
+  pararTimerPosicao();
+  if (typeof window === 'undefined') return;
+
+  timerPosicao = setInterval(() => {
+    const s = usePlayerStore.getState();
+    if (!s.tocando || s.fila.length === 0) {
+      pararTimerPosicao();
+      return;
+    }
+
+    const musica = s.fila[s.indice];
+    const duracaoTotal = s.duracao > 0 ? s.duracao : (musica?.duracao_segundos || 0);
+    const novaPos = s.posicao + 1;
+
+    if (duracaoTotal > 0 && novaPos >= duracaoTotal) {
+      s._aoTerminar();
+    } else {
+      usePlayerStore.setState({
+        posicao: novaPos,
+        duracao: duracaoTotal,
+      });
+    }
+  }, 1000);
+}
+
+function pararTimerPosicao() {
+  if (timerPosicao) {
+    clearInterval(timerPosicao);
+    timerPosicao = null;
+  }
+}
 
 function obterAudio(): HTMLAudioElement | null {
   if (typeof window === 'undefined') return null;
@@ -205,7 +236,6 @@ export const usePlayerStore = create<PlayerState>()(
       repetir: 'nao',
       expandido: false,
       minimizado: false,
-      videoVisivel: true,
       corPrimaria: '#F5C518',
       corSecundaria: '#0B0B0F',
 
@@ -216,16 +246,18 @@ export const usePlayerStore = create<PlayerState>()(
           musica.fonte === 'youtube' ||
           extrairVideoIdYouTube(musica.fonte_id || musica.audio_url)
         );
+        const dur = musica.duracao_segundos || 0;
         set({
           fila: musicas,
           indice: indiceInicial,
           tocando: true,
           posicao: 0,
-          videoVisivel: ehYT,
+          duracao: dur,
           corPrimaria: musica.cor_primaria ?? '#F5C518',
           corSecundaria: musica.cor_secundaria ?? '#0B0B0F',
         });
         carregarEtocar(musica, get().volume);
+        iniciarTimerPosicao();
       },
 
       alternarPlay: () => {
@@ -240,9 +272,11 @@ export const usePlayerStore = create<PlayerState>()(
         if (ytId) {
           if (tocando) {
             controladorYT?.pausar();
+            pararTimerPosicao();
             set({ tocando: false });
           } else {
             controladorYT?.retomar();
+            iniciarTimerPosicao();
             set({ tocando: true });
           }
           return;
@@ -253,9 +287,11 @@ export const usePlayerStore = create<PlayerState>()(
 
         if (tocando) {
           el.pause();
+          pararTimerPosicao();
           set({ tocando: false });
         } else {
           el.play().catch(() => undefined);
+          iniciarTimerPosicao();
           set({ tocando: true });
         }
       },
@@ -274,6 +310,7 @@ export const usePlayerStore = create<PlayerState>()(
           proximo = indice + 1;
           if (proximo >= fila.length) {
             if (repetir !== 'todas') {
+              pararTimerPosicao();
               set({ tocando: false });
               controladorYT?.pausar();
               obterAudio()?.pause();
@@ -288,10 +325,12 @@ export const usePlayerStore = create<PlayerState>()(
           indice: proximo,
           tocando: true,
           posicao: 0,
+          duracao: musica?.duracao_segundos || 0,
           corPrimaria: musica.cor_primaria ?? '#F5C518',
           corSecundaria: musica.cor_secundaria ?? '#0B0B0F',
         });
         carregarEtocar(musica, volume);
+        iniciarTimerPosicao();
       },
 
       anterior: () => {
@@ -323,10 +362,12 @@ export const usePlayerStore = create<PlayerState>()(
           indice: anterior,
           tocando: true,
           posicao: 0,
+          duracao: musica?.duracao_segundos || 0,
           corPrimaria: musica.cor_primaria ?? '#F5C518',
           corSecundaria: musica.cor_secundaria ?? '#0B0B0F',
         });
         carregarEtocar(musica, volume);
+        iniciarTimerPosicao();
       },
 
       irPara: (segundos) => {
@@ -371,13 +412,14 @@ export const usePlayerStore = create<PlayerState>()(
       alternarMinimizado: () =>
         set((e) => ({ minimizado: !e.minimizado, expandido: false })),
 
-      alternarVideoVisivel: () => set((s) => ({ videoVisivel: !s.videoVisivel })),
-      definirVideoVisivel: (v) => set({ videoVisivel: v }),
-
       definirCores: (primaria, secundaria) =>
         set({ corPrimaria: primaria, corSecundaria: secundaria }),
 
-      _sincronizar: (posicao, duracao) => set({ posicao, duracao }),
+      _sincronizar: (posicao, duracao) => {
+        const durAtual = get().duracao;
+        const durFinal = duracao > 0 ? duracao : durAtual;
+        set({ posicao: Math.floor(posicao), duracao: durFinal });
+      },
 
       _aoTerminar: () => {
         const { repetir, volume, fila, indice } = get();
@@ -389,6 +431,7 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       fechar: () => {
+        pararTimerPosicao();
         controladorYT?.pausar();
         const el = obterAudio();
         if (el) {
