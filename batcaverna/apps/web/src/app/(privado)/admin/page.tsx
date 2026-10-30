@@ -18,6 +18,18 @@ import { PainelContatos } from "@/components/admin/PainelContatos";
 import { PainelLacunasTeoria } from "@/components/admin/PainelLacunasTeoria";
 import { PainelResetSenha } from "@/components/admin/PainelResetSenha";
 import { PainelBancoQuestoes } from "@/components/admin/PainelBancoQuestoes";
+import { PainelBanners } from "@/components/admin/PainelBanners";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+} from "recharts";
 
 /** Métricas da plataforma vindas de /api/admin/painel */
 interface MetricasPlataforma {
@@ -186,6 +198,17 @@ export default function AdminPage() {
 
   // Logs de Auditoria
   const [logsAuditoria, setLogsAuditoria] = useState<any[]>([]);
+  const [buscaAuditoria, setBuscaAuditoria] = useState("");
+  const [filtroAcaoAuditoria, setFiltroAcaoAuditoria] = useState("todos");
+  const [logDetalheModal, setLogDetalheModal] = useState<any | null>(null);
+
+  // Estados de Ajuste Manual de Soldado
+  const [mostrarAjusteManual, setMostrarAjusteManual] = useState(false);
+  const [streakAjuste, setStreakAjuste] = useState(0);
+  const [xpAjuste, setXpAjuste] = useState(0);
+  const [resetarAvatarAjuste, setResetarAvatarAjuste] = useState(false);
+  const [salvandoAjusteUsuario, setSalvandoAjusteUsuario] = useState(false);
+  const [montado, setMontado] = useState(false);
 
   // Versão do Sistema
   const [appInfo, setAppInfo] = useState<{ versao_atual: string; atualizado_em: string }>({
@@ -334,6 +357,7 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    setMontado(true);
     carregarDadosIniciais();
     carregarContadoresAbas();
 
@@ -1121,6 +1145,161 @@ export default function AdminPage() {
             </div>
           </div>
 
+          
+          {/* ═══ TELEMETRIA VISUAL & GRÁFICOS (RECHARTS) ═══ */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Gráfico de Cadastros */}
+            <div className="lg:col-span-2 bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-bat-text flex items-center gap-2">
+                    <span>📈</span> Novos Soldados na Base (Últimos 7 Dias)
+                  </h3>
+                  <p className="text-[11px] text-bat-text-muted">
+                    Evolução do contingente matriculado na BatCaverna
+                  </p>
+                </div>
+                <span className="text-xs font-mono font-bold text-bat-gold-400 bg-bat-gold-400/10 px-2 py-0.5 rounded-lg border border-bat-gold-400/25">
+                  +{metricas ? metricas.novos_24h : 0} hoje
+                </span>
+              </div>
+
+              {montado && (
+                <div className="h-56 w-full pt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={(() => {
+                        const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                        const mapaDias: Record<string, { dia: string; novos: number }> = {};
+                        const hoje = new Date();
+                        for (let i = 6; i >= 0; i--) {
+                          const d = new Date(hoje);
+                          d.setDate(d.getDate() - i);
+                          const chave = d.toISOString().split("T")[0];
+                          const label = `${diasSemana[d.getDay()]} (${d.getDate()}/${d.getMonth() + 1})`;
+                          mapaDias[chave] = { dia: label, novos: 0 };
+                        }
+                        usuarios.forEach((u) => {
+                          if (u.criado_em) {
+                            const dataIso = u.criado_em.split("T")[0];
+                            if (mapaDias[dataIso]) {
+                              mapaDias[dataIso].novos += 1;
+                            }
+                          }
+                        });
+                        return Object.values(mapaDias);
+                      })()}
+                    >
+                      <defs>
+                        <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#F5C518" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#F5C518" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis
+                        dataKey="dia"
+                        stroke="#6b7280"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        stroke="#6b7280"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#12141a",
+                          borderColor: "#333b4d",
+                          borderRadius: "12px",
+                          fontSize: "11px",
+                          color: "#fff",
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="novos"
+                        name="Novos Alunos"
+                        stroke="#F5C518"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#goldGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            {/* Divisão por Concurso & Alerta de Retenção */}
+            <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-4 shadow-lg flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-bat-text flex items-center gap-2 mb-1">
+                  <span>🎯</span> Foco dos Alunos por Concurso
+                </h3>
+                <p className="text-[11px] text-bat-text-muted mb-3">
+                  Distribuição percentual dos soldados ativos
+                </p>
+
+                <div className="space-y-2">
+                  {(() => {
+                    const contagem: Record<string, number> = {};
+                    usuarios.forEach((u) => {
+                      const conc = u.concurso_alvo || "Não Definido";
+                      contagem[conc] = (contagem[conc] || 0) + 1;
+                    });
+                    const totalUsers = usuarios.length || 1;
+                    const topConcursos = Object.entries(contagem)
+                      .map(([nome, valor]) => ({ nome, valor, pct: Math.round((valor / totalUsers) * 100) }))
+                      .sort((a, b) => b.valor - a.valor)
+                      .slice(0, 5);
+
+                    return topConcursos.map((c) => (
+                      <div key={c.nome} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-bat-text flex items-center gap-1.5">
+                            <span className="text-bat-gold-400">●</span> {c.nome}
+                          </span>
+                          <span className="font-mono text-bat-text-muted">
+                            {c.valor} ({c.pct}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-bat-bg-primary h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-bat-gold-400 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${c.pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* Indicador de Risco de Abandono */}
+              <div className="pt-3 border-t border-bat-border/50">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-bat-text-secondary flex items-center gap-1.5">
+                    <span>⚠️</span> Em Risco de Abandono:
+                  </span>
+                  <span className="font-bold text-bat-error font-mono">
+                    {(() => {
+                      const agora = Date.now();
+                      const seteDias = 7 * 86400000;
+                      return usuarios.filter((u) => {
+                        if (!u.ultimo_login_em) return true;
+                        return agora - new Date(u.ultimo_login_em).getTime() > seteDias;
+                      }).length;
+                    })()} inativos (&gt;7d)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ═══ CENTRO DE AÇÕES IMEDIATAS & PENDÊNCIAS ═══ */}
           <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-4 shadow-lg">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1412,6 +1591,15 @@ export default function AdminPage() {
                   {r === "todos" ? `Todos (${usuarios.length})` : r === "admin" ? "Admins" : "Alunos"}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={exportarUsuariosCSV}
+                className="btn-secondary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Exportar soldados para planilha CSV"
+              >
+                <span>📥</span>
+                <span>Exportar CSV</span>
+              </button>
             </div>
           </div>
 
@@ -1774,6 +1962,78 @@ export default function AdminPage() {
             <div className="flex justify-between text-xs text-bat-text-muted font-mono pt-2 border-t border-bat-border/50">
               <span>Cadastrado: {new Date(soldadoDossie.criado_em).toLocaleDateString("pt-BR")}</span>
               <span>Último login: {formatarTempoRelativo(soldadoDossie.ultimo_login_em)}</span>
+            </div>
+
+            {/* Ajuste Manual Tático de Dados */}
+            <div className="rounded-xl border border-bat-border bg-bat-bg-primary overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setMostrarAjusteManual(!mostrarAjusteManual)}
+                className="w-full p-3 text-left flex items-center justify-between text-xs font-bold text-bat-text hover:bg-bat-bg-elevated/40 cursor-pointer transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span>🛠️</span>
+                  <span>Ajuste Tático de Dados (Streak / XP / Foto)</span>
+                </span>
+                <span className="text-[10px] text-bat-gold-400">
+                  {mostrarAjusteManual ? "Fechar ▲" : "Abrir ▼"}
+                </span>
+              </button>
+
+              {mostrarAjusteManual && (
+                <div className="p-4 border-t border-bat-border/60 space-y-3 bg-bat-bg-secondary/40">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-bat-text-muted block mb-1">
+                        Ofensiva / Streak (Dias)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={streakAjuste}
+                        onChange={(e) => setStreakAjuste(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full input-field text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-bat-text-muted block mb-1">
+                        XP Total Acumulado
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={xpAjuste}
+                        onChange={(e) => setXpAjuste(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full input-field text-xs font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="chkResetAvatar"
+                      checked={resetarAvatarAjuste}
+                      onChange={(e) => setResetarAvatarAjuste(e.target.checked)}
+                      className="w-4 h-4 accent-amber-500 cursor-pointer"
+                    />
+                    <label htmlFor="chkResetAvatar" className="text-xs text-bat-text-secondary cursor-pointer select-none">
+                      Resetar foto de perfil (remover avatar se inadequado)
+                    </label>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={salvandoAjusteUsuario}
+                      onClick={salvarAjusteTatico}
+                      className="btn-primary py-1.5 px-4 text-xs font-bold cursor-pointer disabled:opacity-40"
+                    >
+                      {salvandoAjusteUsuario ? "Sincronizando..." : "💾 Salvar Ajuste no Banco"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Ações Táticas */}
@@ -2592,65 +2852,194 @@ export default function AdminPage() {
 
       {/* ═══ TAB 7: LOG DE AUDITORIA ═══ */}
       {aba === "auditoria" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-4">
-          <h2 className="heading text-xl text-bat-text">Log de Auditoria Administrativa</h2>
-          <div className="overflow-x-auto rounded-xl border border-bat-border">
-            <table className="w-full text-left text-xs font-mono">
-              <thead>
-                <tr className="bg-bat-bg-primary border-b border-bat-border text-bat-text-muted">
-                  <th className="py-2.5 px-4">Data/Hora</th>
-                  <th className="py-2.5 px-4">Admin</th>
-                  <th className="py-2.5 px-4">Ação</th>
-                  <th className="py-2.5 px-4">Entidade</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-bat-border/40">
-                {logsAuditoria.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-bat-text-muted">Nenhum log registrado ainda.</td>
-                  </tr>
-                ) : (
-                  logsAuditoria.map((a) => (
-                    <tr key={a.id}>
-                      <td className="py-3 px-4">{new Date(a.criado_em).toLocaleString("pt-BR")}</td>
-                      <td className="py-3 px-4 font-bold text-bat-gold-400">{a.admin?.apelido || "Admin"}</td>
-                      <td className="py-3 px-4">{a.acao}</td>
-                      <td className="py-3 px-4">{a.entidade_afetada || "—"}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-5 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-bat-border/60 pb-4">
+            <div>
+              <h2 className="heading text-xl text-bat-text flex items-center gap-2">
+                <span>🛡️</span> Log de Auditoria do Alto Comando
+              </h2>
+              <p className="text-xs text-bat-text-muted mt-0.5">
+                Rastreabilidade completa de todas as ações administrativas, moderações, edições e disparos.
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold text-bat-gold-400 bg-bat-gold-400/10 px-3 py-1 rounded-lg border border-bat-gold-400/25">
+              {logsAuditoria.length} registros
+            </span>
           </div>
+
+          {/* Barra de Filtros e Busca de Auditoria */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 relative">
+              <input
+                type="text"
+                placeholder="Buscar por admin, ação ou entidade afetada..."
+                value={buscaAuditoria}
+                onChange={(e) => setBuscaAuditoria(e.target.value)}
+                className="w-full input-field text-xs pl-8"
+              />
+              <span className="absolute left-2.5 top-2.5 text-xs text-bat-text-muted">🔍</span>
+            </div>
+
+            <div>
+              <select
+                value={filtroAcaoAuditoria}
+                onChange={(e) => setFiltroAcaoAuditoria(e.target.value)}
+                className="w-full input-field text-xs bg-bat-bg-primary"
+              >
+                <option value="todos">Todas as Ações</option>
+                <option value="conta">👥 Gestão de Contas</option>
+                <option value="questao">📚 Banco de Questões</option>
+                <option value="aviso">📢 Mural de Avisos</option>
+                <option value="teoria">📝 Conteúdo de Teoria</option>
+                <option value="banner">🖼️ Banners & Capas</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Tabela de Logs */}
+          {(() => {
+            const logsFiltrados = logsAuditoria.filter((a) => {
+              if (filtroAcaoAuditoria !== "todos") {
+                if (!String(a.acao).toLowerCase().includes(filtroAcaoAuditoria)) return false;
+              }
+              if (buscaAuditoria.trim().length >= 2) {
+                const termo = buscaAuditoria.toLowerCase();
+                const texto = `${a.acao} ${a.admin?.apelido || ""} ${a.entidade_afetada || ""} ${JSON.stringify(a.detalhes || "")}`.toLowerCase();
+                if (!texto.includes(termo)) return false;
+              }
+              return true;
+            });
+
+            return (
+              <div className="overflow-x-auto rounded-xl border border-bat-border">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="bg-bat-bg-primary border-b border-bat-border text-bat-text-muted">
+                      <th className="py-2.5 px-4">Data/Hora</th>
+                      <th className="py-2.5 px-4">Admin</th>
+                      <th className="py-2.5 px-4">Ação</th>
+                      <th className="py-2.5 px-4">Entidade</th>
+                      <th className="py-2.5 px-4 text-right">Inspecionar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-bat-border/40">
+                    {logsFiltrados.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-bat-text-muted">
+                          Nenhum registro de auditoria encontrado para os filtros selecionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      logsFiltrados.map((a) => (
+                        <tr
+                          key={a.id}
+                          className="hover:bg-bat-bg-primary/50 transition-colors cursor-pointer"
+                          onClick={() => setLogDetalheModal(a)}
+                        >
+                          <td className="py-3 px-4 text-bat-text-muted whitespace-nowrap">
+                            {new Date(a.criado_em).toLocaleString("pt-BR")}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-bat-gold-400 whitespace-nowrap">
+                            {a.admin?.apelido || "Admin"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded bg-bat-bg-secondary text-[11px] font-bold text-bat-text border border-bat-border">
+                              {a.acao}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-bat-text-secondary">{a.entidade_afetada || "—"}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLogDetalheModal(a);
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-bat-border bg-bat-bg-primary hover:border-bat-gold-400 text-bat-text-secondary hover:text-bat-gold-400 cursor-pointer"
+                            >
+                              🔍 Inspecionar
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {/* Modal Visualizador de Payload JSON */}
+          {logDetalheModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="bg-bat-bg-card border border-bat-gold-400/50 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col">
+                <div className="px-6 py-4 border-b border-bat-border flex items-center justify-between bg-bat-bg-primary">
+                  <div>
+                    <h3 className="text-base font-bold text-bat-text flex items-center gap-2">
+                      <span>🔍</span> Detalhes da Ação de Auditoria
+                    </h3>
+                    <p className="text-[11px] text-bat-text-muted font-mono">
+                      ID: {logDetalheModal.id}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLogDetalheModal(null)}
+                    className="w-8 h-8 rounded-full bg-bat-bg-secondary flex items-center justify-center text-xs text-bat-text-muted hover:text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border">
+                      <span className="text-[10px] text-bat-text-muted uppercase block">Admin Responsável</span>
+                      <span className="font-bold text-bat-gold-400">{logDetalheModal.admin?.apelido || "Admin"}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border">
+                      <span className="text-[10px] text-bat-text-muted uppercase block">Data e Hora</span>
+                      <span className="text-bat-text">{new Date(logDetalheModal.criado_em).toLocaleString("pt-BR")}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-xs font-mono">
+                    <span className="text-[10px] text-bat-text-muted uppercase block mb-1">Ação Executada</span>
+                    <span className="text-sm font-bold text-bat-text">{logDetalheModal.acao}</span>
+                    {logDetalheModal.entidade_afetada && (
+                      <span className="block text-[11px] text-bat-text-secondary mt-0.5">
+                        Alvo: {logDetalheModal.entidade_afetada}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                      Payload & Parâmetros da Ação (JSON)
+                    </label>
+                    <pre className="p-4 rounded-xl bg-black border border-bat-border text-[11px] font-mono text-emerald-400 overflow-x-auto leading-relaxed">
+                      {JSON.stringify(logDetalheModal.detalhes || {}, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-bat-border bg-bat-bg-primary flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setLogDetalheModal(null)}
+                    className="btn-secondary py-1.5 px-5 text-xs font-bold cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ═══ TAB 8: BANNERS E TEMAS ═══ */}
-      {aba === "banners" && (
-        <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 space-y-4">
-          <h2 className="heading text-xl text-bat-text">Formatos de Banners Suportados</h2>
-          <p className="text-bat-text-secondary text-xs">Imagens estáticas (PNG, JPG, WebP), GIFs animados e vídeos táticos (MP4, WebM).</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-bat-bg-primary rounded-xl border border-bat-border">
-              <span className="text-bat-gold-400 font-bold block mb-1">🖼️ Imagem Estática</span>
-              <p className="text-xs text-bat-text-muted">Compressão otimizada até 15MB.</p>
-            </div>
-            <div className="p-4 bg-bat-bg-primary rounded-xl border border-bat-border">
-              <span className="text-bat-purple-400 font-bold block mb-1">🎬 GIF Animado</span>
-              <p className="text-xs text-bat-text-muted">Loop infinito dinâmico no perfil e modal.</p>
-            </div>
-            <div className="p-4 bg-bat-bg-primary rounded-xl border border-bat-border">
-              <span className="text-emerald-400 font-bold block mb-1">🎥 Vídeo MP4 / WebM</span>
-              <p className="text-xs text-bat-text-muted">Reprodução automática silenciosa (autoplay muted).</p>
-            </div>
-          </div>
-          <p className="text-bat-text-muted text-xs">
-            Todos os banners da plataforma usam <code className="text-bat-gold-400">object-fit: cover</code>,
-            então qualquer proporção de imagem preenche a faixa sem esticar nem
-            vazar — não é preciso recortar antes de enviar.
-          </p>
-        </div>
-      )}
+      {aba === "banners" && <PainelBanners />}
 
       {/* ═══ TAB: BANCO DE QUESTÕES (NOVO) ═══ */}
       {aba === "questoes" && <PainelBancoQuestoes />}

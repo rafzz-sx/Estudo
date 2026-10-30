@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const { data: ticket, error: tErr } = await supabase
       .from('tickets')
       .insert({
-        user_id: user.id,
+        user_id: (user.role === 'admin' && body?.user_id) ? body.user_id : user.id,
         motivo,
         titulo: titulo.trim(),
         status: 'aberto',

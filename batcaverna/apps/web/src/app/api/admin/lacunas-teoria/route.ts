@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase';
 import { lerTudo } from '@/lib/contagens';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { uuidOuNulo } from '@/lib/seguranca';
 
 /**
  * GET /api/admin/lacunas-teoria — onde escrever teoria rende mais.
@@ -238,6 +239,147 @@ export async function GET(req: NextRequest) {
     console.error('GET /api/admin/lacunas-teoria error:', error);
     return NextResponse.json(
       { success: false, error: 'Erro ao montar a fila de teoria' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/admin/lacunas-teoria — Salva um texto de teoria para um assunto.
+ *
+ * Cria o registro em `teoria_conteudo` vinculado ao assunto e matéria,
+ * preenche o resumo em `assuntos.resumo_teorico` e gera log de auditoria.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const admin = await exigirAdmin(req);
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: 'Acesso restrito a administradores' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const assuntoId = uuidOuNulo(body.assunto_id);
+    if (!assuntoId) {
+      return NextResponse.json(
+        { success: false, error: 'ID do assunto é obrigatório' },
+        { status: 400 }
+      );
+    }
+
+    const titulo = String(body.titulo || '').trim();
+    const corpoMarkdown = String(body.corpo_markdown || '').trim();
+
+    if (titulo.length < 3) {
+      return NextResponse.json(
+        { success: false, error: 'O título deve ter no mínimo 3 caracteres' },
+        { status: 400 }
+      );
+    }
+
+    if (corpoMarkdown.length < 20) {
+      return NextResponse.json(
+        { success: false, error: 'O conteúdo de teoria deve ter pelo menos 20 caracteres' },
+        { status: 400 }
+      );
+    }
+
+    const resumo = typeof body.resumo === 'string' && body.resumo.trim().length > 0
+      ? body.resumo.trim().slice(0, 400)
+      : corpoMarkdown.replace(/[#*`_\[\]()]/g, '').trim().slice(0, 300);
+
+    const nivel = ['base', 'aprofundado'].includes(body.nivel) ? body.nivel : 'base';
+    const tempoLeitura = Math.max(1, Math.min(60, parseInt(body.tempo_leitura_min) || 5));
+
+    const supabase = createServerSupabaseClient();
+
+    // Busca detalhes do assunto e matéria se não fornecidos
+    const { data: assunto, error: assErr } = await supabase
+      .from('assuntos')
+      .select('id, nome, materia_id, materias (id, nome)')
+      .eq('id', assuntoId)
+      .single();
+
+    if (assErr || !assunto) {
+      return NextResponse.json(
+        { success: false, error: 'Assunto não encontrado no banco de dados' },
+        { status: 404 }
+      );
+    }
+
+    const materiaId = uuidOuNulo(body.materia_id) || assunto.materia_id;
+    const tema = String(body.tema || assunto.nome).trim().slice(0, 120);
+
+    // Salva ou atualiza em teoria_conteudo
+    const dadosTeoria = {
+      materia_id: materiaId,
+      assunto_id: assuntoId,
+      tema,
+      titulo,
+      resumo,
+      corpo_markdown: corpoMarkdown,
+      nivel,
+      tempo_leitura_min: tempoLeitura,
+      atualizado_em: new Date().toISOString(),
+    };
+
+    // Tenta upsert pelo unique (materia_id, tema, nivel) ou insert simples
+    const { data: teoriaSalva, error: teoErr } = await supabase
+      .from('teoria_conteudo')
+      .upsert(dadosTeoria, { onConflict: 'materia_id,tema,nivel' })
+      .select()
+      .single();
+
+    if (teoErr) {
+      // Se falhar o upsert por constraint, tenta inserção direta
+      const { data: retryData, error: retryErr } = await supabase
+        .from('teoria_conteudo')
+        .insert(dadosTeoria)
+        .select()
+        .single();
+
+      if (retryErr) {
+        return NextResponse.json(
+          { success: false, error: retryErr.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Atualiza resumo_teorico no assunto
+    try {
+      await supabase
+        .from('assuntos')
+        .update({ resumo_teorico: resumo })
+        .eq('id', assuntoId);
+    } catch {}
+
+    // Registra na auditoria
+    try {
+      await supabase.from('admin_audit_log').insert({
+        admin_id: admin.id,
+        acao: 'criar_teoria',
+        entidade_afetada: 'teoria_conteudo',
+        entidade_id: assuntoId,
+        detalhes: {
+          assunto_id: assuntoId,
+          assunto_nome: assunto.nome,
+          titulo,
+          nivel,
+        },
+      });
+    } catch {}
+
+    return NextResponse.json({
+      success: true,
+      data: teoriaSalva || dadosTeoria,
+      mensagem: `Teoria de "${assunto.nome}" publicada com sucesso!`,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || 'Erro ao salvar teoria.' },
       { status: 500 }
     );
   }

@@ -63,6 +63,135 @@ export function PainelBancoQuestoes() {
   // Exclusão
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
 
+  // Nova Questão Manual & Duplicação
+  const [modalNovaAberta, setModalNovaAberta] = useState(false);
+  const [salvandoNova, setSalvandoNova] = useState(false);
+  const [previewEnunciadoNova, setPreviewEnunciadoNova] = useState(false);
+  const [previewEnunciadoEdicao, setPreviewEnunciadoEdicao] = useState(false);
+  const [materiasConcurso, setMateriasConcurso] = useState<any[]>([]);
+  const [carregandoMaterias, setCarregandoMaterias] = useState(false);
+
+  const formNovaPadrao = {
+    concurso_id: "",
+    materia_id: "",
+    assunto_id: "",
+    ano: new Date().getFullYear(),
+    banca: "Oficial",
+    dificuldade: "medio",
+    texto_base: "",
+    enunciado: "",
+    alternativas: [
+      { letra: "A", texto: "" },
+      { letra: "B", texto: "" },
+      { letra: "C", texto: "" },
+      { letra: "D", texto: "" },
+      { letra: "E", texto: "" },
+    ],
+    resposta_correta: "A",
+    explicacao: "",
+    anulada: false,
+  };
+  const [novaQuestao, setNovaQuestao] = useState(formNovaPadrao);
+
+  // Carregar matérias e assuntos quando o concurso da nova questão mudar
+  const carregarMateriasDoConcurso = async (concursoId: string) => {
+    if (!concursoId) {
+      setMateriasConcurso([]);
+      return;
+    }
+    const c = concursos.find((item) => item.id === concursoId);
+    if (!c) return;
+
+    setCarregandoMaterias(true);
+    try {
+      const res = await fetchWithAuth(`/api/concursos/${c.sigla}/materias`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setMateriasConcurso(json.data);
+      } else {
+        setMateriasConcurso([]);
+      }
+    } catch {
+      setMateriasConcurso([]);
+    } finally {
+      setCarregandoMaterias(false);
+    }
+  };
+
+  const handleAbrirCriacao = () => {
+    const padraoConcurso = concursos[0]?.id || "";
+    setNovaQuestao({
+      ...formNovaPadrao,
+      concurso_id: padraoConcurso,
+    });
+    if (padraoConcurso) carregarMateriasDoConcurso(padraoConcurso);
+    setPreviewEnunciadoNova(false);
+    setModalNovaAberta(true);
+  };
+
+  const handleDuplicar = (q: Questao) => {
+    const concId = q.concursos?.id || "";
+    setNovaQuestao({
+      concurso_id: concId,
+      materia_id: q.materias?.id || "",
+      assunto_id: q.assuntos?.id || "",
+      ano: new Date().getFullYear(),
+      banca: q.banca ? `${q.banca} (Inédita/Adaptada)` : "BatCaverna Inédita",
+      dificuldade: q.dificuldade || "medio",
+      texto_base: q.texto_base || "",
+      enunciado: `[Inédita] ${q.enunciado}`,
+      alternativas: q.alternativas
+        ? q.alternativas.map((a) => ({ letra: a.letra, texto: a.texto }))
+        : [
+            { letra: "A", texto: "" },
+            { letra: "B", texto: "" },
+            { letra: "C", texto: "" },
+            { letra: "D", texto: "" },
+            { letra: "E", texto: "" },
+          ],
+      resposta_correta: q.resposta_correta || "A",
+      explicacao: q.explicacao || "",
+      anulada: false,
+    });
+    if (concId) carregarMateriasDoConcurso(concId);
+    setPreviewEnunciadoNova(false);
+    setModalNovaAberta(true);
+  };
+
+  const handleSalvarNovaQuestao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novaQuestao.concurso_id || !novaQuestao.materia_id || !novaQuestao.assunto_id) {
+      setAviso({ tipo: "erro", msg: "Selecione concurso, matéria e assunto para cadastrar." });
+      return;
+    }
+    if (novaQuestao.enunciado.trim().length < 5) {
+      setAviso({ tipo: "erro", msg: "O enunciado precisa ter pelo menos 5 caracteres." });
+      return;
+    }
+
+    setSalvandoNova(true);
+    try {
+      const res = await fetchWithAuth("/api/admin/questoes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(novaQuestao),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setAviso({ tipo: "ok", msg: "✨ Nova questão cadastrada com sucesso!" });
+        setModalNovaAberta(false);
+        setQuestoes((prev) => [json.data, ...prev]);
+        setTotal((t) => t + 1);
+      } else {
+        setAviso({ tipo: "erro", msg: json.error || "Erro ao salvar questão." });
+      }
+    } catch {
+      setAviso({ tipo: "erro", msg: "Falha de conexão com a API de questões." });
+    } finally {
+      setSalvandoNova(false);
+    }
+  };
+
   // Carregar concursos para o filtro
   useEffect(() => {
     fetchWithAuth("/api/concursos")
@@ -230,13 +359,22 @@ export function PainelBancoQuestoes() {
           </p>
         </div>
 
-        <button
-          onClick={() => carregarQuestoes(pagina)}
-          disabled={carregando}
-          className="btn-secondary py-2 px-4 text-xs font-bold self-start sm:self-auto cursor-pointer"
-        >
-          {carregando ? "Carregando..." : "🔄 Atualizar"}
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={handleAbrirCriacao}
+            className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(245,197,24,0.3)]"
+          >
+            <span>➕</span>
+            <span>Nova Questão Manual</span>
+          </button>
+          <button
+            onClick={() => carregarQuestoes(pagina)}
+            disabled={carregando}
+            className="btn-secondary py-2 px-4 text-xs font-bold cursor-pointer"
+          >
+            {carregando ? "Carregando..." : "🔄 Atualizar"}
+          </button>
+        </div>
       </div>
 
       {/* Alertas */}
@@ -556,6 +694,15 @@ export function PainelBancoQuestoes() {
 
                     <button
                       type="button"
+                      onClick={() => handleDuplicar(q)}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-bat-purple-400/40 text-bat-purple-400 hover:bg-bat-purple-400/10 cursor-pointer"
+                      title="Duplicar questão para criar variação inédita"
+                    >
+                      📋 Duplicar
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => handleAlternarAnulada(q)}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border cursor-pointer ${
                         q.anulada
@@ -619,7 +766,336 @@ export function PainelBancoQuestoes() {
         </div>
       )}
 
-      {/* ═══ MODAL DE EDIÇÃO DE QUESTÃO ═══ */}
+      {/* ═══ MODAL DE CADASTRO DE NOVA QUESTÃO MANUAL / INÉDITA ═══ */}
+      {modalNovaAberta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-bat-bg-card border border-bat-gold-400/50 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Header Modal */}
+            <div className="px-6 py-4 border-b border-bat-border flex items-center justify-between bg-bat-bg-primary">
+              <div>
+                <h3 className="text-base font-bold text-bat-text flex items-center gap-2">
+                  <span className="text-bat-gold-400">➕</span> Cadastrar Nova Questão
+                </h3>
+                <p className="text-[11px] text-bat-text-muted">
+                  Crie questões oficiais ou inéditas com suporte a fórmulas matemáticas (KaTeX).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalNovaAberta(false)}
+                className="w-8 h-8 rounded-full bg-bat-bg-secondary flex items-center justify-center text-xs text-bat-text-muted hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Corpo do Formulário */}
+            <form onSubmit={handleSalvarNovaQuestao} className="p-6 overflow-y-auto space-y-4 flex-1">
+              {/* Concurso, Matéria e Assunto */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Concurso Alvo *
+                  </label>
+                  <select
+                    value={novaQuestao.concurso_id}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setNovaQuestao({
+                        ...novaQuestao,
+                        concurso_id: id,
+                        materia_id: "",
+                        assunto_id: "",
+                      });
+                      carregarMateriasDoConcurso(id);
+                    }}
+                    className="w-full input-field text-xs bg-bat-bg-primary"
+                    required
+                  >
+                    <option value="">Selecione o concurso...</option>
+                    {concursos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.sigla} — {c.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Matéria * {carregandoMaterias && "(carregando...)"}
+                  </label>
+                  <select
+                    value={novaQuestao.materia_id}
+                    onChange={(e) => {
+                      setNovaQuestao({
+                        ...novaQuestao,
+                        materia_id: e.target.value,
+                        assunto_id: "",
+                      });
+                    }}
+                    className="w-full input-field text-xs bg-bat-bg-primary"
+                    required
+                    disabled={!novaQuestao.concurso_id || carregandoMaterias}
+                  >
+                    <option value="">
+                      {!novaQuestao.concurso_id
+                        ? "Escolha o concurso primeiro"
+                        : "Selecione a matéria..."}
+                    </option>
+                    {materiasConcurso.map((mc: any) => {
+                      const mat = mc.materias;
+                      if (!mat) return null;
+                      return (
+                        <option key={mat.id} value={mat.id}>
+                          {mat.icone_emoji ? `${mat.icone_emoji} ` : ""}
+                          {mat.nome}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Assunto Tático *
+                  </label>
+                  <select
+                    value={novaQuestao.assunto_id}
+                    onChange={(e) =>
+                      setNovaQuestao({ ...novaQuestao, assunto_id: e.target.value })
+                    }
+                    className="w-full input-field text-xs bg-bat-bg-primary"
+                    required
+                    disabled={!novaQuestao.materia_id}
+                  >
+                    <option value="">
+                      {!novaQuestao.materia_id
+                        ? "Escolha a matéria primeiro"
+                        : "Selecione o assunto..."}
+                    </option>
+                    {(() => {
+                      const selMat = materiasConcurso.find(
+                        (mc: any) => mc.materias?.id === novaQuestao.materia_id
+                      )?.materias;
+                      const assuntos = selMat?.assuntos || [];
+                      return assuntos.map((ass: any) => (
+                        <option key={ass.id} value={ass.id}>
+                          {ass.nome}
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                </div>
+              </div>
+
+              {/* Ano, Banca e Dificuldade */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Ano da Prova
+                  </label>
+                  <input
+                    type="number"
+                    value={novaQuestao.ano}
+                    onChange={(e) =>
+                      setNovaQuestao({
+                        ...novaQuestao,
+                        ano: parseInt(e.target.value) || new Date().getFullYear(),
+                      })
+                    }
+                    className="w-full input-field text-xs font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Banca / Origem
+                  </label>
+                  <input
+                    type="text"
+                    value={novaQuestao.banca}
+                    onChange={(e) =>
+                      setNovaQuestao({ ...novaQuestao, banca: e.target.value })
+                    }
+                    placeholder="Ex: Oficial, EsPCEx, Inédita..."
+                    className="w-full input-field text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                    Dificuldade
+                  </label>
+                  <select
+                    value={novaQuestao.dificuldade}
+                    onChange={(e) =>
+                      setNovaQuestao({ ...novaQuestao, dificuldade: e.target.value })
+                    }
+                    className="w-full input-field text-xs bg-bat-bg-primary"
+                  >
+                    <option value="facil">🟢 Fácil</option>
+                    <option value="medio">🟡 Médio</option>
+                    <option value="dificil">🔴 Difícil</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Texto Base (Opcional) */}
+              <div>
+                <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                  Texto Base (Opcional - para questões com poema, crônica ou contexto compartilhado)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Texto ou contexto que antecede o comando da questão..."
+                  value={novaQuestao.texto_base}
+                  onChange={(e) =>
+                    setNovaQuestao({ ...novaQuestao, texto_base: e.target.value })
+                  }
+                  className="w-full input-field text-xs font-sans leading-relaxed resize-y"
+                />
+              </div>
+
+              {/* Enunciado com Toggle KaTeX Preview */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-bat-text-secondary">
+                    Enunciado da Questão *
+                  </label>
+                  <div className="flex items-center gap-1 bg-bat-bg-primary p-0.5 rounded-lg border border-bat-border text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEnunciadoNova(false)}
+                      className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${
+                        !previewEnunciadoNova
+                          ? "bg-bat-gold-400 text-black"
+                          : "text-bat-text-muted hover:text-bat-text"
+                      }`}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEnunciadoNova(true)}
+                      className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${
+                        previewEnunciadoNova
+                          ? "bg-bat-gold-400 text-black"
+                          : "text-bat-text-muted hover:text-bat-text"
+                      }`}
+                    >
+                      👁️ KaTeX Preview
+                    </button>
+                  </div>
+                </div>
+
+                {!previewEnunciadoNova ? (
+                  <textarea
+                    rows={5}
+                    placeholder="Digite o enunciado completo. Fórmulas LaTeX podem ser inseridas entre $ (inline) ou $$ (bloco)..."
+                    value={novaQuestao.enunciado}
+                    onChange={(e) =>
+                      setNovaQuestao({ ...novaQuestao, enunciado: e.target.value })
+                    }
+                    className="w-full input-field text-xs font-sans leading-relaxed resize-y font-mono"
+                    required
+                  />
+                ) : (
+                  <div className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border min-h-[120px] text-xs text-bat-text leading-relaxed">
+                    <MathText>{novaQuestao.enunciado || "*(Nenhum texto informado)*"}</MathText>
+                  </div>
+                )}
+              </div>
+
+              {/* Alternativas e Gabarito */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-bat-text-secondary">
+                    Alternativas & Gabarito Oficial *
+                  </label>
+                  <span className="text-[10px] text-bat-text-muted font-bold">
+                    Clique na letra para marcar o gabarito correto
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {novaQuestao.alternativas.map((alt, index) => {
+                    const eCorreta = novaQuestao.resposta_correta === alt.letra;
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNovaQuestao({ ...novaQuestao, resposta_correta: alt.letra })
+                          }
+                          className={`w-7 h-7 rounded-lg font-mono font-bold text-xs flex items-center justify-center shrink-0 cursor-pointer transition-all ${
+                            eCorreta
+                              ? "bg-bat-gold-400 text-black shadow-[0_0_10px_rgba(245,197,24,0.4)]"
+                              : "bg-bat-bg-primary text-bat-text-muted hover:text-bat-text border border-bat-border"
+                          }`}
+                          title={`Marcar alternativa ${alt.letra} como correta`}
+                        >
+                          {alt.letra}
+                        </button>
+                        <input
+                          type="text"
+                          placeholder={`Texto da alternativa (${alt.letra})...`}
+                          value={alt.texto}
+                          onChange={(e) => {
+                            const novas = [...novaQuestao.alternativas];
+                            novas[index] = { ...novas[index], texto: e.target.value };
+                            setNovaQuestao({ ...novaQuestao, alternativas: novas });
+                          }}
+                          className={`w-full input-field text-xs ${
+                            eCorreta ? "border-bat-gold-400/60 bg-bat-gold-400/5" : ""
+                          }`}
+                          required
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Gabarito Comentado / Explicação */}
+              <div>
+                <label className="text-xs font-bold text-bat-text-secondary block mb-1">
+                  Resolução e Explicação Didática (Gabarito Comentado)
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="Explicação do porquê o gabarito é o correto e dicas para resolver..."
+                  value={novaQuestao.explicacao}
+                  onChange={(e) =>
+                    setNovaQuestao({ ...novaQuestao, explicacao: e.target.value })
+                  }
+                  className="w-full input-field text-xs font-sans leading-relaxed resize-y"
+                />
+              </div>
+
+              {/* Botões do Rodapé */}
+              <div className="pt-4 border-t border-bat-border flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModalNovaAberta(false)}
+                  disabled={salvandoNova}
+                  className="btn-secondary py-2 px-4 text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoNova}
+                  className="btn-primary py-2 px-6 text-xs font-bold cursor-pointer shadow-[0_0_15px_rgba(245,197,24,0.3)]"
+                >
+                  {salvandoNova ? "Cadastrando..." : "✨ Concluir Cadastro"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {questaoEditando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-bat-bg-card border border-bat-gold-400/40 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
@@ -724,23 +1200,56 @@ export function PainelBancoQuestoes() {
                 </label>
               </div>
 
-              {/* Enunciado */}
+              {/* Enunciado com Toggle de Preview KaTeX */}
               <div>
-                <label className="text-xs font-bold text-bat-text-secondary block mb-1">
-                  Enunciado da Questão
-                </label>
-                <textarea
-                  rows={5}
-                  value={questaoEditando.enunciado}
-                  onChange={(e) =>
-                    setQuestaoEditando({
-                      ...questaoEditando,
-                      enunciado: e.target.value,
-                    })
-                  }
-                  className="w-full input-field text-xs font-sans leading-relaxed resize-y"
-                  required
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-bat-text-secondary">
+                    Enunciado da Questão
+                  </label>
+                  <div className="flex items-center gap-1 bg-bat-bg-primary p-0.5 rounded-lg border border-bat-border text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEnunciadoEdicao(false)}
+                      className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${
+                        !previewEnunciadoEdicao
+                          ? "bg-bat-gold-400 text-black"
+                          : "text-bat-text-muted hover:text-bat-text"
+                      }`}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEnunciadoEdicao(true)}
+                      className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${
+                        previewEnunciadoEdicao
+                          ? "bg-bat-gold-400 text-black"
+                          : "text-bat-text-muted hover:text-bat-text"
+                      }`}
+                    >
+                      👁️ KaTeX Preview
+                    </button>
+                  </div>
+                </div>
+
+                {!previewEnunciadoEdicao ? (
+                  <textarea
+                    rows={5}
+                    value={questaoEditando.enunciado}
+                    onChange={(e) =>
+                      setQuestaoEditando({
+                        ...questaoEditando,
+                        enunciado: e.target.value,
+                      })
+                    }
+                    className="w-full input-field text-xs font-sans leading-relaxed resize-y font-mono"
+                    required
+                  />
+                ) : (
+                  <div className="p-4 rounded-xl bg-bat-bg-primary border border-bat-border min-h-[120px] text-xs text-bat-text leading-relaxed">
+                    <MathText>{questaoEditando.enunciado || "*(Nenhum texto informado)*"}</MathText>
+                  </div>
+                )}
               </div>
 
               {/* Alternativas */}

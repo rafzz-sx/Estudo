@@ -257,13 +257,27 @@ export async function PATCH(req: NextRequest) {
         };
         mensagem = `${alvo.apelido} está liberado.`;
         break;
+
+      case 'ajuste_tatico': {
+        if (typeof body?.streak_dias === 'number' && body.streak_dias >= 0) {
+          mudanca.streak_dias = Math.floor(body.streak_dias);
+        }
+        if (typeof body?.xp_total === 'number' && body.xp_total >= 0) {
+          mudanca.xp_total = Math.floor(body.xp_total);
+        }
+        if (body?.resetar_avatar === true) {
+          mudanca.avatar_url = null;
+        }
+        mensagem = `Dados de ${alvo.apelido} ajustados com sucesso.`;
+        break;
+      }
     }
 
     const { data, error } = await supabase
       .from('users')
       .update(mudanca)
       .eq('id', userId)
-      .select('id, apelido, role, ativo, suspenso_ate, motivo_suspensao')
+      .select('id, apelido, role, ativo, suspenso_ate, motivo_suspensao, streak_dias, xp_total, avatar_url')
       .single();
 
     if (error) throw error;
@@ -289,6 +303,8 @@ export async function PATCH(req: NextRequest) {
           ? 'Sua conta foi liberada'
           : acao === 'rebaixar'
           ? 'Suas permissões mudaram'
+          : acao === 'ajuste_tatico'
+          ? 'Sincronização de Perfil'
           : 'Sua conta foi restringida',
       mensagem: motivo ?? mensagem,
     });

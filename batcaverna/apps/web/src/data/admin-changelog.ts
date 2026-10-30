@@ -8,7 +8,7 @@
  * 2. Registramos as novidades técnicas no `ADMIN_CHANGELOG_HISTORY`.
  * 3. NUNCA vazamos informações administrativas no `changelog.ts` público dos alunos.
  */
-export const CURRENT_ADMIN_VERSION = '2.2.0';
+export const CURRENT_ADMIN_VERSION = '2.3.0';
 
 export interface AdminAlteracao {
   modulo: string;
@@ -24,6 +24,55 @@ export interface AdminReleaseItem {
 }
 
 export const ADMIN_CHANGELOG_HISTORY: AdminReleaseItem[] = [
+  {
+    versao: '2.3.0',
+    dataLancamento: '2026-10-29T21:10:00-03:00',
+    titulo: 'Arsenal Acadêmico com KaTeX, Gestor de Banners, Telemetria Visual & Auditoria Avançada',
+    resumo:
+      'Grande salto de capacidades do Command Center: cadastro manual de questões com Live Preview KaTeX e ação de duplicação, editor de teoria integrado diretamente nas lacunas pedagógicas, gerenciador ativo de banners e capas com suporte a imagens, GIFs e vídeos, mural de avisos com segmentação por concurso e botão de ação (CTA), métricas visuais com Recharts na Visão Geral, exportação de soldados em CSV, ajuste manual de streak/XP no dossiê, conversão de feedbacks em tickets de suporte e inspecionador de payload JSON na auditoria.',
+    alteracoes: [
+      {
+        modulo: 'Banco de Questões',
+        descricao:
+          'Criação do modal "Cadastrar Nova Questão Manual" com formulário completo, seletores encadeados (Concurso > Matéria > Assunto), Live Preview KaTeX e ação "Duplicar" para rápida criação de questões inéditas.',
+      },
+      {
+        modulo: 'Lacunas de Teoria',
+        descricao:
+          'Implementação do Editor de Teoria Integrado com Markdown, fórmulas matemáticas KaTeX, sinopse executiva e modelo tático pronto para publicação instantânea na plataforma.',
+      },
+      {
+        modulo: 'Banners & Capas',
+        descricao:
+          'Módulo de Banners transformado em gerenciador ativo: cards com preview ao vivo, presets oficiais de concursos e atualização imediata no banco de dados.',
+      },
+      {
+        modulo: 'Mural de Avisos',
+        descricao:
+          'Adição de segmentação por concurso (alcance global ou restrito ao concurso foco do aluno), anexo de botão CTA com link direto e pré-visualização ao vivo na composição.',
+      },
+      {
+        modulo: 'Telemetria & Gráficos',
+        descricao:
+          'Gráfico de linha/área com novos soldados nos últimos 7 dias (Recharts), barras de distribuição percentual por concurso e termômetro de retenção com alunos em risco de abandono.',
+      },
+      {
+        modulo: 'Contas & Soldados',
+        descricao:
+          'Exportação da base de soldados em arquivo CSV/Excel e inclusão de ajuste manual de ofensiva (streak), XP e reset de avatar diretamente pelo Dossiê do Soldado.',
+      },
+      {
+        modulo: 'Feedback dos Alunos',
+        descricao:
+          'Adição de termômetro de CSAT, filtros por estrelas (críticas, neutras, elogios) e ação de conversão de feedback em ticket de suporte em 1 clique.',
+      },
+      {
+        modulo: 'Auditoria & Logs',
+        descricao:
+          'Filtros por categoria de ação, busca textual rápida e modal inspecionador de payload JSON para rastrear detalhes brutos de todas as operações administrativas.',
+      },
+    ],
+  },
   {
     versao: '2.2.0',
     dataLancamento: '2026-10-29T20:30:00-03:00',

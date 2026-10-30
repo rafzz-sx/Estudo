@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/admin/avisos — dispara um aviso para TODOS os usuários.
- * Body: { titulo, mensagem, tipo, duracao_horas }
+ * Body: { titulo, concurso_alvo: concursoAlvo || 'TODOS', link_acao: linkAcao, mensagem, tipo, duracao_horas }
  *
  * Cria uma linha em `avisos_globais` (o registro do disparo) e uma
  * notificação individual por usuário, com a mesma data de expiração —
@@ -85,14 +85,51 @@ export async function POST(req: NextRequest) {
         ? new Date(Date.now() + duracaoHoras * 3_600_000).toISOString()
         : null;
 
+    const concursoAlvo =
+      typeof body?.concurso_alvo === 'string' &&
+      body.concurso_alvo.trim().length > 0 &&
+      body.concurso_alvo.toLowerCase() !== 'todos'
+        ? body.concurso_alvo.trim().toUpperCase()
+        : null;
+
+    const linkAcao =
+      typeof body?.link_acao === 'string' && body.link_acao.trim().length > 0
+        ? body.link_acao.trim()
+        : null;
+
+    const textoBotao =
+      typeof body?.texto_botao === 'string' && body.texto_botao.trim().length > 0
+        ? body.texto_botao.trim()
+        : linkAcao
+        ? 'Acessar Agora'
+        : null;
+
     const supabase = createServerSupabaseClient();
 
-    // Sem paginar, o PostgREST devolvia só as 1.000 primeiras linhas: acima
-    // disso o aviso "para todos" chegava a uma parte, e o contador de
-    // destinatários registrava o número errado.
-    const destinatarios = await lerTudo<{ id: string }>(() =>
+    const todosAtivos = await lerTudo<{ id: string }>(() =>
       supabase.from('users').select('id').eq('ativo', true)
     );
+
+    let destinatarios: { id: string }[] = todosAtivos;
+
+    if (concursoAlvo) {
+      const { data: concData } = await supabase
+        .from('concursos')
+        .select('id')
+        .ilike('sigla', concursoAlvo)
+        .maybeSingle();
+
+      if (concData) {
+        const favs = await lerTudo<{ user_id: string }>(() =>
+          supabase
+            .from('user_concurso_favoritos')
+            .select('user_id')
+            .eq('concurso_id', concData.id)
+        );
+        const setFavs = new Set(favs.map((f) => f.user_id));
+        destinatarios = todosAtivos.filter((u) => setFavs.has(u.id));
+      }
+    }
 
     const { data: aviso, error: avisoErr } = await supabase
       .from('avisos_globais')
@@ -119,7 +156,7 @@ export async function POST(req: NextRequest) {
           tipo: 'atualizacao_plataforma',
           titulo: titulo.slice(0, 200),
           mensagem,
-          dados_extra: { aviso_tipo: tipo },
+          dados_extra: { aviso_tipo: tipo, concurso_alvo: concursoAlvo, link_acao: linkAcao, texto_botao: textoBotao },
           aviso_id: aviso.id,
           expira_em: expiraEm,
         }))

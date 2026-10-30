@@ -281,6 +281,161 @@ export async function PATCH(req: NextRequest) {
 }
 
 /**
+ * POST /api/admin/questoes
+ *
+ * Cadastra uma nova questão no banco de dados.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const admin = await exigirAdmin(req);
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, error: 'Acesso restrito a administradores.' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const enunciado = String(body.enunciado || '').trim();
+    if (enunciado.length < 5) {
+      return NextResponse.json(
+        { success: false, error: 'O enunciado deve ter pelo menos 5 caracteres.' },
+        { status: 400 }
+      );
+    }
+
+    const alternativas = Array.isArray(body.alternativas) ? body.alternativas : [];
+    if (alternativas.length < 2) {
+      return NextResponse.json(
+        { success: false, error: 'Informe pelo menos duas alternativas (ex: A, B, C, D, E).' },
+        { status: 400 }
+      );
+    }
+
+    const respostaCorreta = String(body.resposta_correta || '').trim().toUpperCase();
+    if (!respostaCorreta) {
+      return NextResponse.json(
+        { success: false, error: 'A alternativa correta (gabarito) é obrigatória.' },
+        { status: 400 }
+      );
+    }
+
+    const concursoId = uuidOuNulo(body.concurso_id);
+    const materiaId = uuidOuNulo(body.materia_id);
+    const assuntoId = uuidOuNulo(body.assunto_id);
+
+    if (!concursoId || !materiaId || !assuntoId) {
+      return NextResponse.json(
+        { success: false, error: 'Concurso, matéria e assunto são obrigatórios.' },
+        { status: 400 }
+      );
+    }
+
+    const explicacao =
+      typeof body.explicacao === 'string' && body.explicacao.trim().length > 0
+        ? body.explicacao.trim()
+        : 'Gabarito comentado em elaboração pela equipe pedagógica.';
+
+    const dificuldade = ['facil', 'medio', 'dificil'].includes(body.dificuldade)
+      ? body.dificuldade
+      : 'medio';
+
+    const ano = typeof body.ano === 'number' && !isNaN(body.ano)
+      ? body.ano
+      : parseInt(body.ano) || new Date().getFullYear();
+
+    const banca = typeof body.banca === 'string' && body.banca.trim().length > 0
+      ? body.banca.trim()
+      : 'Oficial';
+
+    const textoBase = typeof body.texto_base === 'string' && body.texto_base.trim().length > 0
+      ? body.texto_base.trim()
+      : null;
+
+    const figuraDescricao = typeof body.figura_descricao === 'string' && body.figura_descricao.trim().length > 0
+      ? body.figura_descricao.trim()
+      : null;
+
+    const figuraSvg = typeof body.figura_svg === 'string' && body.figura_svg.trim().length > 0
+      ? body.figura_svg.trim()
+      : null;
+
+    const supabase = createServerSupabaseClient();
+
+    const novaQuestao = {
+      concurso_id: concursoId,
+      materia_id: materiaId,
+      assunto_id: assuntoId,
+      enunciado,
+      alternativas,
+      resposta_correta: respostaCorreta,
+      explicacao,
+      ano,
+      banca,
+      dificuldade,
+      texto_base: textoBase,
+      figura_descricao: figuraDescricao,
+      figura_svg: figuraSvg,
+      anulada: Boolean(body.anulada),
+      vezes_respondida: 0,
+      vezes_acertada: 0,
+    };
+
+    const { data, error } = await supabase
+      .from('questoes')
+      .insert(novaQuestao)
+      .select(
+        `
+        id, concurso_id, materia_id, assunto_id,
+        enunciado, alternativas, resposta_correta,
+        explicacao, anulada, ano, banca, dificuldade,
+        texto_base, numero_original, figura_descricao, figura_svg,
+        vezes_respondida, vezes_acertada, criado_em,
+        concursos (id, sigla, nome),
+        materias  (id, nome, icone_emoji),
+        assuntos  (id, nome)
+      `
+      )
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    // Log de auditoria
+    try {
+      await supabase.from('admin_audit_log').insert({
+        admin_id: admin.id,
+        acao: 'criar_questao',
+        entidade_afetada: 'questoes',
+        entidade_id: data.id,
+        detalhes: {
+          concurso_id: concursoId,
+          materia_id: materiaId,
+          assunto_id: assuntoId,
+          ano,
+          resposta_correta: respostaCorreta,
+        },
+      });
+    } catch {}
+
+    return NextResponse.json({
+      success: true,
+      data,
+      mensagem: 'Questão cadastrada com sucesso!',
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || 'Erro ao cadastrar questão.' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * DELETE /api/admin/questoes
  *
  * Remove uma questão fisicamente do banco, limpando dependências diretas.

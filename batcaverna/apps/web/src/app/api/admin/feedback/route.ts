@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('feedback_plataforma')
-      .select('*, users (nome, apelido, avatar_url, nivel_atual)')
+      .select('*, users (id, nome, apelido, avatar_url, nivel_atual)')
       .order('criado_em', { ascending: false })
       .limit(200);
 
