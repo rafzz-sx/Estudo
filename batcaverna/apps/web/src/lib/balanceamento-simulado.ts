@@ -192,10 +192,21 @@ export interface OpcoesSelecaoBlocos {
   diaProvaNumero?: number | null;
 }
 
+export interface BlocoInfoSimulado {
+  area: string;
+  aplicaTRI: boolean;
+  questoesTotal: number;
+  questoesIds: string[];
+  disciplinas: { nome: string; questoes: number }[];
+  distribuicaoDificuldade?: VagasDificuldade | null;
+}
+
 export interface ResultadoSelecaoBlocos {
   ids: string[];
-  distribuicaoDificuldade: VagasDificuldade;
+  aplicaTRI: boolean;
+  distribuicaoDificuldade: VagasDificuldade | null;
   distribuicaoMaterias: { materia: string; questoes: number }[];
+  blocosInfo: BlocoInfoSimulado[];
   questoesMeta: Record<string, QuestaoMeta>;
   totalIneditas: number;
   totalRepetidas: number;
@@ -281,19 +292,32 @@ export async function selecionarQuestoesPorBlocos(
   const questoesMeta: Record<string, QuestaoMeta> = {};
   const contagemGeralDificuldade: VagasDificuldade = { facil: 0, medio: 0, dificil: 0 };
   const contagemGeralMaterias = new Map<string, number>();
+  const blocosInfo: BlocoInfoSimulado[] = [];
+  let temAlgumBlocoTRI = false;
 
   let contadorGlobal = 0;
 
   // 2. Itera sobre cada Bloco Oficial de Prova
   for (let bIndex = 0; bIndex < blocos.length; bIndex++) {
     const bloco = blocos[bIndex];
+    const aplicaTRI = Boolean(bloco.aplicaTRI);
+    if (aplicaTRI) temAlgumBlocoTRI = true;
 
-    // Para o ENEM, calculamos a meta da régua TRI especificamente para esta Área
-    const metaDificuldadeBloco = bloco.aplicaTRI
+    const blocoDificuldade: VagasDificuldade = { facil: 0, medio: 0, dificil: 0 };
+    const blocoQuestoesIds: string[] = [];
+    const blocoDisciplinasInfo: { nome: string; questoes: number }[] = [];
+
+    // Para o ENEM (aplicaTRI === true): calculamos as vagas de dificuldade INDEPENDENTEMENTE para este bloco/área
+    const metaDificuldadeBloco = aplicaTRI
       ? calcularVagasDificuldade(bloco.questoesTotal, modoDificuldade, customProporcao)
       : null;
 
-    for (const disc of bloco.disciplinas) {
+    let vagasRestantesBloco = metaDificuldadeBloco
+      ? { ...metaDificuldadeBloco }
+      : null;
+
+    for (let dIndex = 0; dIndex < bloco.disciplinas.length; dIndex++) {
+      const disc = bloco.disciplinas[dIndex];
       if (disc.questoes <= 0) continue;
 
       const mids = resolverMateriaIds(disc.nome, disc.sinonimos);
@@ -320,30 +344,66 @@ export async function selecionarQuestoesPorBlocos(
         }
       }
 
-      const faceis = pool.filter((q) => q.dificuldade === 'facil');
-      const medias = pool.filter((q) => q.dificuldade === 'medio' || !q.dificuldade);
-      const dificeis = pool.filter((q) => q.dificuldade === 'dificil');
+      let selDisc: string[] = [];
 
-      const estoqueDisc: EstoqueDificuldade = {
-        facil: faceis.length,
-        medio: medias.length,
-        dificil: dificeis.length,
-      };
+      if (aplicaTRI && vagasRestantesBloco && metaDificuldadeBloco) {
+        // Modo ENEM com TRI: calcula cota proporcional desta disciplina dentro do bloco
+        const faceis = pool.filter((q) => q.dificuldade === 'facil');
+        const medias = pool.filter((q) => q.dificuldade === 'medio' || !q.dificuldade);
+        const dificeis = pool.filter((q) => q.dificuldade === 'dificil');
 
-      const vagasDisc = calcularVagasDificuldade(
-        disc.questoes,
-        modoDificuldade,
-        customProporcao,
-        estoqueDisc
-      );
+        const proporcaoDisc = disc.questoes / Math.max(bloco.questoesTotal, 1);
+        const ehUltimaDisciplina = dIndex === bloco.disciplinas.length - 1;
 
-      const selFacil = priorizarIneditas(faceis).slice(0, vagasDisc.facil);
-      const selMedio = priorizarIneditas(medias).slice(0, vagasDisc.medio);
-      const selDificil = priorizarIneditas(dificeis).slice(0, vagasDisc.dificil);
+        let vFacil = ehUltimaDisciplina
+          ? Math.min(vagasRestantesBloco.facil, faceis.length)
+          : Math.min(Math.round(metaDificuldadeBloco.facil * proporcaoDisc), faceis.length);
 
-      // Embaralha as questões DENTRO da disciplina para garantir variedade de treino,
-      // mas preservando a ordem oficial da disciplina dentro do bloco!
-      const selDisc = embaralhar([...selFacil, ...selMedio, ...selDificil]);
+        let vDificil = ehUltimaDisciplina
+          ? Math.min(vagasRestantesBloco.dificil, dificeis.length)
+          : Math.min(Math.round(metaDificuldadeBloco.dificil * proporcaoDisc), dificeis.length);
+
+        let vMedio = disc.questoes - vFacil - vDificil;
+        if (vMedio < 0) vMedio = 0;
+
+        if (vMedio > medias.length) {
+          const sobra = vMedio - medias.length;
+          vMedio = medias.length;
+          if (faceis.length > vFacil) {
+            const addF = Math.min(sobra, faceis.length - vFacil);
+            vFacil += addF;
+          }
+          const aindaSobra = disc.questoes - (vFacil + vMedio + vDificil);
+          if (aindaSobra > 0 && dificeis.length > vDificil) {
+            vDificil += Math.min(aindaSobra, dificeis.length - vDificil);
+          }
+        }
+
+        const selFacil = priorizarIneditas(faceis).slice(0, vFacil);
+        const selMedio = priorizarIneditas(medias).slice(0, vMedio);
+        const selDificil = priorizarIneditas(dificeis).slice(0, vDificil);
+
+        let combinadas = [...selFacil, ...selMedio, ...selDificil];
+        if (combinadas.length < disc.questoes) {
+          const jaPegas = new Set(combinadas);
+          const restantesPool = priorizarIneditas(pool.filter((q) => !jaPegas.has(q.id)));
+          combinadas.push(...restantesPool.slice(0, disc.questoes - combinadas.length));
+        }
+
+        selDisc = embaralhar(combinadas);
+
+        blocoDificuldade.facil += selFacil.length;
+        blocoDificuldade.medio += selMedio.length;
+        blocoDificuldade.dificil += selDificil.length;
+
+        vagasRestantesBloco.facil = Math.max(0, vagasRestantesBloco.facil - selFacil.length);
+        vagasRestantesBloco.medio = Math.max(0, vagasRestantesBloco.medio - selMedio.length);
+        vagasRestantesBloco.dificil = Math.max(0, vagasRestantesBloco.dificil - selDificil.length);
+      } else {
+        // Concurso Militar / Sem TRI (EEAR, ESA, EsPCEx, etc.):
+        // Segue estritamente as cotas do edital da disciplina e prioriza inéditas, SEM forçar distribuição artificial de TRI!
+        selDisc = embaralhar(priorizarIneditas(pool).slice(0, disc.questoes));
+      }
 
       for (const id of selDisc) {
         contadorGlobal++;
@@ -354,17 +414,34 @@ export async function selecionarQuestoesPorBlocos(
           posicaoNoSimulado: contadorGlobal,
         };
         idsFinais.push(id);
+        blocoQuestoesIds.push(id);
       }
-
-      contagemGeralDificuldade.facil += selFacil.length;
-      contagemGeralDificuldade.medio += selMedio.length;
-      contagemGeralDificuldade.dificil += selDificil.length;
 
       contagemGeralMaterias.set(
         disc.nome,
         (contagemGeralMaterias.get(disc.nome) || 0) + selDisc.length
       );
+
+      blocoDisciplinasInfo.push({
+        nome: disc.nome,
+        questoes: selDisc.length,
+      });
     }
+
+    if (aplicaTRI) {
+      contagemGeralDificuldade.facil += blocoDificuldade.facil;
+      contagemGeralDificuldade.medio += blocoDificuldade.medio;
+      contagemGeralDificuldade.dificil += blocoDificuldade.dificil;
+    }
+
+    blocosInfo.push({
+      area: bloco.area,
+      aplicaTRI,
+      questoesTotal: blocoQuestoesIds.length,
+      questoesIds: blocoQuestoesIds,
+      disciplinas: blocoDisciplinasInfo,
+      distribuicaoDificuldade: aplicaTRI ? blocoDificuldade : null,
+    });
   }
 
   const distribuicaoMaterias = [...contagemGeralMaterias.entries()]
@@ -377,8 +454,10 @@ export async function selecionarQuestoesPorBlocos(
 
   return {
     ids: idsFinais,
-    distribuicaoDificuldade: contagemGeralDificuldade,
+    aplicaTRI: temAlgumBlocoTRI,
+    distribuicaoDificuldade: temAlgumBlocoTRI ? contagemGeralDificuldade : null,
     distribuicaoMaterias,
+    blocosInfo,
     questoesMeta,
     totalIneditas,
     totalRepetidas: idsFinais.length - totalIneditas,

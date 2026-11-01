@@ -15,6 +15,7 @@ import {
   type ProporcaoDificuldade,
   type VagasDificuldade,
   type QuestaoMeta,
+  type BlocoInfoSimulado,
 } from '@/lib/balanceamento-simulado';
 
 /**
@@ -194,11 +195,9 @@ export async function POST(req: NextRequest) {
     let ids: string[] = [];
     let questoesMetaMap: Record<string, QuestaoMeta> = {};
     let distribuicaoMateriasUsada: { materia: string; questoes: number }[] | null = null;
-    let distribuicaoDificuldadeUsada: VagasDificuldade = {
-      facil: 0,
-      medio: 0,
-      dificil: 0,
-    };
+    let distribuicaoDificuldadeUsada: VagasDificuldade | null = null;
+    let blocosInfoUsados: BlocoInfoSimulado[] | null = null;
+    let aplicaTriUsado = false;
     let totalIneditasCount = 0;
     let totalRepetidasCount = 0;
 
@@ -226,6 +225,8 @@ export async function POST(req: NextRequest) {
           ids = resultadoBlocos.ids;
           distribuicaoDificuldadeUsada = resultadoBlocos.distribuicaoDificuldade;
           distribuicaoMateriasUsada = resultadoBlocos.distribuicaoMaterias;
+          blocosInfoUsados = resultadoBlocos.blocosInfo;
+          aplicaTriUsado = resultadoBlocos.aplicaTRI;
           questoesMetaMap = resultadoBlocos.questoesMeta;
           totalIneditasCount = resultadoBlocos.totalIneditas;
           totalRepetidasCount = resultadoBlocos.totalRepetidas;
@@ -258,7 +259,9 @@ export async function POST(req: NextRequest) {
           });
 
           ids = resultadoSelecao.ids;
-          distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
+          const ehEnem = formatoOficial.sigla === 'ENEM';
+          aplicaTriUsado = ehEnem;
+          distribuicaoDificuldadeUsada = ehEnem ? resultadoSelecao.distribuicaoDificuldade : null;
           totalIneditasCount = resultadoSelecao.totalIneditas;
           totalRepetidasCount = resultadoSelecao.totalRepetidas;
 
@@ -354,6 +357,8 @@ export async function POST(req: NextRequest) {
         questoes: ordenadas,
         distribuicao: distribuicaoMateriasUsada,
         distribuicao_dificuldade: distribuicaoDificuldadeUsada,
+        blocos_info: blocosInfoUsados,
+        aplica_tri: aplicaTriUsado,
         formato_info: {
           sigla: formatoOficial.sigla,
           nome: formatoOficial.nome,

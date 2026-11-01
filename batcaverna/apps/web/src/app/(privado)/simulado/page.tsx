@@ -21,7 +21,10 @@ import {
   obterFormatoConcurso,
   type FormatoConcursoReal,
 } from "@/lib/formatos-concursos";
-import { type VagasDificuldade } from "@/lib/balanceamento-simulado";
+import {
+  type VagasDificuldade,
+  type BlocoInfoSimulado,
+} from "@/lib/balanceamento-simulado";
 import { type ResultadoTRI } from "@/lib/tri-enem";
 
 // ─── Contratos ───────────────────────────────────────────────
@@ -206,6 +209,8 @@ function Simulado() {
   >(null);
   const [distribuicaoDificuldade, setDistribuicaoDificuldade] =
     useState<VagasDificuldade | null>(null);
+  const [blocosInfo, setBlocosInfo] = useState<BlocoInfoSimulado[] | null>(null);
+  const [aplicaTRI, setAplicaTRI] = useState<boolean>(false);
   const [formatoInfo, setFormatoInfo] = useState<{
     sigla: string;
     nome: string;
@@ -278,6 +283,9 @@ function Simulado() {
     config.concurso,
     config.variacao_id
   );
+  const ehConcursoTRI =
+    formatoAtual.sigla === "ENEM" ||
+    Boolean(formatoAtual.blocos?.some((b: any) => b.aplicaTRI));
 
   // ─── Iniciar Simulado ──────────────────────────────────────
   const iniciar = useCallback(async () => {
@@ -331,6 +339,8 @@ function Simulado() {
       setQuestoes(json.data.questoes);
       setDistribuicao(json.data.distribuicao ?? null);
       setDistribuicaoDificuldade(json.data.distribuicao_dificuldade ?? null);
+      setBlocosInfo(json.data.blocos_info ?? null);
+      setAplicaTRI(Boolean(json.data.aplica_tri));
       setFormatoInfo(json.data.formato_info ?? null);
       setIneditasInfo(json.data.ineditas_info ?? null);
       setSegundosRestantes(json.data.duracao_minutos * 60);
@@ -347,6 +357,10 @@ function Simulado() {
         indice: 0,
         iniciadoEm,
         duracaoMinutos: json.data.duracao_minutos,
+        distribuicao: json.data.distribuicao ?? null,
+        distribuicaoDificuldade: json.data.distribuicao_dificuldade ?? null,
+        blocosInfo: json.data.blocos_info ?? null,
+        aplicaTRI: Boolean(json.data.aplica_tri),
       });
       setFase("prova");
       window.dispatchEvent(new Event("batcaverna_study_activity"));
@@ -371,7 +385,10 @@ function Simulado() {
 
     setSimuladoId(salva.simuladoId);
     setQuestoes(salva.questoes as any);
-    setDistribuicao(null);
+    setDistribuicao(salva.distribuicao ?? null);
+    setDistribuicaoDificuldade(salva.distribuicaoDificuldade ?? null);
+    setBlocosInfo(salva.blocosInfo ?? null);
+    setAplicaTRI(Boolean(salva.aplicaTRI));
     setRespostas(salva.respostas ?? {});
     setIndice(
       Math.min(Math.max(0, salva.indice ?? 0), Math.max(0, salva.questoes.length - 1))
@@ -705,6 +722,29 @@ function Simulado() {
                 Configurável pelo aluno
               </span>
             </div>
+
+            {config.tipo === "oficial" && !ehConcursoTRI && (
+              <div className="mb-3 rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/10 p-3 text-xs text-bat-text-secondary">
+                <p className="font-semibold text-bat-gold-400 flex items-center gap-1.5">
+                  <span>🏛️</span>
+                  <span>Concurso Militar Oficial ({formatoAtual.sigla})</span>
+                </p>
+                <p className="mt-1">
+                  Este concurso não utiliza régua TRI. A prova é estruturada estritamente pelas cotas oficiais de disciplinas do Edital, priorizando questões reais da banca examinadora.
+                </p>
+              </div>
+            )}
+            {config.tipo === "oficial" && ehConcursoTRI && (
+              <div className="mb-3 rounded-xl border border-sky-400/30 bg-sky-400/10 p-3 text-xs text-bat-text-secondary">
+                <p className="font-semibold text-sky-400 flex items-center gap-1.5">
+                  <span>📐</span>
+                  <span>Modelo Oficial ENEM (TRI Calibrado por Área)</span>
+                </p>
+                <p className="mt-1">
+                  A régua de dificuldade (Fácil, Média e Difícil) é calculada e balanceada independentemente para cada Área do Conhecimento (Linguagens, Humanas, Natureza, Matemática), garantindo a coerência pedagógica do TRI.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* BALANCEADO REAL (RECOMENDADO) */}
@@ -1044,30 +1084,80 @@ function Simulado() {
         )}
 
         {/* Resumo da distribuição do simulado na primeira questão */}
-        {respondidas === 0 && (distribuicao || distribuicaoDificuldade) && (
-          <div className="mb-4 rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3">
-            <p className="mb-1.5 text-xs font-bold text-bat-gold-400 flex items-center gap-1.5">
-              <span>🏛️</span>
-              <span>Prova Calibrada Oficial ({questoes.length} questões)</span>
-            </p>
-            {distribuicao && distribuicao.length > 0 && (
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mb-1.5">
-                {distribuicao.map((d) => (
-                  <span key={d.materia} className="text-xs text-bat-text-secondary">
-                    {d.materia}: <strong className="text-bat-text">{d.questoes}</strong>
-                  </span>
+        {respondidas === 0 && (Boolean(blocosInfo && blocosInfo.length > 0) || distribuicao || distribuicaoDificuldade) && (
+          <div className="mb-4 rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3.5">
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <p className="text-xs font-bold text-bat-gold-400 flex items-center gap-1.5">
+                <span>🏛️</span>
+                <span>
+                  {formatoInfo?.sigla ? `Prova Calibrada Oficial — ${formatoInfo.sigla}` : "Prova Calibrada Oficial"} ({questoes.length} questões)
+                </span>
+              </p>
+              <span className="text-[11px] text-bat-gold-400/90 font-medium ml-auto">
+                Gabarito 100% blindado
+              </span>
+            </div>
+
+            {blocosInfo && blocosInfo.length > 0 ? (
+              <div className="space-y-2.5">
+                {blocosInfo.map((bloco, bIdx) => (
+                  <div
+                    key={`${bloco.area}-${bIdx}`}
+                    className="rounded-lg bg-bat-bg-card/70 border border-bat-gold-400/15 p-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-bat-text">
+                        {bloco.area} ({bloco.questoesTotal} questões)
+                      </span>
+                      {bloco.aplicaTRI && (
+                        <span className="rounded bg-bat-gold-400/20 px-1.5 py-0.5 text-[10px] font-bold text-bat-gold-400">
+                          Área com Régua TRI
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-bat-text-secondary">
+                      {bloco.disciplinas.map((d) => (
+                        <span key={d.nome}>
+                          {d.nome}: <strong className="text-bat-text">{d.questoes}</strong>
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Calibragem de Dificuldade TRI por Área — EXCLUSIVO do ENEM (aplicaTRI === true) */}
+                    {bloco.aplicaTRI && bloco.distribuicaoDificuldade && (
+                      <div className="mt-2 flex items-center gap-3 text-[11px] text-bat-text-muted pt-1.5 border-t border-bat-border/60 flex-wrap">
+                        <span className="text-[10px] font-semibold text-bat-gold-400">
+                          Régua TRI da Área:
+                        </span>
+                        <span>🟢 {bloco.distribuicaoDificuldade.facil} Fáceis</span>
+                        <span>🟡 {bloco.distribuicaoDificuldade.medio} Médias</span>
+                        <span>🔴 {bloco.distribuicaoDificuldade.dificil} Difíceis</span>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-            {distribuicaoDificuldade && (
-              <div className="flex items-center gap-3 text-[11px] text-bat-text-muted pt-1 border-t border-bat-gold-400/15">
-                <span>🟢 {distribuicaoDificuldade.facil} Fáceis</span>
-                <span>🟡 {distribuicaoDificuldade.medio} Médias</span>
-                <span>🔴 {distribuicaoDificuldade.dificil} Difíceis</span>
-                <span className="text-bat-gold-400/90 font-medium ml-auto">
-                  Gabarito 100% blindado
-                </span>
-              </div>
+            ) : (
+              <>
+                {distribuicao && distribuicao.length > 0 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mb-1.5">
+                    {distribuicao.map((d) => (
+                      <span key={d.materia} className="text-xs text-bat-text-secondary">
+                        {d.materia}: <strong className="text-bat-text">{d.questoes}</strong>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Apenas exibe dificuldade se aplicaTRI for true ou se não for prova oficial militar */}
+                {distribuicaoDificuldade && (aplicaTRI || config.tipo !== "oficial") && (
+                  <div className="flex items-center gap-3 text-[11px] text-bat-text-muted pt-1 border-t border-bat-gold-400/15">
+                    <span>🟢 {distribuicaoDificuldade.facil} Fáceis</span>
+                    <span>🟡 {distribuicaoDificuldade.medio} Médias</span>
+                    <span>🔴 {distribuicaoDificuldade.dificil} Difíceis</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -49,6 +49,10 @@ export interface ProvaSalva {
   indice: number;
   iniciadoEm: string;
   duracaoMinutos: number;
+  distribuicao?: { materia: string; questoes: number }[] | null;
+  distribuicaoDificuldade?: any | null;
+  blocosInfo?: any | null;
+  aplicaTRI?: boolean;
 }
 
 /**
