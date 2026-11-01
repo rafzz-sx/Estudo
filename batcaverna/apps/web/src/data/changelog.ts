@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.3';
+export const CURRENT_APP_VERSION = '3.7.4';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,50 @@ export const CURRENT_APP_VERSION = '3.7.3';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.4',
+    dataLancamento: '2026-10-31T22:00:00-03:00',
+    titulo: 'Simulados Modelo Real de Concurso, TRI por Área & Blindagem no Suporte',
+    resumo:
+      'Reestruturação completa dos simulados com fidelidade absoluta aos editais de cada concurso (ENEM Dia 1/Dia 2, EEAR 96/48 questões, ESA e militares), cálculo do TRI calibrado por área de conhecimento, navegador agrupado e blindagem de segurança no suporte a tickets.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'atualizacao',
+    alteracoes: [
+      {
+        id: 'simulados-modelo-oficial-concursos',
+        tipo: 'novo',
+        titulo: 'Fidelidade Absoluta aos Editais dos Concursos',
+        descricao:
+          'Simulados estruturados estritamente pelo modelo real da banca: ENEM dividido em Dia 1 (45 Linguagens com as 5 primeiras de Inglês + 45 Humanas) e Dia 2 (45 Natureza + 45 Matemática), EEAR com opções de prova completa (96 questões, 24 de cada) e reduzida (48 questões, 12 de cada), além de quotas oficiais para ESA, EsPCEx, EPCAR, Colégio Naval e demais escolas.',
+        tag: 'Simulados & Editais',
+      },
+      {
+        id: 'tri-enem-calibrado-por-area',
+        tipo: 'melhoria',
+        titulo: 'Balanceamento de Dificuldade e TRI por Área de Conhecimento',
+        descricao:
+          'A proporção de questões fáceis, médias e difíceis para a régua do TRI agora é processada de forma independente por área do conhecimento no ENEM, impedindo distorções na curva de proficiência e mantendo as quotas exatas de cada matéria.',
+        tag: 'Pedagogia & TRI',
+      },
+      {
+        id: 'navegador-tatico-blocos',
+        tipo: 'melhoria',
+        titulo: 'Navegador de Questões por Área Oficial',
+        descricao:
+          'Durante a execução do simulado, o mapa de questões e o cabeçalho tático exibem a área de conhecimento ativa e organizam o salto rápido entre os blocos oficiais da prova.',
+        tag: 'UX & Simulados',
+      },
+      {
+        id: 'suporte-blindagem-seguranca',
+        tipo: 'correcao',
+        titulo: 'Blindagem e Isolamento Estrito no Atendimento',
+        descricao:
+          'Verificação de autenticação reforçada no banco de dados e proteção total contra enumeração (IDOR) na Central de Suporte, garantindo isolamento absoluto e privacidade de cada chamado.',
+        tag: 'Segurança & Privacidade',
+      },
+    ],
+  },
   {
     versao: '3.7.3',
     dataLancamento: '2026-10-30T18:35:00-03:00',

@@ -110,6 +110,12 @@ export function NovidadesView() {
           badgeClass: "bg-red-500/15 text-red-400 border-red-500/30",
           icon: "⚠️",
         };
+      default:
+        return {
+          label: "ATUALIZAÇÃO",
+          badgeClass: "bg-bat-gold-400/15 text-bat-gold-400 border-bat-gold-400/30",
+          icon: "⚡",
+        };
     }
   };
 

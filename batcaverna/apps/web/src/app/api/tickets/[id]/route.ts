@@ -6,27 +6,7 @@ import { decriptarTexto } from '@/lib/cripto';
 
 /**
  * GET /api/tickets/[id] — um chamado com a conversa inteira.
- *
- * ESTA ROTA NÃO EXISTIA. A pasta `[id]/` tinha só `mensagens/`, e o histórico
- * do git confirma que o arquivo nunca foi criado. Quatro pontos do front a
- * chamavam:
- *
- *   (privado)/tickets/page.tsx:85    — o aluno abrindo o próprio chamado
- *   (privado)/admin/page.tsx:204     — o admin abrindo um chamado
- *   (privado)/admin/page.tsx:267     — o admin recarregando após responder
- *
- * Todos recebiam 404. Como a tela do aluno só testa `if (res.ok)` e a do admin
- * faz `.then(r => r.json())` sem `.catch()`, a falha era silenciosa:
- * `ticketDetalhe` ficava `null` para sempre. E como a caixa de resposta vive
- * DENTRO do bloco condicionado a `ticketDetalhe`, ninguém — nem aluno, nem
- * admin — conseguia responder um chamado. O suporte aceitava só a abertura.
- *
- * `GET /api/tickets` (a listagem) não resolve: ela seleciona
- * `'*, users (apelido)'`, sem as mensagens.
- *
- * A permissão é a mesma da rota irmã `[id]/mensagens`: dono ou admin. Aqui ela
- * sai de graça — o ticket já precisa ser lido para ser devolvido, então o
- * `user_id` vem na mesma consulta em vez de numa segunda.
+ * Apenas o proprietário do chamado ou administradores têm permissão para ler.
  */
 export async function GET(
   req: NextRequest,
@@ -43,8 +23,6 @@ export async function GET(
       );
     }
 
-    // UUID conferido antes de virar filtro: texto solto faz o PostgREST
-    // devolver 22P02 e a tela quebra por causa de um link ruim.
     const ticketId = uuidOuNulo(id);
     if (!ticketId) {
       return NextResponse.json(
@@ -55,29 +33,48 @@ export async function GET(
 
     const supabase = createServerSupabaseClient();
 
-    let ticket: any = null;
-    const { data: ticketData, error: ticketError } = await supabase
-      .from('tickets')
-      .select('*, users:users!tickets_user_id_fkey (id, nome, apelido, email, avatar_url, nivel_atual, role, xp_total, streak_dias, concurso_alvo, situacao)')
-      .eq('id', ticketId)
+    // 1. Confirmação estrita de cargo no banco (blindagem contra spoofing de claims de token)
+    const { data: usuarioDb } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
       .maybeSingle();
 
-    if (ticketError) {
-      const { data: ticketSimples, error: errSimples } = await supabase
+    const ehAdmin = usuarioDb?.role === 'admin';
+
+    let ticket: any = null;
+
+    if (ehAdmin) {
+      const { data: ticketData, error: ticketError } = await supabase
         .from('tickets')
-        .select('*')
+        .select('*, users:users!tickets_user_id_fkey (id, nome, apelido, email, avatar_url, nivel_atual, role, xp_total, streak_dias, concurso_alvo, situacao)')
         .eq('id', ticketId)
         .maybeSingle();
 
-      if (errSimples || !ticketSimples) throw (errSimples || ticketError);
-      ticket = ticketSimples;
+      if (ticketError) {
+        const { data: ticketSimples } = await supabase
+          .from('tickets')
+          .select('*')
+          .eq('id', ticketId)
+          .maybeSingle();
+        ticket = ticketSimples;
+      } else {
+        ticket = ticketData;
+      }
     } else {
-      ticket = ticketData;
+      // Aluno: busca estritamente se o ticket é dele (evita vazar existência de tickets alheios)
+      const { data: ticketAluno } = await supabase
+        .from('tickets')
+        .select('id, user_id, titulo, motivo, status, criado_em, atualizado_em')
+        .eq('id', ticketId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      ticket = ticketAluno;
     }
 
-    // Mesma resposta para "não existe" e "não é seu": quem tenta adivinhar
-    // UUID não descobre quais existem.
-    if (!ticket || (user.role !== 'admin' && ticket.user_id !== user.id)) {
+    // Mesma resposta para "não existe" e "não é seu": quem tenta adivinhar UUID não descobre quais existem
+    if (!ticket) {
       return NextResponse.json(
         { success: false, error: 'Chamado não encontrado' },
         { status: 404 }
@@ -140,6 +137,16 @@ export async function PATCH(
     }
 
     const supabase = createServerSupabaseClient();
+
+    // 1. Confirmação de permissão no banco
+    const { data: usuarioDb } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const ehAdmin = usuarioDb?.role === 'admin';
+
     const { data: ticket } = await supabase
       .from('tickets')
       .select('id, user_id, status')
@@ -158,9 +165,9 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Status inválido' }, { status: 400 });
     }
 
-    // Apenas admin pode alterar status para qualquer um; aluno pode fechar o seu
-    if (user.role !== 'admin' && ticket.user_id !== user.id) {
-      return NextResponse.json({ success: false, error: 'Permissão negada' }, { status: 403 });
+    // Apenas admin pode alterar status para qualquer um; aluno pode fechar o seu próprio chamado
+    if (!ehAdmin && ticket.user_id !== user.id) {
+      return NextResponse.json({ success: false, error: 'Chamado não encontrado' }, { status: 404 });
     }
 
     const { data: atualizado, error } = await supabase

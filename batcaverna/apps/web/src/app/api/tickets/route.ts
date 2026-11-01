@@ -4,11 +4,6 @@ import { getAuthUserFromRequest } from '@/lib/auth';
 
 /**
  * Aceita cookie (navegador) e header Bearer (app/mobile).
- *
- * Devolvia só o `id` (`Promise<string | null>`), mas TODO este arquivo usa o
- * retorno como objeto: `user.id`, `user.role`. Em TypeScript isso é erro de
- * compilação — o build do Vercel não passaria. Em execução, `user.id` seria
- * `undefined` e a rota quebraria por inteiro.
  */
 async function getUserFromRequest(
   req: NextRequest
@@ -23,15 +18,32 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
 
     const supabase = createServerSupabaseClient();
-    let query = supabase
-      .from('tickets')
-      .select('*, users:users!tickets_user_id_fkey (id, nome, apelido, email, avatar_url, nivel_atual, role)');
 
-    if (user.role !== 'admin') {
-      query = query.eq('user_id', user.id);
+    // 1. Confirma o papel do usuário diretamente no banco de dados (blindagem contra spoofing de token)
+    const { data: usuarioDb } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const ehAdmin = usuarioDb?.role === 'admin';
+
+    // 2. Administradores veem todos os tickets com dados do autor.
+    // Alunos veem estritamente seus próprios tickets sem expor dados ou tickets de terceiros.
+    let query = supabase.from('tickets');
+
+    if (ehAdmin) {
+      query = query
+        .select('*, users:users!tickets_user_id_fkey (id, nome, apelido, email, avatar_url, nivel_atual, role)')
+        .order('atualizado_em', { ascending: false });
+    } else {
+      query = query
+        .select('id, user_id, titulo, motivo, status, criado_em, atualizado_em')
+        .eq('user_id', user.id)
+        .order('atualizado_em', { ascending: false });
     }
 
-    const { data, error } = await query.order('atualizado_em', { ascending: false });
+    const { data, error } = await query;
     if (error) throw error;
 
     return NextResponse.json({ success: true, data: data || [] });
@@ -46,6 +58,17 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+
+    const supabase = createServerSupabaseClient();
+
+    // Confirma cargo no banco de dados
+    const { data: usuarioDb } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const ehAdmin = usuarioDb?.role === 'admin';
 
     const body = await req.json().catch(() => ({}));
     const motivo = body?.motivo;
@@ -62,13 +85,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Motivo, título e descrição são obrigatórios' }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
+    // Se não for admin no banco, força o id do próprio aluno solicitante
+    const donoTicketId = (ehAdmin && body?.user_id) ? body.user_id : user.id;
 
     // 1. Criar ticket
     const { data: ticket, error: tErr } = await supabase
       .from('tickets')
       .insert({
-        user_id: (user.role === 'admin' && body?.user_id) ? body.user_id : user.id,
+        user_id: donoTicketId,
         motivo,
         titulo: titulo.trim(),
         status: 'aberto',
@@ -82,7 +106,7 @@ export async function POST(req: NextRequest) {
     await supabase.from('ticket_mensagens').insert({
       ticket_id: ticket.id,
       autor_id: user.id,
-      autor_role: user.role === 'admin' ? 'admin' : 'usuario',
+      autor_role: ehAdmin ? 'admin' : 'usuario',
       conteudo: descricao.trim(),
     });
 

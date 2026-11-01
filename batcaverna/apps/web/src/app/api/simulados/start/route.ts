@@ -10,9 +10,11 @@ import {
 } from '@/lib/formatos-concursos';
 import {
   selecionarQuestoesBalanceadas,
+  selecionarQuestoesPorBlocos,
   type ModoDificuldade,
   type ProporcaoDificuldade,
   type VagasDificuldade,
+  type QuestaoMeta,
 } from '@/lib/balanceamento-simulado';
 
 /**
@@ -190,6 +192,7 @@ export async function POST(req: NextRequest) {
 
     // ─── 7. Seleção de Questões com Matéria e Dificuldade ─────
     let ids: string[] = [];
+    let questoesMetaMap: Record<string, QuestaoMeta> = {};
     let distribuicaoMateriasUsada: { materia: string; questoes: number }[] | null = null;
     let distribuicaoDificuldadeUsada: VagasDificuldade = {
       facil: 0,
@@ -207,39 +210,63 @@ export async function POST(req: NextRequest) {
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(quantidadeFinal, idsErrados.length));
     } else if (tipo === 'oficial' && !materiaId && !ano) {
-      // Modo oficial: repartição fatiada por matéria conforme variação/edital/banco
-      const opcoesDist = formatoOficial.variacaoAtiva
-        ? {
-            materiasPermitidas: formatoOficial.variacaoAtiva.materiasPermitidas,
-            pesosFixos: formatoOficial.variacaoAtiva.pesosFixos,
-            diaProvaNumero: formatoOficial.variacaoAtiva.diaProvaNumero,
-          }
-        : undefined;
-
-      const fatias = await distribuicaoDaProva(supabase, concursoId, opcoesDist);
-      const vagasPorMateria = repartirVagas(quantidadeFinal, fatias);
-
-      if (vagasPorMateria.size > 0) {
-        const resultadoSelecao = await selecionarQuestoesBalanceadas(supabase, {
+      // 🎯 Modo oficial: Seleção estruturada por Blocos Oficiais da banca
+      if (formatoOficial.blocos && formatoOficial.blocos.length > 0) {
+        const resultadoBlocos = await selecionarQuestoesPorBlocos(supabase, {
           concursoId,
-          quantidadeTotal: quantidadeFinal,
+          blocos: formatoOficial.blocos,
           modoDificuldade,
           customProporcao,
-          vagasPorMateria,
           ano,
           idsExcluir,
           diaProvaNumero,
         });
 
-        ids = resultadoSelecao.ids;
-        distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
-        totalIneditasCount = resultadoSelecao.totalIneditas;
-        totalRepetidasCount = resultadoSelecao.totalRepetidas;
+        if (resultadoBlocos.ids.length > 0) {
+          ids = resultadoBlocos.ids;
+          distribuicaoDificuldadeUsada = resultadoBlocos.distribuicaoDificuldade;
+          distribuicaoMateriasUsada = resultadoBlocos.distribuicaoMaterias;
+          questoesMetaMap = resultadoBlocos.questoesMeta;
+          totalIneditasCount = resultadoBlocos.totalIneditas;
+          totalRepetidasCount = resultadoBlocos.totalRepetidas;
+        }
+      }
 
-        const nomePorId = new Map(fatias.map((f) => [f.materia_id, f.nome]));
-        distribuicaoMateriasUsada = [...vagasPorMateria.entries()]
-          .map(([mid, n]) => ({ materia: nomePorId.get(mid) ?? 'Outros', questoes: n }))
-          .sort((a, b) => b.questoes - a.questoes);
+      // Fallback para concurso sem blocos explícitos
+      if (ids.length === 0) {
+        const opcoesDist = formatoOficial.variacaoAtiva
+          ? {
+              materiasPermitidas: formatoOficial.variacaoAtiva.materiasPermitidas,
+              pesosFixos: formatoOficial.variacaoAtiva.pesosFixos,
+              diaProvaNumero: formatoOficial.variacaoAtiva.diaProvaNumero,
+            }
+          : undefined;
+
+        const fatias = await distribuicaoDaProva(supabase, concursoId, opcoesDist);
+        const vagasPorMateria = repartirVagas(quantidadeFinal, fatias);
+
+        if (vagasPorMateria.size > 0) {
+          const resultadoSelecao = await selecionarQuestoesBalanceadas(supabase, {
+            concursoId,
+            quantidadeTotal: quantidadeFinal,
+            modoDificuldade,
+            customProporcao,
+            vagasPorMateria,
+            ano,
+            idsExcluir,
+            diaProvaNumero,
+          });
+
+          ids = resultadoSelecao.ids;
+          distribuicaoDificuldadeUsada = resultadoSelecao.distribuicaoDificuldade;
+          totalIneditasCount = resultadoSelecao.totalIneditas;
+          totalRepetidasCount = resultadoSelecao.totalRepetidas;
+
+          const nomePorId = new Map(fatias.map((f) => [f.materia_id, f.nome]));
+          distribuicaoMateriasUsada = [...vagasPorMateria.entries()]
+            .map(([mid, n]) => ({ materia: nomePorId.get(mid) ?? 'Outros', questoes: n }))
+            .sort((a, b) => b.questoes - a.questoes);
+        }
       }
     }
 
@@ -300,9 +327,21 @@ export async function POST(req: NextRequest) {
       )
       .in('id', ids);
 
-    // Preserva a ordem aleatória definida pelo algoritmo
+    // Preserva a ordem estrita dos blocos e disciplinas definida pelo algoritmo
     const porId = new Map((questoes ?? []).map((q) => [q.id, q]));
-    const ordenadas = ids.map((id) => porId.get(id)).filter(Boolean);
+    const ordenadas = ids
+      .map((id) => {
+        const q = porId.get(id);
+        if (!q) return null;
+        const meta = questoesMetaMap[id];
+        return {
+          ...q,
+          area_conhecimento: meta?.area ?? (q.materias as any)?.nome ?? 'Geral',
+          numero_no_simulado: meta?.posicaoNoSimulado ?? null,
+          bloco_numero: meta?.blocoNumero ?? null,
+        };
+      })
+      .filter(Boolean);
 
     return NextResponse.json({
       success: true,
@@ -324,6 +363,7 @@ export async function POST(req: NextRequest) {
           redacaoDescartada: formatoOficial.temRedacaoNaProvaReal,
           adaptadoEstoque: totalDisponivel < quantidadeDesejada,
           variacaoAtiva: formatoOficial.variacaoAtiva,
+          blocos: formatoOficial.blocos ?? null,
         },
         ineditas_info: {
           solicitado: apenasIneditas,

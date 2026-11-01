@@ -7,11 +7,6 @@ import { encriptarTexto, decriptarTexto } from '@/lib/cripto';
 
 /**
  * Aceita cookie (navegador) e header Bearer (app/mobile).
- *
- * Devolvia só o `id` (`Promise<string | null>`), mas TODO este arquivo usa o
- * retorno como objeto: `user.id`, `user.role`. Em TypeScript isso é erro de
- * compilação — o build do Vercel não passaria. Em execução, `user.id` seria
- * `undefined` e a rota quebraria por inteiro.
  */
 async function getUserFromRequest(
   req: NextRequest
@@ -20,19 +15,22 @@ async function getUserFromRequest(
 }
 
 /**
- * O ticket é do usuário, ou quem pergunta é da moderação?
- *
- * NÃO EXISTIA. Qualquer pessoa logada lia e respondia o ticket de qualquer
- * outra só trocando o UUID da URL — e ticket de suporte é onde o aluno
- * escreve justamente o que não quer que os outros leiam: denúncia de
- * assédio, problema com a conta, dados de contato.
+ * O ticket é do usuário, ou quem pergunta é administrador verificado?
  */
 async function podeVerTicket(
   supabase: SupabaseClient,
   ticketId: string,
-  user: { id: string; role: string }
-): Promise<boolean> {
-  if (user.role === 'admin') return true;
+  userId: string
+): Promise<{ permitido: boolean; ehAdmin: boolean }> {
+  // Confirmação estrita de cargo no banco (blindagem contra spoofing de claims de token)
+  const { data: usuarioDb } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const ehAdmin = usuarioDb?.role === 'admin';
+  if (ehAdmin) return { permitido: true, ehAdmin: true };
 
   const { data } = await supabase
     .from('tickets')
@@ -40,7 +38,7 @@ async function podeVerTicket(
     .eq('id', ticketId)
     .maybeSingle();
 
-  return data?.user_id === user.id;
+  return { permitido: data?.user_id === userId, ehAdmin: false };
 }
 
 // GET /api/tickets/[id]/mensagens
@@ -62,8 +60,9 @@ export async function GET(
     }
 
     const supabase = createServerSupabaseClient();
+    const { permitido } = await podeVerTicket(supabase, ticketId, user.id);
 
-    if (!(await podeVerTicket(supabase, ticketId, user))) {
+    if (!permitido) {
       return NextResponse.json(
         { success: false, error: 'Chamado não encontrado' },
         { status: 404 }
@@ -118,8 +117,9 @@ export async function POST(
     }
 
     const supabase = createServerSupabaseClient();
+    const { permitido, ehAdmin } = await podeVerTicket(supabase, ticketId, user.id);
 
-    if (!(await podeVerTicket(supabase, ticketId, user))) {
+    if (!permitido) {
       return NextResponse.json(
         { success: false, error: 'Chamado não encontrado' },
         { status: 404 }
@@ -133,7 +133,7 @@ export async function POST(
       .insert({
         ticket_id: ticketId,
         autor_id: user.id,
-        autor_role: user.role === 'admin' ? 'admin' : 'usuario',
+        autor_role: ehAdmin ? 'admin' : 'usuario',
         conteudo: textoCifrado || texto,
       })
       .select('*')
@@ -142,7 +142,7 @@ export async function POST(
     if (mErr) throw mErr;
 
     // Se admin respondeu, atualizar status para 'respondido'
-    if (user.role === 'admin') {
+    if (ehAdmin) {
       await supabase
         .from('tickets')
         .update({ status: 'respondido' })

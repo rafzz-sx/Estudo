@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { BlocoProva } from './formatos-concursos';
 
 export type ModoDificuldade =
   | 'balanceado'
@@ -174,6 +175,216 @@ export function calcularVagasDificuldade(
   };
 }
 
+export interface QuestaoMeta {
+  area: string;
+  materia: string;
+  blocoNumero: number;
+  posicaoNoSimulado: number;
+}
+
+export interface OpcoesSelecaoBlocos {
+  concursoId: string;
+  blocos: BlocoProva[];
+  modoDificuldade: ModoDificuldade;
+  customProporcao?: Partial<ProporcaoDificuldade>;
+  ano?: number | null;
+  idsExcluir?: Set<string>;
+  diaProvaNumero?: number | null;
+}
+
+export interface ResultadoSelecaoBlocos {
+  ids: string[];
+  distribuicaoDificuldade: VagasDificuldade;
+  distribuicaoMaterias: { materia: string; questoes: number }[];
+  questoesMeta: Record<string, QuestaoMeta>;
+  totalIneditas: number;
+  totalRepetidas: number;
+}
+
+/**
+ * Seleciona questões estruturadas estritamente pelos BLOCOS OFICIAIS do concurso.
+ *
+ * 🎯 REGRAS PEDAGÓGICAS BATCAVERNA:
+ * 1. Para o ENEM:
+ *    - A dificuldade NÃO é calculada pelo total geral da prova de 90 questões.
+ *    - É calculada INDEPENDENTEMENTE por cada Área de Conhecimento (Linguagens,
+ *      Ciências Humanas, Ciências da Natureza, Matemática).
+ *    - Isso assegura a calibração perfeita da Teoria de Resposta ao Item (TRI),
+ *      evitando que Linguagens receba apenas fáceis e Humanas concentre todas as difíceis.
+ *    - Mantém a ordem oficial das disciplinas (ex: Questões 1 a 5 de Inglês,
+ *      depois Português/Literatura/Artes/Ed. Física, depois Ciências Humanas).
+ *
+ * 2. Para outros concursos (EEAR, ESA, EPCAR, Colégio Naval, EsPCEx, etc.):
+ *    - O TRI não é aplicado nesses concursos.
+ *    - A prioridade absoluta é o cumprimento das cotas estritas do edital para cada disciplina
+ *      (ex: EEAR tem 24 de cada disciplina na completa ou 12 de cada no simulado padrão).
+ *    - As questões são ordenadas e agrupadas pelos blocos oficiais da banca.
+ */
+export async function selecionarQuestoesPorBlocos(
+  supabase: SupabaseClient,
+  opcoes: OpcoesSelecaoBlocos
+): Promise<ResultadoSelecaoBlocos> {
+  const {
+    concursoId,
+    blocos,
+    modoDificuldade,
+    customProporcao,
+    ano,
+    idsExcluir,
+    diaProvaNumero,
+  } = opcoes;
+
+  // 1. Carrega todas as matérias para mapeamento semântico
+  const { data: materiasDB } = await supabase
+    .from('materias')
+    .select('id, nome');
+
+  const materiaIdPorNome = new Map<string, string>();
+  for (const m of materiasDB ?? []) {
+    materiaIdPorNome.set(m.nome.toLowerCase().trim(), m.id);
+  }
+
+  const resolverMateriaIds = (nome: string, sinonimos?: string[]): string[] => {
+    const alvos = [nome, ...(sinonimos || [])].map((s) => s.toLowerCase().trim());
+    const ids = new Set<string>();
+
+    for (const [mName, mId] of materiaIdPorNome.entries()) {
+      for (const alvo of alvos) {
+        if (mName === alvo) {
+          ids.add(mId);
+          continue;
+        }
+        // Evita colisões falsas (ex: "Física" com "Educação Física")
+        if (alvo === 'física' && /educa[cç][aã]o/i.test(mName)) continue;
+        if (/educa[cç][aã]o/i.test(alvo) && !/educa[cç][aã]o/i.test(mName)) continue;
+
+        if (mName.startsWith(alvo) || alvo.startsWith(mName)) {
+          ids.add(mId);
+        }
+      }
+    }
+    return [...ids];
+  };
+
+  const priorizarIneditas = (
+    lista: { id: string; dificuldade?: string | null }[]
+  ): string[] => {
+    if (!idsExcluir || idsExcluir.size === 0) {
+      return embaralhar(lista.map((q) => q.id));
+    }
+    const ineditas = lista.filter((q) => !idsExcluir.has(q.id)).map((q) => q.id);
+    const repetidas = lista.filter((q) => idsExcluir.has(q.id)).map((q) => q.id);
+    return [...embaralhar(ineditas), ...embaralhar(repetidas)];
+  };
+
+  const idsFinais: string[] = [];
+  const questoesMeta: Record<string, QuestaoMeta> = {};
+  const contagemGeralDificuldade: VagasDificuldade = { facil: 0, medio: 0, dificil: 0 };
+  const contagemGeralMaterias = new Map<string, number>();
+
+  let contadorGlobal = 0;
+
+  // 2. Itera sobre cada Bloco Oficial de Prova
+  for (let bIndex = 0; bIndex < blocos.length; bIndex++) {
+    const bloco = blocos[bIndex];
+
+    // Para o ENEM, calculamos a meta da régua TRI especificamente para esta Área
+    const metaDificuldadeBloco = bloco.aplicaTRI
+      ? calcularVagasDificuldade(bloco.questoesTotal, modoDificuldade, customProporcao)
+      : null;
+
+    for (const disc of bloco.disciplinas) {
+      if (disc.questoes <= 0) continue;
+
+      const mids = resolverMateriaIds(disc.nome, disc.sinonimos);
+      if (mids.length === 0) continue;
+
+      let qQuery = supabase
+        .from('questoes')
+        .select('id, dificuldade, dia_prova')
+        .eq('concurso_id', concursoId)
+        .eq('ativa', true)
+        .in('materia_id', mids);
+
+      if (ano) qQuery = qQuery.eq('ano', ano);
+
+      const { data: questoesDisc } = await qQuery.limit(Math.max(disc.questoes * 8, 400));
+      const poolBruto = questoesDisc ?? [];
+
+      // Prioriza questões do dia da prova correspondente, quando aplicável
+      let pool = poolBruto;
+      if (diaProvaNumero != null) {
+        const doDia = poolBruto.filter((q) => q.dia_prova === diaProvaNumero);
+        if (doDia.length >= disc.questoes) {
+          pool = doDia;
+        }
+      }
+
+      const faceis = pool.filter((q) => q.dificuldade === 'facil');
+      const medias = pool.filter((q) => q.dificuldade === 'medio' || !q.dificuldade);
+      const dificeis = pool.filter((q) => q.dificuldade === 'dificil');
+
+      const estoqueDisc: EstoqueDificuldade = {
+        facil: faceis.length,
+        medio: medias.length,
+        dificil: dificeis.length,
+      };
+
+      const vagasDisc = calcularVagasDificuldade(
+        disc.questoes,
+        modoDificuldade,
+        customProporcao,
+        estoqueDisc
+      );
+
+      const selFacil = priorizarIneditas(faceis).slice(0, vagasDisc.facil);
+      const selMedio = priorizarIneditas(medias).slice(0, vagasDisc.medio);
+      const selDificil = priorizarIneditas(dificeis).slice(0, vagasDisc.dificil);
+
+      // Embaralha as questões DENTRO da disciplina para garantir variedade de treino,
+      // mas preservando a ordem oficial da disciplina dentro do bloco!
+      const selDisc = embaralhar([...selFacil, ...selMedio, ...selDificil]);
+
+      for (const id of selDisc) {
+        contadorGlobal++;
+        questoesMeta[id] = {
+          area: bloco.area,
+          materia: disc.nome,
+          blocoNumero: bIndex + 1,
+          posicaoNoSimulado: contadorGlobal,
+        };
+        idsFinais.push(id);
+      }
+
+      contagemGeralDificuldade.facil += selFacil.length;
+      contagemGeralDificuldade.medio += selMedio.length;
+      contagemGeralDificuldade.dificil += selDificil.length;
+
+      contagemGeralMaterias.set(
+        disc.nome,
+        (contagemGeralMaterias.get(disc.nome) || 0) + selDisc.length
+      );
+    }
+  }
+
+  const distribuicaoMaterias = [...contagemGeralMaterias.entries()]
+    .map(([materia, questoes]) => ({ materia, questoes }))
+    .sort((a, b) => b.questoes - a.questoes);
+
+  const totalIneditas = idsExcluir
+    ? idsFinais.filter((id) => !idsExcluir.has(id)).length
+    : idsFinais.length;
+
+  return {
+    ids: idsFinais,
+    distribuicaoDificuldade: contagemGeralDificuldade,
+    distribuicaoMaterias,
+    questoesMeta,
+    totalIneditas,
+    totalRepetidas: idsFinais.length - totalIneditas,
+  };
+}
+
 /**
  * Seleciona IDs de questões respeitando concomitantemente:
  * 1. A proporção de matérias (quando fornecida)
@@ -300,7 +511,7 @@ export async function selecionarQuestoesBalanceadas(
       : idsFinais.length;
 
     return {
-      ids: embaralhar(idsFinais),
+      ids: idsFinais,
       distribuicaoDificuldade: contagemTotalDificuldade,
       totalIneditas,
       totalRepetidas: idsFinais.length - totalIneditas,
@@ -366,7 +577,7 @@ export async function selecionarQuestoesBalanceadas(
   };
 }
 
-function embaralhar<T>(array: T[]): T[] {
+export function embaralhar<T>(array: T[]): T[] {
   const copia = [...array];
   for (let i = copia.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -374,4 +585,3 @@ function embaralhar<T>(array: T[]): T[] {
   }
   return copia;
 }
-

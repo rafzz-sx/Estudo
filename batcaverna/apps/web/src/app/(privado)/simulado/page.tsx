@@ -35,6 +35,9 @@ interface QuestaoSim {
   figura_descricao: string | null;
   figura_svg: string | null;
   numero_original: string | null;
+  area_conhecimento?: string;
+  numero_no_simulado?: number;
+  bloco_numero?: number;
   concursos: { sigla: string; emoji: string | null } | null;
   materias: { nome: string; icone_emoji: string | null } | null;
   assuntos: { nome: string } | null;
@@ -212,6 +215,7 @@ function Simulado() {
     redacaoDescartada: boolean;
     adaptadoEstoque?: boolean;
     variacaoAtiva?: any;
+    blocos?: any;
   } | null>(null);
   const [ineditasInfo, setIneditasInfo] = useState<{
     solicitado: boolean;
@@ -607,30 +611,38 @@ function Simulado() {
               </p>
             )}
 
-            {/* Variações de Prova (ex: ENEM 1º dia / 2º dia / CN) */}
+            {/* Variações de Prova (ex: ENEM 1º dia / 2º dia / EEAR / ESA / CN) */}
             {oficial && formatoAtual.variacoes && formatoAtual.variacoes.length > 0 && (
               <div className="mt-3 pt-3 border-t border-bat-gold-400/15">
                 <label className="mb-1.5 block text-xs font-semibold text-bat-text">
-                  Selecione o Dia ou Extensão da Prova:
+                  Selecione o Dia ou Modelo da Prova:
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {formatoAtual.variacoes.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => setConfig({ ...config, variacao_id: v.id })}
-                      className={`cursor-pointer rounded-lg border p-2.5 text-left transition-all ${
-                        (config.variacao_id || formatoAtual.variacoes![0].id) === v.id
-                          ? "border-bat-gold-400 bg-bat-gold-400/15 text-bat-gold-400 font-bold"
-                          : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
-                      }`}
-                    >
-                      <p className="text-xs">{v.nome}</p>
-                      <p className="text-[10px] text-bat-text-muted mt-0.5">
-                        {v.questoes} questões · {Math.round(v.minutos / 60)}h
-                      </p>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {formatoAtual.variacoes.map((v) => {
+                    const ativo = (config.variacao_id || formatoAtual.variacoes![0].id) === v.id;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setConfig({ ...config, variacao_id: v.id })}
+                        className={`cursor-pointer rounded-xl border p-3 text-left transition-all ${
+                          ativo
+                            ? "border-bat-gold-400 bg-bat-gold-400/15 text-bat-gold-400 font-bold ring-1 ring-bat-gold-400/40"
+                            : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold">{v.nome}</p>
+                          <span className="text-[10px] font-semibold text-bat-text-muted">
+                            {v.questoes} q
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-bat-text-muted mt-1 leading-tight">
+                          {v.descricao}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1092,28 +1104,80 @@ function Simulado() {
             </div>
           </div>
 
-          {/* MAPA DE QUESTÕES (SEM REVELAR ACERTO/ERRO) */}
-          <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-            {questoes.map((qq, i) => {
-              const respondida = !!respostas[qq.id];
-              const ativa = i === indice;
-              return (
-                <button
-                  key={qq.id}
-                  onClick={() => setIndice(i)}
-                  className={`h-7 w-7 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
-                    ativa
-                      ? "bg-bat-gold-400 text-black shadow"
-                      : respondida
-                      ? "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40"
-                      : "bg-bat-bg-secondary text-bat-text-muted hover:bg-bat-bg-elevated"
-                  }`}
-                  aria-label={`Ir para a questão ${i + 1}`}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
+          {/* MAPA DE QUESTÕES (ORGANIZADO POR ÁREA / DISCIPLINA QUANDO HOUVER) */}
+          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+            {(() => {
+              // Agrupamento por área de conhecimento oficial
+              const areasMap = new Map<string, { questao: QuestaoSim; idx: number }[]>();
+              for (let i = 0; i < questoes.length; i++) {
+                const qq = questoes[i];
+                const areaKey = qq.area_conhecimento || "Questões da Prova";
+                if (!areasMap.has(areaKey)) areasMap.set(areaKey, []);
+                areasMap.get(areaKey)!.push({ questao: qq, idx: i });
+              }
+
+              if (areasMap.size <= 1) {
+                return (
+                  <div className="flex flex-wrap gap-1.5">
+                    {questoes.map((qq, i) => {
+                      const respondida = !!respostas[qq.id];
+                      const ativa = i === indice;
+                      return (
+                        <button
+                          key={qq.id}
+                          onClick={() => setIndice(i)}
+                          className={`h-7 w-7 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
+                            ativa
+                              ? "bg-bat-gold-400 text-black shadow"
+                              : respondida
+                              ? "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40"
+                              : "bg-bat-bg-secondary text-bat-text-muted hover:bg-bat-bg-elevated"
+                          }`}
+                          aria-label={`Ir para a questão ${i + 1}`}
+                        >
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              return [...areasMap.entries()].map(([areaNome, items]) => (
+                <div key={areaNome} className="pt-1 border-t first:border-t-0 border-bat-border/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-bat-gold-400">
+                      🏛️ {areaNome} ({items[0].idx + 1} a {items[items.length - 1].idx + 1})
+                    </span>
+                    <span className="text-[10px] text-bat-text-muted">
+                      {items.filter((it) => !!respostas[it.questao.id]).length}/{items.length} resp.
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {items.map(({ questao: qq, idx: i }) => {
+                      const respondida = !!respostas[qq.id];
+                      const ativa = i === indice;
+                      return (
+                        <button
+                          key={qq.id}
+                          onClick={() => setIndice(i)}
+                          className={`h-7 w-7 cursor-pointer rounded-md text-[11px] font-bold transition-all ${
+                            ativa
+                              ? "bg-bat-gold-400 text-black shadow"
+                              : respondida
+                              ? "bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40"
+                              : "bg-bat-bg-secondary text-bat-text-muted hover:bg-bat-bg-elevated"
+                          }`}
+                          aria-label={`Ir para a questão ${i + 1}`}
+                        >
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         </div>
 
@@ -1124,6 +1188,11 @@ function Simulado() {
               {q.concursos?.emoji} {q.concursos?.sigla}
               {q.ano ? ` — ${q.ano}` : ""}
             </span>
+            {q.area_conhecimento && (
+              <span className="rounded-lg border border-bat-gold-400/30 bg-bat-gold-400/15 px-2.5 py-1 text-xs font-bold text-bat-gold-400">
+                🏛️ {q.area_conhecimento}
+              </span>
+            )}
             {q.materias?.nome && (
               <span className="rounded-lg bg-bat-bg-secondary px-2.5 py-1 text-xs font-medium text-bat-text-secondary">
                 {q.materias.icone_emoji} {q.materias.nome}
@@ -1134,6 +1203,9 @@ function Simulado() {
                 {q.assuntos.nome}
               </span>
             )}
+            <span className="ml-auto text-xs text-bat-text-muted font-medium">
+              Questão {indice + 1} de {questoes.length}
+            </span>
           </header>
 
           {(() => {
