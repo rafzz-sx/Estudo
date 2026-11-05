@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.4';
+export const CURRENT_APP_VERSION = '3.7.5';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,42 @@ export const CURRENT_APP_VERSION = '3.7.4';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.7.5',
+    dataLancamento: '2026-11-05T15:20:00-03:00',
+    titulo: 'Treino Focado em Pontos Fracos, Boletim de Desempenho & Filtros Inteligentes',
+    resumo:
+      'Superação de pontos fracos com modo de treino direcionado no Banco de Questões, sincronização automática de filtros por assunto e concurso, e novo Boletim de Desempenho com taxa de aproveitamento, diagnóstico pedagógico e gabarito explicadinho inline.',
+    destaque: true,
+    impacto: 'minor',
+    classificacao: 'atualizacao',
+    alteracoes: [
+      {
+        id: 'treino-focado-ponto-fraco',
+        tipo: 'novo',
+        titulo: 'Modo de Treino Focado no Ponto Fraco',
+        descricao:
+          'Ao clicar para resolver questões de um assunto fraco no radar, o Banco de Questões agora ativa um modo de treino exclusivo com banner de acompanhamento, contagem de questões disponíveis daquele assunto no concurso e botão para encerramento de sessão com diagnóstico.',
+        tag: 'Radar & Questões',
+      },
+      {
+        id: 'boletim-desempenho-sessao',
+        tipo: 'novo',
+        titulo: 'Boletim de Desempenho e Revisão Detalhada',
+        descricao:
+          'Novo relatório pós-treino exibindo a taxa de aproveitamento no assunto, status de superação do ponto fraco, tempo total e XP de combate ganho, além do detalhamento de cada questão com acesso direto ao gabarito comentado passo a passo.',
+        tag: 'Pedagogia & Análise',
+      },
+      {
+        id: 'correcao-filtros-radar-questoes',
+        tipo: 'correcao',
+        titulo: 'Sincronização Precisa dos Filtros de Assunto',
+        descricao:
+          'Correção na transmissão de parâmetros da URL para o Banco de Questões, garantindo que o concurso, a matéria e o assunto específico sejam aplicados imediatamente sem carregar questões desnecessárias.',
+        tag: 'Banco de Questões',
+      },
+    ],
+  },
   {
     versao: '3.7.4',
     dataLancamento: '2026-10-31T22:00:00-03:00',

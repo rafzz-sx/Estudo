@@ -57,6 +57,17 @@ export function RadarFraqueza({
 }) {
   const nadaAinda = fracos.length === 0 && pontosCegos.length === 0;
 
+  const criarLinkTreino = (a: AssuntoRadar) => {
+    const qs = new URLSearchParams({
+      concurso: sigla,
+      materia: a.materia,
+      assunto: a.assunto,
+      assunto_id: a.assunto_id,
+      foco: "ponto_fraco",
+    });
+    return `/questoes?${qs.toString()}`;
+  };
+
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -108,7 +119,7 @@ export function RadarFraqueza({
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-base">{a.materia_emoji ?? "📚"}</span>
                     <Link
-                      href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
+                      href={criarLinkTreino(a)}
                       className="truncate text-sm font-semibold text-bat-text no-underline transition-colors hover:text-bat-gold-400"
                     >
                       {a.assunto}
@@ -166,7 +177,7 @@ export function RadarFraqueza({
                     leu quer ir direto para as questões. */}
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <Link
-                    href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
+                    href={criarLinkTreino(a)}
                     className="rounded-lg border border-bat-gold-400/30 bg-bat-gold-400/10 px-2.5 py-1 text-[11px] font-semibold text-bat-gold-400 no-underline transition-colors hover:bg-bat-gold-400/20"
                   >
                     ⚔️ Resolver questões
@@ -201,7 +212,7 @@ export function RadarFraqueza({
             {pontosCegos.map((a) => (
               <Link
                 key={a.assunto_id}
-                href={`/questoes?concurso=${sigla}&assunto_id=${a.assunto_id}`}
+                href={criarLinkTreino(a)}
                 className="rounded-lg border border-bat-border bg-bat-bg-card px-3 py-1.5 text-xs text-bat-text-secondary no-underline transition-all hover:border-bat-gold-400/40 hover:text-bat-text"
               >
                 {a.materia_emoji} {a.assunto}

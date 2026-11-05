@@ -266,7 +266,9 @@ export default function AssuntosPage() {
                           key={`${a.id ?? a.nome}`}
                           href={`/questoes?concurso=${sigla}&materia=${encodeURIComponent(
                             m.nome
-                          )}`}
+                          )}&assunto=${encodeURIComponent(a.nome)}${
+                            a.id ? `&assunto_id=${encodeURIComponent(a.id)}` : ""
+                          }&foco=assunto`}
                           className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 no-underline transition-all hover:border-bat-gold-400/30 hover:bg-bat-bg-secondary"
                         >
                           <div className="min-w-0 flex-1">

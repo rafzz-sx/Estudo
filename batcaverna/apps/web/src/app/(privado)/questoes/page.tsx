@@ -13,6 +13,10 @@ import { ComboBanner, ComboCompacto } from "@/components/questoes/ComboBadge";
 import { ContestarGabarito } from "@/components/questoes/ContestarGabarito";
 import { MathText } from "@/components/MathText";
 import { tratarTextoBaseEFigura } from "@/lib/questoes-figura";
+import {
+  BoletimSessaoModal,
+  type ItemHistoricoSessao,
+} from "@/components/questoes/BoletimSessaoModal";
 
 // ─── Contratos ───────────────────────────────────────────────
 interface Alternativa {
@@ -107,12 +111,37 @@ function BancoDeQuestoes() {
     concurso: params.get("concurso") ?? "todos",
     materia: params.get("materia") ?? "todas",
     assunto: params.get("assunto") ?? "todos",
+    assunto_id: params.get("assunto_id") ?? null,
+    foco: params.get("foco") ?? null,
     area: params.get("area") ?? "todas",
     ano: params.get("ano") ?? "todos",
     dificuldade: "todas",
     nao_respondidas: false,
     comentadas: false,
   });
+
+  const [historicoSessao, setHistoricoSessao] = useState<ItemHistoricoSessao[]>([]);
+  const [modalBoletimAberto, setModalBoletimAberto] = useState(false);
+
+  // Sincroniza estado de filtros caso a URL mude por navegação
+  useEffect(() => {
+    const conc = params.get("concurso");
+    const mat = params.get("materia");
+    const ass = params.get("assunto");
+    const assId = params.get("assunto_id");
+    const foco = params.get("foco");
+
+    if (conc || mat || ass || assId || foco) {
+      setFiltros((prev) => ({
+        ...prev,
+        concurso: conc ?? prev.concurso,
+        materia: mat ?? prev.materia,
+        assunto: ass ?? prev.assunto,
+        assunto_id: assId ?? prev.assunto_id,
+        foco: foco ?? prev.foco,
+      }));
+    }
+  }, [params]);
 
   const [opcoes, setOpcoes] = useState<OpcoesFiltro | null>(null);
   const [questoes, setQuestoes] = useState<Questao[]>([]);
@@ -170,6 +199,7 @@ function BancoDeQuestoes() {
           ano: filtros.ano,
           dificuldade: filtros.dificuldade,
         });
+        if (filtros.assunto_id) qs.set("assunto_id", filtros.assunto_id);
         if (filtros.nao_respondidas) qs.set("nao_respondidas", "1");
         if (filtros.comentadas) qs.set("comentadas", "1");
 
@@ -180,6 +210,25 @@ function BancoDeQuestoes() {
 
         setQuestoes(json.data.items);
         setTotal(json.data.total);
+
+        // Se entrou por um link que tinha apenas assunto_id, sincroniza assunto e matéria
+        if (json.data.items.length > 0 && filtros.assunto === "todos" && filtros.assunto_id) {
+          const primeiro = json.data.items[0];
+          if (primeiro.assuntos?.nome) {
+            setFiltros((prev) => ({
+              ...prev,
+              assunto: primeiro.assuntos.nome,
+              materia:
+                prev.materia === "todas" && primeiro.materias?.nome
+                  ? primeiro.materias.nome
+                  : prev.materia,
+              concurso:
+                prev.concurso === "todos" && primeiro.concursos?.sigla
+                  ? primeiro.concursos.sigla
+                  : prev.concurso,
+            }));
+          }
+        }
         setIndice(0);
         setEscolhida(null);
         setResultado(null);
@@ -236,6 +285,30 @@ function BancoDeQuestoes() {
         respondidas: s.respondidas + 1,
         acertos: s.acertos + (r.correta ? 1 : 0),
       }));
+
+      // Registra a resolução detalhada no histórico da sessão
+      const itemHistorico: ItemHistoricoSessao = {
+        id: questao.id,
+        enunciado: questao.enunciado,
+        materia: questao.materias?.nome ?? null,
+        assunto: questao.assuntos?.nome ?? null,
+        concurso: questao.concursos?.sigla ?? null,
+        ano: questao.ano,
+        dificuldade: questao.dificuldade,
+        resposta_dada: escolhida,
+        resposta_correta: r.resposta_correta,
+        correta: r.correta,
+        tempo_gasto: tempo,
+        xp_ganho: r.xp_ganho,
+        explicacao: r.explicacao,
+        explicacao_alternativas: r.explicacao_alternativas,
+        resolucao_passos: r.resolucao_passos,
+        figura_descricao: r.figura_descricao,
+        figura_svg: r.figura_svg,
+        precisa_resolucao: r.precisa_resolucao,
+        alternativas: questao.alternativas,
+      };
+      setHistoricoSessao((prev) => [...prev, itemHistorico]);
 
       // O servidor é a fonte da verdade: o store só reflete o que foi gravado.
       updateUser({
@@ -295,6 +368,15 @@ function BancoDeQuestoes() {
 
   const acabaram = indice + 1 >= questoes.length && pagina * 10 >= total;
 
+  const limparFoco = () => {
+    setFiltros((prev) => ({
+      ...prev,
+      assunto: "todos",
+      assunto_id: null,
+      foco: null,
+    }));
+  };
+
   // ─── Render ────────────────────────────────────────────────
   return (
     <div ref={topoRef} className="flex flex-col gap-6 lg:flex-row">
@@ -313,7 +395,14 @@ function BancoDeQuestoes() {
           <select
             value={filtros.concurso}
             onChange={(e) =>
-              setFiltros({ ...filtros, concurso: e.target.value, materia: "todas", ano: "todos" })
+              setFiltros({
+                ...filtros,
+                concurso: e.target.value,
+                materia: "todas",
+                assunto: "todos",
+                assunto_id: null,
+                ano: "todos",
+              })
             }
             className="input-field text-sm"
           >
@@ -332,7 +421,12 @@ function BancoDeQuestoes() {
           <select
             value={filtros.materia}
             onChange={(e) =>
-              setFiltros({ ...filtros, materia: e.target.value, assunto: "todos" })
+              setFiltros({
+                ...filtros,
+                materia: e.target.value,
+                assunto: "todos",
+                assunto_id: null,
+              })
             }
             className="input-field text-sm"
           >
@@ -349,7 +443,15 @@ function BancoDeQuestoes() {
         <Campo label="Assunto da matéria">
           <select
             value={filtros.assunto}
-            onChange={(e) => setFiltros({ ...filtros, assunto: e.target.value })}
+            onChange={(e) => {
+              const val = e.target.value;
+              const a = opcoes?.assuntos?.find((x) => x.nome === val);
+              setFiltros({
+                ...filtros,
+                assunto: val,
+                assunto_id: a?.id ?? (val === "todos" ? null : filtros.assunto_id),
+              });
+            }}
             className="input-field text-sm"
           >
             <option value="todos">
@@ -359,6 +461,10 @@ function BancoDeQuestoes() {
                 ? "Todos os assuntos desta matéria"
                 : "Todos os assuntos"}
             </option>
+            {filtros.assunto !== "todos" &&
+              !opcoes?.assuntos?.some((a) => a.nome === filtros.assunto) && (
+                <option value={filtros.assunto}>{filtros.assunto}</option>
+              )}
             {opcoes?.assuntos?.map((a) => (
               <option key={a.id} value={a.nome}>
                 {a.nome} ({a.total_questoes})
@@ -450,11 +556,87 @@ function BancoDeQuestoes() {
               <ComboCompacto combo={combo} />
             </div>
           </div>
+          {historicoSessao.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setModalBoletimAberto(true)}
+              className="mt-3.5 w-full rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/10 py-2 text-center text-xs font-bold text-bat-gold-400 transition-colors hover:bg-bat-gold-400/20"
+            >
+              🏁 Ver Boletim ({historicoSessao.length} questões)
+            </button>
+          )}
         </div>
       </aside>
 
       {/* ═══════════ QUESTÃO ═══════════ */}
       <section className="min-w-0 flex-1">
+        {/* Banner de Treino Focado no Assunto / Ponto Fraco */}
+        {(filtros.assunto !== "todos" || filtros.assunto_id || filtros.foco === "ponto_fraco") && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-bat-gold-400/40 bg-gradient-to-r from-bat-gold-400/15 via-bat-bg-card to-bat-bg-card p-4 sm:p-5 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bat-gold-400/20 text-2xl text-bat-gold-400">
+                🎯
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-bat-gold-400">
+                    {filtros.foco === "ponto_fraco"
+                      ? "Treino Focado no Ponto Fraco"
+                      : "Treino Focado no Assunto"}
+                  </span>
+                  {filtros.concurso !== "todos" && (
+                    <span className="rounded bg-bat-gold-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-bat-gold-400">
+                      {filtros.concurso}
+                    </span>
+                  )}
+                  {filtros.materia !== "todas" && (
+                    <span className="rounded bg-bat-bg-secondary px-1.5 py-0.5 text-[10px] text-bat-text-muted">
+                      {filtros.materia}
+                    </span>
+                  )}
+                </div>
+                <h2 className="heading text-base sm:text-lg font-bold text-bat-text truncate">
+                  {filtros.assunto !== "todos"
+                    ? filtros.assunto
+                    : questao?.assuntos?.nome ?? "Assunto Selecionado"}
+                </h2>
+                <p className="text-xs text-bat-text-secondary">
+                  {total > 0 ? (
+                    <>
+                      <strong>{total}</strong>{" "}
+                      {total === 1 ? "questão disponível" : "questões disponíveis"} no banco
+                      {sessao.respondidas > 0 &&
+                        ` · ${sessao.acertos}/${sessao.respondidas} acertos nesta sessão`}
+                    </>
+                  ) : (
+                    "Carregando questões deste assunto..."
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {historicoSessao.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setModalBoletimAberto(true)}
+                  className="rounded-xl border border-bat-gold-400/50 bg-bat-gold-400/20 px-3.5 py-2 text-xs font-bold text-bat-gold-400 transition-all hover:bg-bat-gold-400/30 flex items-center gap-1.5 shadow-sm"
+                >
+                  🏁 Encerrar Treino & Ver Boletim
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={limparFoco}
+                className="rounded-xl border border-bat-border bg-bat-bg-secondary px-3 py-2 text-xs text-bat-text-muted transition-colors hover:text-bat-text hover:border-bat-gold-400/30"
+                title="Remover filtro deste assunto e voltar ao modo geral"
+              >
+                Limpar foco
+              </button>
+            </div>
+          </div>
+        )}
+
         {combo >= 3 && (
           <ComboBanner combo={combo} destaque={!!resultado?.patamar_novo} />
         )}
@@ -731,13 +913,31 @@ function BancoDeQuestoes() {
                       📖 Ver gabarito comentado
                     </button>
                   )}
-                  <button
-                    onClick={proxima}
-                    disabled={acabaram}
-                    className="btn-primary px-8 py-3 disabled:opacity-40"
-                  >
-                    {acabaram ? "Fim das questões deste filtro" : "Próxima questão →"}
-                  </button>
+                  {acabaram ? (
+                    <button
+                      onClick={() => setModalBoletimAberto(true)}
+                      className="btn-primary px-8 py-3 bg-bat-gold-400 hover:bg-bat-gold-300 text-black font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(245,197,24,0.3)]"
+                    >
+                      🎉 Fim das questões! Ver Boletim do Treino →
+                    </button>
+                  ) : (
+                    <button
+                      onClick={proxima}
+                      className="btn-primary px-8 py-3"
+                    >
+                      Próxima questão →
+                    </button>
+                  )}
+
+                  {historicoSessao.length >= 2 && !acabaram && (
+                    <button
+                      type="button"
+                      onClick={() => setModalBoletimAberto(true)}
+                      className="rounded-xl border border-bat-border bg-bat-bg-secondary px-4 py-3 text-xs font-semibold text-bat-text-secondary hover:text-bat-gold-400 hover:border-bat-gold-400/40 transition-colors"
+                    >
+                      🏁 Encerrar treino ({sessao.respondidas} feitas)
+                    </button>
+                  )}
                 </div>
 
                 {/* Ao errar, insistimos para o aluno entender antes de seguir */}
@@ -786,6 +986,17 @@ function BancoDeQuestoes() {
           </article>
         )}
       </section>
+
+      {/* ═══════════ MODAL BOLETIM DE DESEMPENHO DA SESSÃO ═══════════ */}
+      <BoletimSessaoModal
+        aberto={modalBoletimAberto}
+        onClose={() => setModalBoletimAberto(false)}
+        historico={historicoSessao}
+        concurso={filtros.concurso}
+        materia={filtros.materia}
+        assunto={filtros.assunto !== "todos" ? filtros.assunto : questao?.assuntos?.nome}
+        isPontoFraco={filtros.foco === "ponto_fraco" || !!filtros.assunto_id}
+      />
     </div>
   );
 }
