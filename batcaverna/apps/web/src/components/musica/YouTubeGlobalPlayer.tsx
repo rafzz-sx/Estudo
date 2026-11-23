@@ -61,10 +61,16 @@ export function YouTubeGlobalPlayer() {
         startSeconds
       )}&origin=${originParam}`;
 
-      // Se já está no mesmo vídeo, apenas executa playVideo
+      // Se já está no mesmo vídeo, reposiciona e executa playVideo
       if (iframeRef.current.src && iframeRef.current.src.includes(videoId)) {
-        postYT("unMute");
-        postYT("setVolume", [Math.round(vol * 100)]);
+        postYT("seekTo", [Math.floor(startSeconds), true]);
+        if (vol <= 0) {
+          postYT("setVolume", [0]);
+          postYT("mute");
+        } else {
+          postYT("unMute");
+          postYT("setVolume", [Math.round(vol * 100)]);
+        }
         postYT("playVideo");
         return;
       }
@@ -74,8 +80,14 @@ export function YouTubeGlobalPlayer() {
 
       // Envia comandos após carregar
       iframeRef.current.onload = () => {
-        postYT("unMute");
-        postYT("setVolume", [Math.round(vol * 100)]);
+        postYT("seekTo", [Math.floor(startSeconds), true]);
+        if (vol <= 0) {
+          postYT("setVolume", [0]);
+          postYT("mute");
+        } else {
+          postYT("unMute");
+          postYT("setVolume", [Math.round(vol * 100)]);
+        }
         postYT("playVideo");
         postYT("listening");
       };
@@ -99,8 +111,13 @@ export function YouTubeGlobalPlayer() {
         postYT("seekTo", [segundos, true]);
       },
       definirVolume: (vol: number) => {
-        postYT("setVolume", [Math.round(vol * 100)]);
-        postYT("unMute");
+        if (vol <= 0) {
+          postYT("setVolume", [0]);
+          postYT("mute");
+        } else {
+          postYT("unMute");
+          postYT("setVolume", [Math.round(vol * 100)]);
+        }
       },
       estaPronto: () => true,
     };

@@ -215,7 +215,8 @@ function carregarEtocar(musica: Musica, volume: number) {
   const el = obterAudio();
   if (!el) return;
   el.src = musica.audio_url;
-  el.volume = volume;
+  el.volume = Math.max(0, Math.min(1, volume));
+  el.muted = volume <= 0;
   el.play().catch(() => {
     // Autoplay bloqueado pelo navegador: fica pausado até o usuário clicar.
     usePlayerStore.setState({ tocando: false });
@@ -309,9 +310,9 @@ export const usePlayerStore = create<PlayerState>()(
         } else {
           proximo = indice + 1;
           if (proximo >= fila.length) {
-            if (repetir !== 'todas') {
+            if (repetir === 'nao') {
               pararTimerPosicao();
-              set({ tocando: false });
+              set({ tocando: false, posicao: 0 });
               controladorYT?.pausar();
               obterAudio()?.pause();
               return;
@@ -391,10 +392,14 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       definirVolume: (v) => {
-        controladorYT?.definirVolume(v);
+        const volVal = Math.max(0, Math.min(1, v));
+        controladorYT?.definirVolume(volVal);
         const el = obterAudio();
-        if (el) el.volume = v;
-        set({ volume: v });
+        if (el) {
+          el.volume = volVal;
+          el.muted = volVal <= 0;
+        }
+        set({ volume: volVal });
       },
 
       alternarAleatorio: () => set((s) => ({ aleatorio: !s.aleatorio })),
@@ -424,7 +429,27 @@ export const usePlayerStore = create<PlayerState>()(
       _aoTerminar: () => {
         const { repetir, volume, fila, indice } = get();
         if (repetir === 'uma') {
-          carregarEtocar(fila[indice], volume);
+          const musica = fila[indice];
+          if (!musica) return;
+          set({ posicao: 0, tocando: true });
+          const ytId =
+            musica.fonte === 'youtube' && musica.fonte_id
+              ? musica.fonte_id
+              : extrairVideoIdYouTube(musica.fonte_id || musica.audio_url);
+          if (ytId && controladorYT) {
+            controladorYT.buscar(0);
+            controladorYT.retomar();
+            iniciarTimerPosicao();
+            return;
+          }
+          const el = obterAudio();
+          if (el) {
+            el.currentTime = 0;
+            el.play().catch(() => undefined);
+            iniciarTimerPosicao();
+            return;
+          }
+          carregarEtocar(musica, volume);
           return;
         }
         get().proxima();

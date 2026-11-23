@@ -266,13 +266,14 @@ export function DynamicIsland() {
 
   const [avisoPlayer, setAvisoPlayer] = useState<string | null>(null);
 
-  const volumeAnterior = useRef(0.5);
+  const volumeAnterior = useRef(0.7);
   const toggleMudo = useCallback(() => {
     if (volume > 0) {
       volumeAnterior.current = volume;
       definirVolume(0);
     } else {
-      definirVolume(volumeAnterior.current || 0.5);
+      const volRestaurar = volumeAnterior.current > 0 ? volumeAnterior.current : 0.7;
+      definirVolume(volRestaurar);
     }
   }, [volume, definirVolume]);
 
@@ -529,12 +530,11 @@ export function DynamicIsland() {
                 onClick={alternarAleatorio}
                 className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl transition-all ${
                   aleatorio
-                    ? "bg-white/20 text-white shadow-xs border border-white/20"
+                    ? "bg-bat-gold-400/20 text-bat-gold-400 shadow-sm border border-bat-gold-400/50"
                     : "text-white/40 hover:text-white hover:bg-white/10"
                 }`}
-                style={aleatorio ? { background: `${corPrimaria}40`, color: "#ffffff" } : undefined}
                 aria-label="Modo aleatório"
-                title={aleatorio ? "Modo aleatório ativo" : "Ativar modo aleatório"}
+                title={aleatorio ? "Modo aleatório ativo (clique para desativar)" : "Ativar modo aleatório"}
               >
                 <Shuffle className="h-3.5 w-3.5" />
               </button>
@@ -542,29 +542,34 @@ export function DynamicIsland() {
               {/* Repetir */}
               <button
                 onClick={alternarRepetir}
-                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl transition-all ${
+                className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl transition-all ${
                   repetir !== "nao"
-                    ? "bg-white/20 text-white shadow-xs border border-white/20"
+                    ? "bg-bat-gold-400/20 text-bat-gold-400 shadow-sm border border-bat-gold-400/50 font-bold"
                     : "text-white/40 hover:text-white hover:bg-white/10"
                 }`}
-                style={
-                  repetir !== "nao"
-                    ? { background: `${corPrimaria}40`, color: "#ffffff" }
-                    : undefined
-                }
                 aria-label="Modo de repetição"
                 title={
                   repetir === "uma"
-                    ? "Repetindo a faixa atual"
+                    ? "Repetindo a faixa atual (clique para desativar)"
                     : repetir === "todas"
-                    ? "Repetindo toda a fila"
-                    : "Repetição desativada"
+                    ? "Repetindo toda a fila (clique para repetir apenas esta)"
+                    : "Repetição desativada (clique para ativar)"
                 }
               >
                 {repetir === "uma" ? (
-                  <Repeat1 className="h-3.5 w-3.5" />
+                  <Repeat1 className="h-4 w-4" />
                 ) : (
                   <Repeat className="h-3.5 w-3.5" />
+                )}
+                {repetir === "todas" && (
+                  <span className="absolute -top-1 -right-1 text-[7.5px] font-black leading-none px-1 py-0.5 rounded-full bg-bat-gold-400 text-black shadow-xs">
+                    ALL
+                  </span>
+                )}
+                {repetir === "uma" && (
+                  <span className="absolute -top-1 -right-1 text-[7.5px] font-black leading-none px-1 py-0.5 rounded-full bg-bat-gold-400 text-black shadow-xs">
+                    1
+                  </span>
                 )}
               </button>
 
@@ -573,23 +578,23 @@ export function DynamicIsland() {
                 <button
                   type="button"
                   onClick={toggleMudo}
-                  className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
-                  title={volume === 0 ? "Desmutar volume" : "Mutar volume"}
-                  aria-label={volume === 0 ? "Desmutar" : "Mutar"}
+                  className="p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                  title={volume <= 0 ? "Desmutar volume" : "Mutar volume (silêncio total)"}
+                  aria-label={volume <= 0 ? "Desmutar" : "Mutar"}
                 >
-                  {volume === 0 ? (
-                    <VolumeX className="h-3.5 w-3.5 text-red-400" />
+                  {volume <= 0 ? (
+                    <VolumeX className="h-4 w-4 text-red-400 animate-pulse" />
                   ) : volume < 0.5 ? (
-                    <Volume1 className="h-3.5 w-3.5" />
+                    <Volume1 className="h-4 w-4 text-white/70 hover:text-white" />
                   ) : (
-                    <Volume2 className="h-3.5 w-3.5" />
+                    <Volume2 className="h-4 w-4 text-white/70 hover:text-white" />
                   )}
                 </button>
                 <input
                   type="range"
                   min={0}
                   max={1}
-                  step={0.05}
+                  step={0.01}
                   value={volume}
                   onChange={(e) => definirVolume(Number(e.target.value))}
                   className="w-full cursor-pointer appearance-none rounded-full bg-white/20 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
