@@ -13,6 +13,7 @@ import { ComboBanner, ComboCompacto } from "@/components/questoes/ComboBadge";
 import { ContestarGabarito } from "@/components/questoes/ContestarGabarito";
 import { MathText } from "@/components/MathText";
 import { tratarTextoBaseEFigura } from "@/lib/questoes-figura";
+import { TextoBaseCard } from "@/components/questoes/TextoBaseCard";
 import {
   BoletimSessaoModal,
   type ItemHistoricoSessao,
@@ -289,6 +290,7 @@ function BancoDeQuestoes() {
       // Registra a resolução detalhada no histórico da sessão
       const itemHistorico: ItemHistoricoSessao = {
         id: questao.id,
+        texto_base: questao.texto_base,
         enunciado: questao.enunciado,
         materia: questao.materias?.nome ?? null,
         assunto: questao.assuntos?.nome ?? null,
@@ -760,16 +762,7 @@ function BancoDeQuestoes() {
               );
               return (
                 <>
-                  {textoBaseFinal && (
-                    <div className="mb-5 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3.5">
-                      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
-                        Texto base
-                      </p>
-                      <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                        <MathText>{textoBaseFinal}</MathText>
-                      </div>
-                    </div>
-                  )}
+                  <TextoBaseCard texto={textoBaseFinal} />
 
                   <QuadroFigura
                     descricao={figuraDescricaoFinal}

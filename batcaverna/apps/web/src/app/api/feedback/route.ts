@@ -3,12 +3,40 @@ import { createServerSupabaseClient } from '@/lib/supabase';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
 // ═══════════════════════════════════════════════════════════════
-// GET /api/feedback — Retorna depoimentos aprovados para a vitrine (público)
+// GET /api/feedback
+// ?meus=1 -> Retorna feedbacks do usuário autenticado com status
+// Sem parâmetro -> Retorna depoimentos aprovados para a vitrine (público)
 // ═══════════════════════════════════════════════════════════════
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
     const supabase = createServerSupabaseClient();
 
+    // ─── Histórico pessoal de feedbacks do usuário logado ──────
+    if (searchParams.get('meus') === '1') {
+      const user = await getAuthUserFromRequest(req);
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Não autorizado' },
+          { status: 401 }
+        );
+      }
+
+      const { data: meusFeedbacks, error } = await supabase
+        .from('feedback_plataforma')
+        .select('id, tipo, nota, mensagem, aprovado_para_vitrine, lido_por_admin, criado_em')
+        .eq('user_id', user.id)
+        .order('criado_em', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar histórico de feedback do usuário:', error);
+        return NextResponse.json({ success: true, data: [] });
+      }
+
+      return NextResponse.json({ success: true, data: meusFeedbacks || [] });
+    }
+
+    // ─── Depoimentos aprovados para a vitrine pública ──────────
     const { data: depoimentos, error } = await supabase
       .from('feedback_plataforma')
       .select(`

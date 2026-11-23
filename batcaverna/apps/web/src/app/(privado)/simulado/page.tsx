@@ -12,6 +12,7 @@ import {
 import { MathText } from "@/components/MathText";
 import { formatarCronometro } from "@batcaverna/utils";
 import { tratarTextoBaseEFigura } from "@/lib/questoes-figura";
+import { TextoBaseCard } from "@/components/questoes/TextoBaseCard";
 import {
   lerProvaSalva,
   gravarProvaSalva,
@@ -48,6 +49,7 @@ interface QuestaoSim {
 
 interface Detalhe {
   questao_id: string;
+  texto_base?: string | null;
   enunciado: string;
   dificuldade?: string;
   materia_nome?: string | null;
@@ -1305,16 +1307,7 @@ function Simulado() {
             );
             return (
               <>
-                {textoBaseFinal && (
-                  <div className="mb-5 rounded-xl border-l-4 border-bat-gold-400/50 bg-bat-bg-secondary/50 px-4 py-3.5">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-bat-text-muted">
-                      Texto base
-                    </p>
-                    <div className="whitespace-pre-line text-sm leading-relaxed text-bat-text-secondary">
-                      <MathText>{textoBaseFinal}</MathText>
-                    </div>
-                  </div>
-                )}
+                <TextoBaseCard texto={textoBaseFinal} />
 
                 <QuadroFigura descricao={figuraDescricaoFinal} svg={q.figura_svg} />
               </>
@@ -1773,6 +1766,8 @@ function Simulado() {
                 </span>
               )}
             </div>
+
+            <TextoBaseCard texto={resultado.detalhes[revisando].texto_base} />
 
             <p className="mb-3 whitespace-pre-line text-sm leading-relaxed text-bat-text">
               <MathText>{resultado.detalhes[revisando].enunciado}</MathText>

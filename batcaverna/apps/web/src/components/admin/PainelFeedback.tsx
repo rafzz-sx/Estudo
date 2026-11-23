@@ -129,7 +129,7 @@ export function PainelFeedback({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          motivo: f.tipo === "bug" ? "bug" : "outro",
+          motivo: f.tipo === "bug" ? "bugs" : f.tipo === "ideia" ? "ideia" : "outros",
           titulo: `[Feedback ${f.tipo.toUpperCase()}] ${f.users?.apelido || "Aluno"}`,
           descricao: `[Origem: Feedback ${f.nota ? `${f.nota}★` : ""}]
 

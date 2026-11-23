@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
 import { ResolucaoGabarito, type PassoResolucao } from "./ResolucaoGabarito";
+import { TextoBaseCard } from "./TextoBaseCard";
 
 export interface ItemHistoricoSessao {
   id: string;
+  texto_base?: string | null;
   enunciado: string;
   materia?: string | null;
   assunto?: string | null;
@@ -318,6 +320,10 @@ export function BoletimSessaoModal({
                         {/* Detalhe Aberto: Gabarito & Resolução Passo a Passo */}
                         {aberta && (
                           <div className="border-t border-bat-border/60 p-4 sm:p-5 bg-bat-bg-secondary/30">
+                            {item.texto_base && (
+                              <TextoBaseCard texto={item.texto_base} />
+                            )}
+
                             <div className="mb-3 text-xs text-bat-text-secondary">
                               <strong>Enunciado completo:</strong>
                               <div className="mt-1 rounded-xl bg-bat-bg-card p-3 border border-bat-border/60">

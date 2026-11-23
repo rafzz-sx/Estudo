@@ -201,12 +201,70 @@ export async function GET(req: NextRequest) {
 
     const criticosQuebrados = checagens.filter((c) => c.critico && !c.ok);
 
+    // ─── Telemetria e Métricas ao Vivo (Tempo Real) ───────────
+    const t0 = performance.now();
+    await supabase.from('users').select('id', { count: 'exact', head: true }).limit(1);
+    const latenciaDbMs = Math.round(performance.now() - t0);
+
+    const agora = Date.now();
+    const cincoMinAtras = new Date(agora - 5 * 60_000).toISOString();
+    const umDiaAtras = new Date(agora - 24 * 60 * 60_000).toISOString();
+
+    const [
+      { count: sessoesAtivas },
+      { count: respostasHoje },
+      { count: usuariosOnline },
+      { count: ticketsAbertosTotal },
+      { count: feedbacksPendentesTotal },
+      { count: usuariosTotal },
+    ] = await Promise.all([
+      supabase
+        .from('study_sessions')
+        .select('id', { count: 'exact', head: true })
+        .is('finalizada_em', null)
+        .gte('ultima_atividade_em', cincoMinAtras),
+      supabase
+        .from('user_questao_respostas')
+        .select('id', { count: 'exact', head: true })
+        .gte('respondido_em', umDiaAtras),
+      supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .gte('ultimo_login_em', cincoMinAtras),
+      supabase
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'aberto'),
+      supabase
+        .from('feedback_plataforma')
+        .select('id', { count: 'exact', head: true })
+        .eq('lido_por_admin', false),
+      supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true }),
+    ]);
+
+    const telemetriaAoVivo = {
+      latencia_db_ms: latenciaDbMs,
+      status_latencia: latenciaDbMs < 100 ? 'excelente' : latenciaDbMs < 300 ? 'estavel' : 'lenta',
+      sessoes_ativas: sessoesAtivas ?? 0,
+      usuarios_online: usuariosOnline ?? 0,
+      respostas_24h: respostasHoje ?? 0,
+      tickets_abertos: ticketsAbertosTotal ?? 0,
+      feedbacks_pendentes: feedbacksPendentesTotal ?? 0,
+      usuarios_total: usuariosTotal ?? 0,
+      questoes_total: questoes ?? 0,
+      memoria_heap_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      uptime_segundos: Math.round(process.uptime()),
+    };
+
     return NextResponse.json({
       success: true,
       data: {
         saudavel: criticosQuebrados.length === 0,
         problemas_criticos: criticosQuebrados.length,
         checagens,
+        telemetria: telemetriaAoVivo,
         verificado_em: new Date().toISOString(),
       },
     });

@@ -54,6 +54,12 @@ interface ResumoSaude {
   saudavel: boolean;
   problemas_criticos: number;
   checagens: ChecagemSaude[];
+  latencia_db_ms?: number;
+  latencia_status?: "excelente" | "estavel" | "lenta";
+  sessoes_ativas?: number;
+  respostas_24h?: number;
+  memoria_heap_mb?: number;
+  uptime_segundos?: number;
   verificado_em: string;
 }
 
@@ -1103,45 +1109,83 @@ export default function AdminPage() {
       {aba === "visao_geral" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <p className="text-bat-text-muted text-xs mb-1">Total de Soldados</p>
+            {/* Total de Soldados */}
+            <div
+              onClick={() => trocarAba("usuarios")}
+              className="card-glow bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/50 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-bat-text-muted text-xs font-bold uppercase tracking-wider">Total de Soldados</p>
+                <span className="text-xl p-1.5 rounded-xl bg-bat-bg-secondary text-bat-gold-400">👥</span>
+              </div>
               <p className="heading text-3xl font-bold text-bat-text">
                 {metricas ? metricas.total_usuarios.toLocaleString("pt-BR") : usuarios.length}
               </p>
-              <p className="text-bat-text-secondary text-xs mt-1">
-                {metricas && metricas.online_agora > 0
-                  ? <><span className="text-bat-success">●</span> {metricas.online_agora} online agora</>
-                  : "Plataforma ativa"
-                }
+              <p className="text-bat-text-secondary text-xs mt-1.5 flex items-center gap-1.5 font-medium">
+                {metricas && metricas.online_agora > 0 ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-emerald-400 font-bold">{metricas.online_agora} online agora</span>
+                  </>
+                ) : (
+                  "Plataforma ativa"
+                )}
               </p>
             </div>
-            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <p className="text-bat-text-muted text-xs mb-1">Questões no Banco</p>
+
+            {/* Questões no Banco */}
+            <div
+              onClick={() => trocarAba("questoes")}
+              className="card-glow bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/50 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-bat-text-muted text-xs font-bold uppercase tracking-wider">Questões no Banco</p>
+                <span className="text-xl p-1.5 rounded-xl bg-bat-bg-secondary text-bat-gold-400">📚</span>
+              </div>
               <p className="heading text-3xl font-bold text-bat-gold-400">
                 {metricas ? metricas.total_questoes.toLocaleString("pt-BR") : "—"}
               </p>
-              <p className="text-bat-text-secondary text-xs mt-1">
-                {metricas ? `${metricas.total_respostas.toLocaleString("pt-BR")} respostas` : "Carregando..."}
+              <p className="text-bat-text-secondary text-xs mt-1.5 font-medium">
+                {metricas ? `${metricas.total_respostas.toLocaleString("pt-BR")} respostas registradas` : "Carregando..."}
               </p>
             </div>
-            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <p className="text-bat-text-muted text-xs mb-1">Novos em 24h</p>
+
+            {/* Novos em 24h & Feedbacks */}
+            <div
+              onClick={() => trocarAba("feedback")}
+              className="card-glow bg-bat-bg-card border border-bat-border hover:border-bat-gold-400/50 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-bat-text-muted text-xs font-bold uppercase tracking-wider">Novos Combatentes</p>
+                <span className="text-xl p-1.5 rounded-xl bg-bat-bg-secondary text-cyan-400">⚡</span>
+              </div>
               <p className="heading text-3xl font-bold text-bat-info">
-                {metricas ? metricas.novos_24h : "—"}
+                +{metricas ? metricas.novos_24h : 0} <span className="text-xs font-normal text-bat-text-muted">nas últimas 24h</span>
               </p>
-              <p className="text-bat-text-secondary text-xs mt-1">
+              <p className="text-bat-text-secondary text-xs mt-1.5 font-medium">
                 {metricas?.feedbacks_novos
-                  ? `${metricas.feedbacks_novos} feedback${metricas.feedbacks_novos !== 1 ? "s" : ""} não lido${metricas.feedbacks_novos !== 1 ? "s" : ""}`
+                  ? `${metricas.feedbacks_novos} feedback(s) pendentes`
                   : "Nenhum feedback pendente"
                 }
               </p>
             </div>
-            <div className="card-glow bg-bat-bg-card border border-bat-border rounded-2xl p-5">
-              <p className="text-bat-text-muted text-xs mb-1">Chamados Abertos</p>
+
+            {/* Chamados Abertos */}
+            <div
+              onClick={() => trocarAba("tickets")}
+              className="card-glow bg-bat-bg-card border border-bat-border hover:border-bat-error/60 rounded-2xl p-5 cursor-pointer transition-all hover:scale-[1.01] shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-bat-text-muted text-xs font-bold uppercase tracking-wider">Chamados Abertos</p>
+                <span className="text-xl p-1.5 rounded-xl bg-bat-error/15 text-bat-error">🎫</span>
+              </div>
               <p className="heading text-3xl font-bold text-bat-error">
                 {metricas ? metricas.tickets_abertos : tickets.filter((t) => t.status === "aberto").length}
               </p>
-              <p className="text-bat-text-muted text-xs mt-1">Aguardando atendimento</p>
+              <p className="text-bat-text-muted text-xs mt-1.5 flex items-center gap-1 font-medium">
+                <span className="w-2 h-2 rounded-full bg-bat-error animate-ping" />
+                <span>Aguardando resposta do comando</span>
+              </p>
             </div>
           </div>
 
@@ -1411,46 +1455,131 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="heading text-lg text-bat-text">Status da Instalação</h2>
-              {resumoSaude && (
-                <span className={`rounded-lg px-3 py-1 text-xs font-bold ${
-                  resumoSaude.saudavel
-                    ? "bg-bat-success/10 text-bat-success"
-                    : "bg-bat-error/10 text-bat-error"
-                }`}>
-                  {resumoSaude.saudavel
-                    ? "✅ Instalação íntegra"
-                    : `🚨 ${resumoSaude.problemas_criticos} problema${resumoSaude.problemas_criticos !== 1 ? "s" : ""}`
-                  }
-                </span>
-              )}
+          {/* ═══ TELEMETRIA & SAÚDE OPERACIONAL AO VIVO ═══ */}
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-bat-border/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-bat-gold-400/10 border border-bat-gold-400/30 flex items-center justify-center text-xl text-bat-gold-400 shadow-inner">
+                  🩺
+                </div>
+                <div>
+                  <h2 className="heading text-lg text-bat-text flex items-center gap-2">
+                    Telemetria & Saúde Operacional da Plataforma
+                    {resumoSaude?.saudavel && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" title="Sistemas Operacionais" />
+                    )}
+                  </h2>
+                  <p className="text-xs text-bat-text-muted mt-0.5">
+                    Métricas de infraestrutura, latência do banco de dados e tráfego em tempo real.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {resumoSaude && (
+                  <span className={`rounded-xl px-3 py-1.5 text-xs font-mono font-bold flex items-center gap-1.5 border ${
+                    resumoSaude.saudavel
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-bat-error/15 text-bat-error border-bat-error/30"
+                  }`}>
+                    {resumoSaude.saudavel
+                      ? "✅ Infraestrutura Íntegra"
+                      : `🚨 ${resumoSaude.problemas_criticos} problema${resumoSaude.problemas_criticos !== 1 ? "s" : ""} crítico(s)`
+                    }
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => trocarAba("saude")}
+                  className="px-3 py-1.5 rounded-xl bg-bat-gold-400/10 hover:bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Cockpit Detalhado</span>
+                  <span>→</span>
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+
+            {/* Grid de Métricas Rápidas ao Vivo */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-bat-text-muted block">
+                  Latência do Banco
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-base sm:text-lg font-mono font-extrabold ${
+                    (resumoSaude?.latencia_db_ms ?? 0) <= 80
+                      ? "text-emerald-400"
+                      : (resumoSaude?.latencia_db_ms ?? 0) <= 250
+                      ? "text-bat-gold-400"
+                      : "text-bat-error"
+                  }`}>
+                    {resumoSaude?.latencia_db_ms !== undefined ? `${resumoSaude.latencia_db_ms}ms` : "—"}
+                  </span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded capitalize ${
+                    resumoSaude?.latencia_status === "excelente"
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : resumoSaude?.latencia_status === "estavel"
+                      ? "bg-bat-gold-400/15 text-bat-gold-400"
+                      : "bg-bat-error/15 text-bat-error"
+                  }`}>
+                    {resumoSaude?.latencia_status || "Online"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-bat-text-muted block">
+                  Sessões Ativas
+                </span>
+                <p className="text-base sm:text-lg font-mono font-extrabold text-bat-text">
+                  {resumoSaude?.sessoes_ativas !== undefined ? resumoSaude.sessoes_ativas : metricas?.online_agora ?? 0}
+                  <span className="text-xs font-normal text-bat-text-muted ml-1">em combate</span>
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-bat-text-muted block">
+                  Questões (24h)
+                </span>
+                <p className="text-base sm:text-lg font-mono font-extrabold text-bat-gold-400">
+                  {resumoSaude?.respostas_24h !== undefined ? resumoSaude.respostas_24h.toLocaleString("pt-BR") : "—"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-bat-bg-primary border border-bat-border space-y-1">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-bat-text-muted block">
+                  Heap de Memória
+                </span>
+                <p className="text-base sm:text-lg font-mono font-extrabold text-cyan-400">
+                  {resumoSaude?.memoria_heap_mb ? `${resumoSaude.memoria_heap_mb} MB` : "Ativo"}
+                </p>
+              </div>
+            </div>
+
+            {/* 3 checagens críticas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono pt-1">
               {resumoSaude ? (
                 resumoSaude.checagens.filter((c) => c.critico).slice(0, 3).map((c) => (
-                  <div key={c.nome} className={`p-4 rounded-xl border space-y-1 ${
+                  <div key={c.nome} className={`p-3.5 rounded-xl border space-y-1 ${
                     c.ok
-                      ? "bg-bat-bg-primary border-bat-border"
-                      : "bg-bat-error/5 border-bat-error/40"
+                      ? "bg-bat-bg-primary/60 border-bat-border"
+                      : "bg-bat-error/10 border-bat-error/40"
                   }`}>
-                    <span className="text-bat-text-muted">{c.nome}:</span>
-                    <p className={`font-bold ${c.ok ? "text-emerald-400" : "text-bat-error"}`}>
+                    <span className="text-bat-text-muted text-[11px]">{c.nome}:</span>
+                    <p className={`font-bold ${c.ok ? "text-emerald-400" : "text-bat-error"} truncate`}>
                       {c.ok ? "🟢" : "🔴"} {c.detalhe}
                     </p>
                   </div>
                 ))
               ) : (
-                // Skeleton enquanto carrega
                 [0, 1, 2].map((i) => (
-                  <div key={i} className="skeleton h-16 rounded-xl" />
+                  <div key={i} className="skeleton h-14 rounded-xl" />
                 ))
               )}
             </div>
+
             {resumoSaude?.verificado_em && (
-              <p className="text-center text-[10px] text-bat-text-muted mt-3">
-                Verificado em {new Date(resumoSaude.verificado_em).toLocaleString("pt-BR")}
+              <p className="text-center text-[10px] text-bat-text-muted">
+                Última checagem telemétrica: {new Date(resumoSaude.verificado_em).toLocaleString("pt-BR")}
               </p>
             )}
           </div>
@@ -2165,13 +2294,16 @@ export default function AdminPage() {
               {/* Lista de Chamados */}
               <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1 flex-1 custom-scrollbar">
                 {(() => {
+                  const termoBusca = buscaTickets.trim().toLowerCase();
+                  const termoLimpo = termoBusca.replace("#", "").replace("tkt-", "");
                   const listaFiltrada = tickets.filter((t: any) => {
                     const matchBusca =
-                      !buscaTickets ||
-                      t.titulo?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                      t.users?.nome?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                      t.users?.apelido?.toLowerCase().includes(buscaTickets.toLowerCase()) ||
-                      t.users?.email?.toLowerCase().includes(buscaTickets.toLowerCase());
+                      !termoBusca ||
+                      t.id?.toLowerCase().includes(termoLimpo) ||
+                      t.titulo?.toLowerCase().includes(termoBusca) ||
+                      t.users?.nome?.toLowerCase().includes(termoBusca) ||
+                      t.users?.apelido?.toLowerCase().includes(termoBusca) ||
+                      t.users?.email?.toLowerCase().includes(termoBusca);
 
                     const matchStatus =
                       filtroStatusTickets === "todos"
@@ -2213,9 +2345,14 @@ export default function AdminPage() {
                         )}
 
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[10px] uppercase font-bold text-bat-gold-400 tracking-wider flex items-center gap-1">
-                            {t.motivo === "bugs" ? "🐛 Bug" : t.motivo === "ideia" ? "💡 Sugestão" : "📋 Dúvida"}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-bat-bg-card text-bat-gold-400 border border-bat-gold-400/30 font-bold shrink-0">
+                              #TKT-{t.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-bat-gold-400 tracking-wider truncate flex items-center gap-1">
+                              {t.motivo === "bugs" ? "🐛 Bug" : t.motivo === "ideia" ? "💡 Sugestão" : "📋 Chamado"}
+                            </span>
+                          </div>
                           <span
                             className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                               ehAberto
@@ -2332,16 +2469,19 @@ export default function AdminPage() {
                     {/* Cabeçalho do Chamado e Controles de Status */}
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-bat-border/50">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-bat-bg-secondary text-bat-gold-400 border border-bat-border">
-                            {ticketDetalhe.motivo === "bugs" ? "🐛 Bug" : ticketDetalhe.motivo === "ideia" ? "💡 Sugestão" : "📋 Dúvida"}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs px-2 py-0.5 rounded-md font-bold bg-bat-gold-400/20 text-bat-gold-400 border border-bat-gold-400/40">
+                            #TKT-{ticketDetalhe.id.slice(0, 8).toUpperCase()}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-bat-bg-secondary text-bat-text-secondary border border-bat-border">
+                            {ticketDetalhe.motivo === "bugs" ? "🐛 Bug" : ticketDetalhe.motivo === "ideia" ? "💡 Sugestão" : "📋 Chamado / Suporte"}
                           </span>
                           <h3 className="font-bold text-bat-text text-sm sm:text-base">
                             {ticketDetalhe.titulo}
                           </h3>
                         </div>
                         <p className="text-[11px] text-bat-text-muted font-mono mt-1">
-                          Ticket #{ticketDetalhe.id.slice(0, 8)} · Aberto em {new Date(ticketDetalhe.criado_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          Aberto em {new Date(ticketDetalhe.criado_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
 

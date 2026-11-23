@@ -66,7 +66,7 @@ export async function POST(
     const { data: gabarito } = await supabase
       .from('questoes')
       .select(
-        `id, resposta_correta, explicacao, resolucao_passos, figura_descricao,
+        `id, resposta_correta, explicacao, resolucao_passos, figura_descricao, texto_base,
          materia_id, concurso_id, enunciado, dificuldade,
          materias (id, nome, icone_emoji)`
       )
@@ -123,6 +123,7 @@ export async function POST(
 
       detalhes.push({
         questao_id: q.id,
+        texto_base: q.texto_base ?? null,
         enunciado: q.enunciado,
         dificuldade: diff,
         materia_nome: mat?.nome ?? null,

@@ -180,6 +180,87 @@ export async function GET(req: NextRequest) {
       (a, b) => b.questoes.length - a.questoes.length
     );
 
+    // ─── Estatísticas e Raio-X Diagnóstico ─────────────────────
+    // Calcula distribuição por matéria considerando todas as questões erradas
+    const materiaCounts = new Map<
+      string,
+      { nome: string; emoji: string; total_questoes: number; total_erros: number }
+    >();
+
+    const assuntoCounts = new Map<
+      string,
+      {
+        assunto: string;
+        materia: string;
+        emoji: string;
+        total_questoes: number;
+        total_erros: number;
+        reincidentes: number;
+      }
+    >();
+
+    let faceis = 0,
+      medias = 0,
+      dificeis = 0,
+      reincidentes = 0;
+
+    for (const q of questoes) {
+      const matNome = q.materias?.nome ?? 'Sem matéria';
+      const matEmoji = q.materias?.icone_emoji ?? '📚';
+      const infoMat = materiaCounts.get(matNome) ?? {
+        nome: matNome,
+        emoji: matEmoji,
+        total_questoes: 0,
+        total_erros: 0,
+      };
+      const numErros = ultima.get(q.id)?.erros ?? 1;
+      infoMat.total_questoes += 1;
+      infoMat.total_erros += numErros;
+      materiaCounts.set(matNome, infoMat);
+
+      // Assuntos
+      const assNome = q.assuntos?.nome ?? 'Geral';
+      const infoAss = assuntoCounts.get(assNome) ?? {
+        assunto: assNome,
+        materia: matNome,
+        emoji: matEmoji,
+        total_questoes: 0,
+        total_erros: 0,
+        reincidentes: 0,
+      };
+      infoAss.total_questoes += 1;
+      infoAss.total_erros += numErros;
+      if (numErros >= 2) infoAss.reincidentes += 1;
+      assuntoCounts.set(assNome, infoAss);
+
+      // Dificuldade
+      const dif = (q.dificuldade || '').toLowerCase();
+      if (dif.includes('facil') || dif.includes('fácil')) faceis++;
+      else if (dif.includes('dificil') || dif.includes('difícil')) dificeis++;
+      else medias++;
+
+      if (numErros >= 2) reincidentes++;
+    }
+
+    const estatisticasMaterias = [...materiaCounts.values()]
+      .sort((a, b) => b.total_questoes - a.total_questoes)
+      .map((m) => ({
+        ...m,
+        percentual: questoes.length
+          ? Number(((m.total_questoes / questoes.length) * 100).toFixed(1))
+          : 0,
+      }));
+
+    const topAssuntosCriticos = [...assuntoCounts.values()]
+      .sort(
+        (a, b) =>
+          b.total_erros * 2 +
+          b.reincidentes * 3 +
+          b.total_questoes -
+          (a.total_erros * 2 + a.reincidentes * 3 + a.total_questoes)
+      )
+      .slice(0, 8);
+
     // Taxa de recuperação: das que errou algum dia, quantas já acertou depois
     const totalJaErradas = [...ultima.values()].filter((v) => v.erros > 0).length;
     const recuperadas = totalJaErradas - idsErradas.length;
@@ -194,6 +275,18 @@ export async function GET(req: NextRequest) {
         taxa_recuperacao: totalJaErradas
           ? Number(((recuperadas / totalJaErradas) * 100).toFixed(1))
           : 0,
+        estatisticas_materias: estatisticasMaterias,
+        top_assuntos_criticos: topAssuntosCriticos,
+        diagnostico: {
+          reincidentes,
+          faceis,
+          medias,
+          dificeis,
+          total_acumulado_erros: [...materiaCounts.values()].reduce(
+            (acc, m) => acc + m.total_erros,
+            0
+          ),
+        },
       },
     });
   } catch (error) {

@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         nome,
         descricao: body?.descricao ? String(body.descricao).slice(0, 200) : null,
+        capa_url: body?.capa_url ? String(body.capa_url).trim() : null,
       })
       .select()
       .single();

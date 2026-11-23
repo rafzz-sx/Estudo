@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { fetchWithAuth, useAuthStore } from "@/stores/auth-store";
 import { AdicionarAmigoModal } from "@/components/AdicionarAmigoModal";
@@ -266,7 +266,8 @@ export default function ChatPage() {
               if (
                 silencioso &&
                 atuais.length === json.data.length &&
-                atuais[atuais.length - 1]?.id === json.data[json.data.length - 1]?.id
+                atuais[atuais.length - 1]?.id === json.data[json.data.length - 1]?.id &&
+                atuais[atuais.length - 1]?.lida === json.data[json.data.length - 1]?.lida
               ) {
                 return atuais;
               }
@@ -313,6 +314,25 @@ export default function ChatPage() {
     }
   };
 
+  const ultimaAtividadeRef = useRef(Date.now());
+  const registrarAtividade = useCallback(() => {
+    ultimaAtividadeRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    const onInteracao = () => {
+      ultimaAtividadeRef.current = Date.now();
+    };
+    window.addEventListener("mousemove", onInteracao, { passive: true });
+    window.addEventListener("keydown", onInteracao, { passive: true });
+    window.addEventListener("touchstart", onInteracao, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onInteracao);
+      window.removeEventListener("keydown", onInteracao);
+      window.removeEventListener("touchstart", onInteracao);
+    };
+  }, []);
+
   useEffect(() => {
     setVisible(true);
     carregarConversas();
@@ -323,15 +343,42 @@ export default function ChatPage() {
 
     carregarMensagens(conversaAtivaId);
 
-    // Polling a cada 5 segundos (ótimo equilíbrio entre tempo real e rede móvel)
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") {
+    // Polling inteligente e adaptativo:
+    // - Pausa se a aba estiver oculta (economia massiva de bateria, rede móvel e requisições)
+    // - Polling rápido (4s) se houve interação recente (< 45s)
+    // - Polling moderado (10s) se o usuário estiver inativo
+    let timeoutId: NodeJS.Timeout;
+    let ativo = true;
+
+    const executarLoop = () => {
+      if (!ativo) return;
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        const ocioso = Date.now() - ultimaAtividadeRef.current > 45000;
+        const proximoIntervalo = ocioso ? 10000 : 4000;
         carregarMensagens(conversaAtivaId, true);
+        timeoutId = setTimeout(executarLoop, proximoIntervalo);
+      } else {
+        // Aba em segundo plano: checagem leve a cada 20 segundos
+        timeoutId = setTimeout(executarLoop, 20000);
       }
-    }, 5000);
+    };
+
+    timeoutId = setTimeout(executarLoop, 4000);
+
+    const onVisibilidade = () => {
+      if (document.visibilityState === "visible") {
+        ultimaAtividadeRef.current = Date.now();
+        carregarMensagens(conversaAtivaId, true);
+        carregarConversas(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilidade);
 
     return () => {
-      clearInterval(timer);
+      ativo = false;
+      clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibilidade);
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
   }, [conversaAtivaId]);
@@ -341,7 +388,7 @@ export default function ChatPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") carregarConversas(true);
-    }, 20000);
+    }, 25000);
     return () => clearInterval(timer);
   }, []);
 
@@ -928,10 +975,10 @@ export default function ChatPage() {
                         )}
                       </div>
                       {conv.tipo !== 'grupo' && conv.outro_usuario && recemVisto(conv.outro_usuario.ultimo_login_em) && (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-bat-bg-card"
-                          title="Por perto agora"
-                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5" title="Por perto agora">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-bat-bg-card" />
+                        </span>
                       )}
                     </div>
 
@@ -987,17 +1034,25 @@ export default function ChatPage() {
                   >
                     ←
                   </button>
-                  <div className="w-10 h-10 shrink-0 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
-                    {conversaAtiva.tipo === 'grupo' ? (
-                      <span className="text-lg">⚔️</span>
-                    ) : conversaAtiva.outro_usuario?.avatar_url ? (
-                      <img
-                        src={conversaAtiva.outro_usuario.avatar_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      (conversaAtiva.outro_usuario?.apelido || '?')[0]?.toUpperCase()
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-bat-bg-tertiary border border-bat-border flex items-center justify-center font-bold text-bat-gold-400 overflow-hidden">
+                      {conversaAtiva.tipo === 'grupo' ? (
+                        <span className="text-lg">⚔️</span>
+                      ) : conversaAtiva.outro_usuario?.avatar_url ? (
+                        <img
+                          src={conversaAtiva.outro_usuario.avatar_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (conversaAtiva.outro_usuario?.apelido || '?')[0]?.toUpperCase()
+                      )}
+                    </div>
+                    {conversaAtiva.tipo !== 'grupo' && conversaAtiva.outro_usuario && recemVisto(conversaAtiva.outro_usuario.ultimo_login_em) && (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3" title="Por perto agora">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-bat-bg-card" />
+                      </span>
                     )}
                   </div>
                   <div>
@@ -1093,10 +1148,10 @@ export default function ChatPage() {
                             )}
 
                             <div
-                              className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed max-w-full shadow-sm ${
+                              className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed max-w-full shadow-md transition-all ${
                                 souEu
-                                  ? "bg-bat-gold-400 text-black font-medium rounded-br-xs shadow-bat-gold-400/10"
-                                  : "bg-bat-bg-card border border-bat-border text-bat-text rounded-bl-xs"
+                                  ? "bg-gradient-to-br from-bat-gold-400 via-bat-gold-400 to-amber-400 text-black font-medium rounded-br-xs shadow-bat-gold-400/15"
+                                  : "bg-bat-bg-card/95 border border-bat-border/80 text-bat-text rounded-bl-xs shadow-black/20"
                               }`}
                             >
                               {!souEu && conversaAtiva.tipo === 'grupo' && (
@@ -1143,7 +1198,7 @@ export default function ChatPage() {
                               {/* Rodapé Interno do Balão (Horário + Confirmação de Envio estilo WhatsApp) */}
                               <div
                                 className={`flex items-center justify-end gap-1 mt-1 text-[10px] font-mono select-none ${
-                                  souEu ? "text-black/60" : "text-bat-text-muted"
+                                  souEu ? "text-black/70 font-semibold" : "text-bat-text-muted"
                                 }`}
                               >
                                 <span>
@@ -1160,8 +1215,8 @@ export default function ChatPage() {
                                       <span className="text-red-700 font-bold ml-0.5" title="Não enviada">⚠️</span>
                                     ) : (
                                       <span
-                                        className={`font-bold ml-0.5 ${msg.lida ? "text-blue-700" : "text-black/70"}`}
-                                        title={msg.lida ? "Lida" : "Entregue"}
+                                        className={`font-black ml-0.5 text-xs ${msg.lida ? "text-black drop-shadow-xs" : "text-black/50"}`}
+                                        title={msg.lida ? "Lida pelo destinatário" : "Entregue"}
                                       >
                                         {msg.lida ? "✓✓" : "✓"}
                                       </span>
@@ -1432,18 +1487,21 @@ export default function ChatPage() {
                   type="text"
                   placeholder={`Mensagem para ${conversaAtiva.tipo === 'grupo' ? conversaAtiva.nome_grupo : conversaAtiva.outro_usuario?.apelido || 'amigo'}...`}
                   value={textoMensagem}
-                  onChange={(e) => setTextoMensagem(e.target.value)}
-                  className="min-w-0 flex-1 bg-bat-bg-primary border border-bat-border rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs text-bat-text placeholder:text-bat-text-muted focus:border-bat-gold-400/60 focus:outline-none transition-all"
+                  onChange={(e) => {
+                    setTextoMensagem(e.target.value);
+                    registrarAtividade();
+                  }}
+                  className="min-w-0 flex-1 bg-bat-bg-primary border border-bat-border focus:border-bat-gold-400/80 rounded-xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-bat-text placeholder:text-bat-text-muted focus:outline-none transition-all shadow-inner"
                 />
 
                 <button
                   type="submit"
                   disabled={!textoMensagem.trim() && !imagemPreview && !audioUrlPreview}
-                  className="btn-primary shrink-0 w-10 h-10 sm:w-auto sm:px-6 py-2.5 sm:py-3 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-md"
+                  className="btn-primary shrink-0 min-w-[42px] h-10 sm:h-11 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all cursor-pointer"
                   title="Enviar Mensagem"
                 >
                   <span className="hidden sm:inline">Enviar</span>
-                  <span>⚡</span>
+                  <span className="text-sm">⚡</span>
                 </button>
               </form>
             </>

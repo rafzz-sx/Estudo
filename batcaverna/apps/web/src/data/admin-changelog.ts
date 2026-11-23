@@ -8,7 +8,7 @@
  * 2. Registramos as novidades técnicas no `ADMIN_CHANGELOG_HISTORY`.
  * 3. NUNCA vazamos informações administrativas no `changelog.ts` público dos alunos.
  */
-export const CURRENT_ADMIN_VERSION = '2.3.0';
+export const CURRENT_ADMIN_VERSION = '2.4.0';
 
 export interface AdminAlteracao {
   modulo: string;
@@ -24,6 +24,30 @@ export interface AdminReleaseItem {
 }
 
 export const ADMIN_CHANGELOG_HISTORY: AdminReleaseItem[] = [
+  {
+    versao: '2.4.0',
+    dataLancamento: '2026-11-23T20:35:00-03:00',
+    titulo: 'Cockpit de Telemetria ao Vivo, Central de Suporte & Gestão de Tickets Táticos',
+    resumo:
+      'Nova central de telemetria operacional com benchmark de latência do banco de dados em milissegundos, monitoramento contínuo de sessões ativas e questões em 24h, chat de atendimento administrativo com busca e protocolos unificados (#TKT), atalho para dossiê do estudante e fila de moderação com detecção de reincidência.',
+    alteracoes: [
+      {
+        modulo: 'Telemetria & Saúde Operacional',
+        descricao:
+          'Painel de telemetria em tempo real no dashboard e aba de Saúde com verificação contínua de latência de ping do banco, uso de heap de memória, sessões de estudo ativas e alternância de auto-refresh de 10 segundos.',
+      },
+      {
+        modulo: 'Suporte & Tickets',
+        descricao:
+          'Suporte integrado com identificação de protocolo (#TKT-XXXXXXXX), visualizador de status com filtros rápidos, busca aprimorada e atalho instantâneo para o dossiê do aluno.',
+      },
+      {
+        modulo: 'Moderação & Feedback',
+        descricao:
+          'Aprimoramento da fila de moderação com tags de severidade visual e ação direta para conversão de feedback em ticket oficial preservando o vínculo com o usuário.',
+      },
+    ],
+  },
   {
     versao: '2.3.0',
     dataLancamento: '2026-10-29T21:10:00-03:00',

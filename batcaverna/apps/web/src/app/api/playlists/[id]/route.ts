@@ -117,3 +117,75 @@ export async function DELETE(
     );
   }
 }
+
+/** PATCH /api/playlists/[id] — atualiza nome, descrição ou capa da playlist. */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const user = await getAuthUserFromRequest(req);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Não autorizado' },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createServerSupabaseClient();
+    if (!(await minhaPlaylist(supabase, id, user.id))) {
+      return NextResponse.json(
+        { success: false, error: 'Playlist não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const updates: Record<string, any> = {};
+
+    if (body?.nome !== undefined) {
+      const nome = String(body.nome).trim();
+      if (nome.length < 2 || nome.length > 80) {
+        return NextResponse.json(
+          { success: false, error: 'O nome da playlist deve ter entre 2 e 80 caracteres.' },
+          { status: 400 }
+        );
+      }
+      updates.nome = nome;
+    }
+
+    if (body?.descricao !== undefined) {
+      updates.descricao = body.descricao ? String(body.descricao).slice(0, 200).trim() : null;
+    }
+
+    if (body?.capa_url !== undefined) {
+      updates.capa_url = body.capa_url ? String(body.capa_url).trim() : null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Nenhum campo fornecido para atualização.' },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('playlists')
+      .update(updates)
+      .eq('id', id)
+      .select('id, nome, descricao, capa_url, criada_em')
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('PATCH /api/playlists/[id] error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Erro ao atualizar dados da playlist' },
+      { status: 500 }
+    );
+  }
+}

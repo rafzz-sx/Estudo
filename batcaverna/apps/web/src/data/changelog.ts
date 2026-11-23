@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.7.5';
+export const CURRENT_APP_VERSION = '3.8.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,74 @@ export const CURRENT_APP_VERSION = '3.7.5';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.8.0',
+    dataLancamento: '2026-11-23T20:35:00-03:00',
+    titulo: 'Novo Caderno de Erros, Central de Suporte Privada, Modo Playlist & Leitura Confortável',
+    resumo:
+      'Grande evolução na experiência de estudo: Caderno de Erros completamente transformado em um cockpit de diagnóstico dos seus pontos fracos, abertura imersiva de playlists com capas dedicadas, nova Central de Suporte 100% privada com protocolo exclusivo, conforto visual no texto base das questões e otimização no chat.',
+    destaque: true,
+    impacto: 'major',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'caderno-erros-cockpit',
+        tipo: 'novo',
+        titulo: 'Diagnóstico Inteligente no Caderno de Erros',
+        descricao:
+          'O Caderno de Erros agora funciona como uma central de superação: veja exatamente as matérias e assuntos onde você mais erra, gráficos de vulnerabilidade e atalhos para treinar e eliminar cada falha.',
+        tag: 'Caderno de Erros',
+      },
+      {
+        id: 'central-suporte-privada',
+        tipo: 'novo',
+        titulo: 'Central de Suporte e Tickets 100% Privada',
+        descricao:
+          'Canal de atendimento exclusivo entre você e o Comando. Cada chamado conta com número de protocolo individual (#TKT), acompanhamento de respostas em tempo real e opção de marcar como resolvido.',
+        tag: 'Suporte & Atendimento',
+      },
+      {
+        id: 'playlists-estilo-abertura',
+        tipo: 'novo',
+        titulo: 'Playlists com Capa e Visualização Imersiva',
+        descricao:
+          'Agora você pode abrir suas playlists para conferir todas as faixas com arte de capa individual, adicionar foto de capa personalizada à playlist e navegar de maneira fluida e organizada.',
+        tag: 'Música & Foco',
+      },
+      {
+        id: 'texto-base-leitura-agradavel',
+        tipo: 'melhoria',
+        titulo: 'Leitura Confortável do Texto Base',
+        descricao:
+          'Textos de apoio e interpretação com tipografia ampliada para evitar o cansaço visual em questões longas, com opção inteligente de recolher/expandir para não ocupar a tela.',
+        tag: 'Banco de Questões & Simulados',
+      },
+      {
+        id: 'chat-visual-e-desempenho',
+        tipo: 'melhoria',
+        titulo: 'Chat Mais Rápido e Visual Renovado',
+        descricao:
+          'Visual aprimorado nas conversas com amigos e esquadrões, balões mais nítidos e sistema inteligente de sincronização que consome menos dados e bateria.',
+        tag: 'Comunicação',
+      },
+      {
+        id: 'feedback-novo-formato',
+        tipo: 'melhoria',
+        titulo: 'Acompanhamento de Feedbacks e Sugestões',
+        descricao:
+          'Interface renovada para enviar e acompanhar suas ideias, relatos e depoimentos com status de leitura e visualização prévia em tempo real.',
+        tag: 'Plataforma',
+      },
+      {
+        id: 'dynamic-island-refinado',
+        tipo: 'melhoria',
+        titulo: 'Dynamic Island e Controles de Áudio',
+        descricao:
+          'Design mais refinado dos controles no player do topo, mantendo o visual tático e responsivo para celular e computador.',
+        tag: 'Interface & Design',
+      },
+    ],
+  },
   {
     versao: '3.7.5',
     dataLancamento: '2026-11-05T15:20:00-03:00',

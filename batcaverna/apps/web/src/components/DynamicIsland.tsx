@@ -7,6 +7,21 @@ import {
   formatarTempoMusica,
   extrairVideoIdYouTube,
 } from "@/stores/player-store";
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  Volume1,
+  VolumeX,
+  Music,
+  ChevronDown,
+  X,
+} from "lucide-react";
 
 /**
  * Dynamic Island do player.
@@ -251,6 +266,16 @@ export function DynamicIsland() {
 
   const [avisoPlayer, setAvisoPlayer] = useState<string | null>(null);
 
+  const volumeAnterior = useRef(0.5);
+  const toggleMudo = useCallback(() => {
+    if (volume > 0) {
+      volumeAnterior.current = volume;
+      definirVolume(0);
+    } else {
+      definirVolume(volumeAnterior.current || 0.5);
+    }
+  }, [volume, definirVolume]);
+
   // O `onMouseUp`/`onTouchEnd` ficava só no <input>. Quem arrastava e soltava
   // o dedo fora da barra — o normal num celular, a barra tem 4px de altura —
   // nunca disparava o evento: a posição congelava no valor arrastado e a
@@ -348,15 +373,16 @@ export function DynamicIsland() {
         <div className="fixed top-14 right-3 z-40 sm:top-15 sm:right-4 lg:top-4 lg:right-6">
           <button
             onClick={alternarMinimizado}
-            className="flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 shadow-2xl backdrop-blur-xl transition-transform hover:scale-105 active:scale-95"
+            className="group flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 shadow-2xl backdrop-blur-2xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
             style={{
-              background: `linear-gradient(135deg, ${corPrimaria}33, ${corSecundaria}f5)`,
-              borderColor: `${corPrimaria}55`,
+              background: `linear-gradient(135deg, ${corPrimaria}40, ${corSecundaria}f5)`,
+              borderColor: `${corPrimaria}66`,
+              boxShadow: `0 8px 24px ${corPrimaria}30, 0 2px 8px rgba(0,0,0,0.6)`,
             }}
             aria-label={`Reabrir o player — tocando ${musica.titulo}`}
             title={`${musica.titulo}${musica.artista ? ` — ${musica.artista}` : ""}`}
           >
-            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-black/30">
+            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/20 bg-black/40 shadow-xs">
               {musica.capa_url ? (
                 <img
                   src={musica.capa_url}
@@ -364,28 +390,32 @@ export function DynamicIsland() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="flex h-full w-full items-center justify-center text-sm">
-                  🎵
+                <span className="flex h-full w-full items-center justify-center text-xs text-bat-gold-400">
+                  <Music className="h-4 w-4" />
                 </span>
               )}
             </span>
-            <span className="text-xs font-bold text-white/90">
-              {tocando ? "▶" : "⏸"}
+            <span className="text-white/90 group-hover:scale-110 transition-transform">
+              {tocando ? (
+                <Pause className="h-3.5 w-3.5 fill-current" />
+              ) : (
+                <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+              )}
             </span>
           </button>
         </div>
       ) : (
         <div
           className={`fixed top-14 left-1/2 z-40 -translate-x-1/2 transition-all duration-500 ease-out sm:top-15 lg:top-4 ${
-            expandido ? "w-[min(94vw,26rem)]" : "w-[min(90vw,22rem)]"
+            expandido ? "w-[min(94vw,26.5rem)]" : "w-[min(90vw,22rem)]"
           }`}
         >
       <div
-        className="overflow-hidden rounded-[1.75rem] border shadow-2xl backdrop-blur-xl transition-all duration-500"
+        className="overflow-hidden rounded-[1.75rem] border shadow-2xl backdrop-blur-2xl transition-all duration-500"
         style={{
-          background: `linear-gradient(135deg, ${corPrimaria}26, ${corSecundaria}f2 55%, ${corSecundaria}fa)`,
-          borderColor: `${corPrimaria}44`,
-          boxShadow: `0 8px 32px ${corPrimaria}30, 0 2px 8px rgba(0,0,0,0.5)`,
+          background: `linear-gradient(145deg, ${corPrimaria}28, ${corSecundaria}f2 55%, ${corSecundaria}fa)`,
+          borderColor: `${corPrimaria}55`,
+          boxShadow: `0 12px 36px ${corPrimaria}33, 0 4px 16px rgba(0,0,0,0.65)`,
         }}
       >
         {avisoPlayer && (
@@ -394,58 +424,63 @@ export function DynamicIsland() {
           </div>
         )}
         {/* ═══ BARRA RECOLHIDA ═══ */}
-        <div className="flex items-center gap-3 px-3 py-2">
+        <div className="flex items-center gap-2.5 px-3 py-2 sm:gap-3">
           <button
             onClick={() => definirExpandido(!expandido)}
-            className="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-black/30"
+            className="group relative h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-black/40 shadow-sm transition-transform active:scale-95 sm:h-11 sm:w-11"
             aria-label={expandido ? "Recolher player" : "Expandir player"}
+            title="Expandir controles do player"
           >
             {musica.capa_url ? (
               <img
                 src={musica.capa_url}
-                alt=""
-                className="h-full w-full object-cover"
+                alt={musica.titulo}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
-              <span className="flex h-full w-full items-center justify-center text-lg">
-                🎵
+              <span className="flex h-full w-full items-center justify-center bg-white/5 text-bat-gold-400">
+                <Music className="h-5 w-5" />
               </span>
             )}
           </button>
 
           <button
             onClick={() => definirExpandido(!expandido)}
-            className="min-w-0 flex-1 cursor-pointer text-left"
+            className="min-w-0 flex-1 cursor-pointer text-left focus:outline-none"
           >
             <div className="flex items-center gap-1.5">
-              <p className="truncate text-xs font-bold text-white">
+              <p className="truncate text-xs font-bold text-white tracking-tight sm:text-[13px]">
                 {musica.titulo}
               </p>
               {ehYouTube && (
-                <span className="shrink-0 rounded bg-red-600/80 px-1 py-0.5 text-[9px] font-bold text-white uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-red-600 px-1.5 py-0.5 text-[8.5px] font-black text-white tracking-wider shadow-xs uppercase">
                   YT
                 </span>
               )}
             </div>
-            <p className="truncate text-[11px] text-white/60">
-              {musica.artista ?? "Desconhecido"}
+            <p className="truncate text-[11px] font-medium text-white/70">
+              {musica.artista ?? "BatCaverna"}
             </p>
           </button>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             <Botao onClick={anterior} rotulo="Faixa anterior">
-              ⏮
+              <SkipBack className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-current" />
             </Botao>
             <button
               onClick={alternarPlay}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-base transition-transform hover:scale-105 active:scale-95 sm:h-9 sm:w-9 sm:text-sm"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 sm:h-10 sm:w-10"
               style={{ background: corPrimaria, color: "#0B0B0F" }}
               aria-label={tocando ? "Pausar" : "Tocar"}
             >
-              {tocando ? "⏸" : "▶"}
+              {tocando ? (
+                <Pause className="h-4 w-4 fill-current" />
+              ) : (
+                <Play className="h-4 w-4 fill-current ml-0.5" />
+              )}
             </button>
             <Botao onClick={proxima} rotulo="Próxima faixa">
-              ⏭
+              <SkipForward className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-current" />
             </Botao>
           </div>
         </div>
@@ -464,7 +499,7 @@ export function DynamicIsland() {
         {expandido && (
           <div className="px-4 pb-4">
             {/* Barra de progresso arrastável */}
-            <div className="mb-1 mt-1">
+            <div className="mb-2 mt-0.5">
               <input
                 type="range"
                 min={0}
@@ -474,55 +509,82 @@ export function DynamicIsland() {
                 onChange={(e) => setArrastando(Number(e.target.value))}
                 onPointerUp={soltar}
                 onKeyUp={soltar}
-                className="w-full cursor-pointer appearance-none rounded-full bg-white/15 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md"
+                className="w-full cursor-pointer appearance-none rounded-full bg-white/20 transition-all hover:bg-white/30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:bg-white hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:scale-125"
                 style={{
                   height: 4,
                   accentColor: corPrimaria,
                 }}
                 aria-label="Posição da música"
               />
-              <div className="mt-1 flex justify-between text-[10px] text-white/50">
+              <div className="mt-1 flex justify-between font-mono text-[10px] text-white/60 tabular-nums">
                 <span>{formatarTempoMusica(arrastando ?? posicao)}</span>
                 <span>{formatarTempoMusica(duracao)}</span>
               </div>
             </div>
 
             {/* Controles secundários */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              {/* Aleatório */}
               <button
                 onClick={alternarAleatorio}
-                className={`cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors ${
-                  aleatorio ? "text-white" : "text-white/40"
+                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl transition-all ${
+                  aleatorio
+                    ? "bg-white/20 text-white shadow-xs border border-white/20"
+                    : "text-white/40 hover:text-white hover:bg-white/10"
                 }`}
-                style={aleatorio ? { background: `${corPrimaria}33` } : undefined}
+                style={aleatorio ? { background: `${corPrimaria}40`, color: "#ffffff" } : undefined}
                 aria-label="Modo aleatório"
-                title="Aleatório"
+                title={aleatorio ? "Modo aleatório ativo" : "Ativar modo aleatório"}
               >
-                🔀
+                <Shuffle className="h-3.5 w-3.5" />
               </button>
 
+              {/* Repetir */}
               <button
                 onClick={alternarRepetir}
-                className={`cursor-pointer rounded-lg px-2 py-1 text-xs transition-colors ${
-                  repetir !== "nao" ? "text-white" : "text-white/40"
+                className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl transition-all ${
+                  repetir !== "nao"
+                    ? "bg-white/20 text-white shadow-xs border border-white/20"
+                    : "text-white/40 hover:text-white hover:bg-white/10"
                 }`}
                 style={
-                  repetir !== "nao" ? { background: `${corPrimaria}33` } : undefined
+                  repetir !== "nao"
+                    ? { background: `${corPrimaria}40`, color: "#ffffff" }
+                    : undefined
                 }
                 aria-label="Modo de repetição"
                 title={
                   repetir === "uma"
-                    ? "Repetir a faixa atual"
+                    ? "Repetindo a faixa atual"
                     : repetir === "todas"
-                    ? "Repetir a fila"
-                    : "Sem repetição"
+                    ? "Repetindo toda a fila"
+                    : "Repetição desativada"
                 }
               >
-                {repetir === "uma" ? "🔂" : "🔁"}
+                {repetir === "uma" ? (
+                  <Repeat1 className="h-3.5 w-3.5" />
+                ) : (
+                  <Repeat className="h-3.5 w-3.5" />
+                )}
               </button>
 
-              <div className="flex flex-1 items-center gap-2 px-2">
-                <span className="text-xs text-white/40">🔈</span>
+              {/* Volume com Mute Interativo */}
+              <div className="flex flex-1 items-center gap-1.5 px-1 sm:px-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={toggleMudo}
+                  className="text-white/50 hover:text-white transition-colors cursor-pointer shrink-0"
+                  title={volume === 0 ? "Desmutar volume" : "Mutar volume"}
+                  aria-label={volume === 0 ? "Desmutar" : "Mutar"}
+                >
+                  {volume === 0 ? (
+                    <VolumeX className="h-3.5 w-3.5 text-red-400" />
+                  ) : volume < 0.5 ? (
+                    <Volume1 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
                 <input
                   type="range"
                   min={0}
@@ -530,46 +592,46 @@ export function DynamicIsland() {
                   step={0.05}
                   value={volume}
                   onChange={(e) => definirVolume(Number(e.target.value))}
-                  className="w-full cursor-pointer"
+                  className="w-full cursor-pointer appearance-none rounded-full bg-white/20 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
                   style={{ height: 3, accentColor: corPrimaria }}
                   aria-label="Volume"
                 />
               </div>
 
-              <span className="text-[10px] text-white/40">
+              {/* Contador de Faixas */}
+              <span className="hidden sm:inline-flex items-center rounded-full bg-white/10 border border-white/10 px-2 py-0.5 text-[10px] font-mono font-medium text-white/70">
                 {indice + 1}/{fila.length}
               </span>
 
+              {/* Link Sala de Música */}
               <Link
                 href="/musica"
                 onClick={() => definirExpandido(false)}
-                className="cursor-pointer rounded-lg px-2 py-1 text-xs text-white/40 no-underline transition-colors hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-white/50 transition-colors hover:text-white hover:bg-white/10"
                 aria-label="Abrir a sala de música"
                 title="Abrir a sala de música"
               >
-                🎵
+                <Music className="h-3.5 w-3.5" />
               </Link>
 
-              {/* Recolher fica ANTES de fechar, e com rótulo que diz a
-                  diferença: fechar apaga a fila, recolher não. Era essa a
-                  escolha que faltava — antes, quem queria a tela livre só
-                  tinha o ✕ e perdia tudo. */}
+              {/* Minimizar */}
               <button
                 onClick={alternarMinimizado}
-                className="cursor-pointer rounded-lg px-2 py-1 text-xs text-white/40 transition-colors hover:text-white"
-                aria-label="Recolher o player, sem perder a fila"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-white/50 transition-colors hover:text-white hover:bg-white/10"
+                aria-label="Recolher o player sem perder a fila"
                 title="Recolher (a música continua)"
               >
-                ⌄
+                <ChevronDown className="h-4 w-4" />
               </button>
 
+              {/* Fechar */}
               <button
                 onClick={fechar}
-                className="cursor-pointer rounded-lg px-2 py-1 text-xs text-white/40 transition-colors hover:text-white"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl text-white/50 transition-colors hover:text-red-400 hover:bg-red-500/15"
                 aria-label="Fechar o player e limpar a fila"
-                title="Fechar (perde a fila)"
+                title="Fechar (limpa a fila)"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -593,7 +655,7 @@ function Botao({
   return (
     <button
       onClick={onClick}
-      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white active:bg-white/20 sm:h-8 sm:w-8 sm:text-xs"
+      className="flex h-8 w-8 sm:h-9 sm:w-9 cursor-pointer items-center justify-center rounded-full text-white/75 transition-all hover:bg-white/12 hover:text-white active:scale-95"
       aria-label={rotulo}
     >
       {children}
