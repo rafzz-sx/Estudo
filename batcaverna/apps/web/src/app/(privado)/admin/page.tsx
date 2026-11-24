@@ -99,7 +99,10 @@ interface UsuarioAdmin {
 
 function formatarTempoRelativo(dataIso?: string | null): string {
   if (!dataIso) return "Nunca";
-  const ms = Date.now() - new Date(dataIso).getTime();
+  const date = new Date(dataIso);
+  const time = date.getTime();
+  if (Number.isNaN(time)) return "Nunca";
+  const ms = Date.now() - time;
   const mins = Math.floor(ms / 60000);
   if (mins < 1) return "Agora";
   if (mins < 60) return `Há ${mins}m`;
@@ -107,7 +110,7 @@ function formatarTempoRelativo(dataIso?: string | null): string {
   if (horas < 24) return `Há ${horas}h`;
   const dias = Math.floor(horas / 24);
   if (dias < 30) return `Há ${dias}d`;
-  return new Date(dataIso).toLocaleDateString("pt-BR");
+  return date.toLocaleDateString("pt-BR");
 }
 
 function formatarTempoEstudoMinutos(segundos?: number): string {
@@ -472,6 +475,37 @@ export default function AdminPage() {
     } finally {
       setModerando(null);
     }
+  };
+
+  // Exportação de soldados em formato CSV
+  const exportarUsuariosCSV = () => {
+    if (!usuarios || usuarios.length === 0) return;
+    const cabecalho = ["ID", "Nome", "Apelido", "Email", "Role", "Nivel", "XP", "Streak", "Concurso", "Precisao", "Questoes", "Situacao", "CriadoEm"];
+    const linhas = usuarios.map((u) => [
+      u.id,
+      `"${(u.nome || "").replace(/"/g, '""')}"`,
+      `"${(u.apelido || "").replace(/"/g, '""')}"`,
+      `"${(u.email || "").replace(/"/g, '""')}"`,
+      u.role || "user",
+      u.nivel_atual || 1,
+      u.xp_total || 0,
+      u.streak_dias || 0,
+      `"${(u.concurso_alvo || "").replace(/"/g, '""')}"`,
+      u.taxa_acerto !== null && u.taxa_acerto !== undefined ? `${u.taxa_acerto}%` : "—",
+      u.total_questoes_respondidas || 0,
+      u.situacao || "ativa",
+      u.criado_em || ""
+    ]);
+    const csvContent = "\uFEFF" + [cabecalho.join(";"), ...linhas.map((e) => e.join(";"))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `soldados_batcaverna_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Responder Ticket
@@ -1895,9 +1929,9 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 font-mono">
-                        <span className="font-bold text-bat-text">Nv. {u.nivel_atual}</span>
+                        <span className="font-bold text-bat-text">Nv. {u.nivel_atual || 1}</span>
                         <span className="block text-bat-text-muted text-[10px]">
-                          {u.xp_total.toLocaleString("pt-BR")} XP
+                          {(u.xp_total || 0).toLocaleString("pt-BR")} XP
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono">
@@ -1906,7 +1940,7 @@ export default function AdminPage() {
                             <span className="font-bold text-emerald-400">
                               {u.taxa_acerto !== null && u.taxa_acerto !== undefined ? `${u.taxa_acerto}%` : "—"}
                             </span>
-                            <span className="text-bat-gold-400 text-[11px]">🔥 {u.streak_dias}d</span>
+                            <span className="text-bat-gold-400 text-[11px]">🔥 {u.streak_dias || 0}d</span>
                           </div>
                           <span className="block text-[10px] text-bat-text-muted">
                             {u.total_questoes_respondidas || 0} questões
@@ -2051,12 +2085,12 @@ export default function AdminPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
                 <span className="text-[10px] text-bat-text-muted block">Patente / Nível</span>
-                <span className="text-base font-bold text-bat-text font-mono">Nv. {soldadoDossie.nivel_atual}</span>
-                <span className="text-[10px] text-bat-text-muted block">{soldadoDossie.xp_total.toLocaleString("pt-BR")} XP</span>
+                <span className="text-base font-bold text-bat-text font-mono">Nv. {soldadoDossie.nivel_atual || 1}</span>
+                <span className="text-[10px] text-bat-text-muted block">{(soldadoDossie.xp_total || 0).toLocaleString("pt-BR")} XP</span>
               </div>
               <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
                 <span className="text-[10px] text-bat-text-muted block">Ofensiva</span>
-                <span className="text-base font-bold text-bat-gold-400 font-mono">🔥 {soldadoDossie.streak_dias} dias</span>
+                <span className="text-base font-bold text-bat-gold-400 font-mono">🔥 {soldadoDossie.streak_dias || 0} dias</span>
                 <span className="text-[10px] text-bat-text-muted block">Sequência</span>
               </div>
               <div className="p-3 rounded-xl bg-bat-bg-primary border border-bat-border text-center">
@@ -2089,7 +2123,7 @@ export default function AdminPage() {
 
             {/* Datas de Acesso */}
             <div className="flex justify-between text-xs text-bat-text-muted font-mono pt-2 border-t border-bat-border/50">
-              <span>Cadastrado: {new Date(soldadoDossie.criado_em).toLocaleDateString("pt-BR")}</span>
+              <span>Cadastrado: {soldadoDossie.criado_em ? new Date(soldadoDossie.criado_em).toLocaleDateString("pt-BR") : "—"}</span>
               <span>Último login: {formatarTempoRelativo(soldadoDossie.ultimo_login_em)}</span>
             </div>
 

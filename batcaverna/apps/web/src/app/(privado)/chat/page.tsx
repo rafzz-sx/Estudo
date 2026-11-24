@@ -858,14 +858,8 @@ export default function ChatPage() {
             >
               ←
             </Link>
-            <h1 className="heading text-3xl text-bat-text">💬 Comunicação Tática</h1>
-            <span className="text-[10px] font-bold text-bat-gold-400 bg-bat-gold-400/10 border border-bat-gold-400/20 px-2 py-0.5 rounded-lg tracking-wider">
-              CHAT MULTIMÍDIA
-            </span>
+            <h1 className="heading text-2xl sm:text-3xl text-bat-text">Chat</h1>
           </div>
-          <p className="text-bat-text-secondary text-sm ml-12">
-            Texto, áudio e foto — só entre soldados que já são amigos confirmados.
-          </p>
         </div>
 
         <div className="flex gap-2 self-start sm:self-auto">

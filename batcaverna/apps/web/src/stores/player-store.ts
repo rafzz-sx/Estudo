@@ -90,6 +90,7 @@ interface PlayerState {
 let audio: HTMLAudioElement | null = null;
 let errosSeguidos = 0;
 let timerPosicao: ReturnType<typeof setInterval> | null = null;
+let ultimoTerminoTimestamp = 0;
 
 function iniciarTimerPosicao() {
   pararTimerPosicao();
@@ -234,7 +235,7 @@ export const usePlayerStore = create<PlayerState>()(
       duracao: 0,
       volume: 0.8,
       aleatorio: false,
-      repetir: 'nao',
+      repetir: 'todas',
       expandido: false,
       minimizado: false,
       corPrimaria: '#F5C518',
@@ -310,7 +311,7 @@ export const usePlayerStore = create<PlayerState>()(
         } else {
           proximo = indice + 1;
           if (proximo >= fila.length) {
-            if (repetir === 'nao') {
+            if (repetir === 'nao' && fila.length <= 1) {
               pararTimerPosicao();
               set({ tocando: false, posicao: 0 });
               controladorYT?.pausar();
@@ -427,6 +428,13 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       _aoTerminar: () => {
+        const agora = Date.now();
+        if (agora - ultimoTerminoTimestamp < 1200) {
+          // Ignora disparos duplicados em menos de 1.2s para evitar pular faixa dupla
+          return;
+        }
+        ultimoTerminoTimestamp = agora;
+
         const { repetir, volume, fila, indice } = get();
         if (repetir === 'uma') {
           const musica = fila[indice];
@@ -437,8 +445,7 @@ export const usePlayerStore = create<PlayerState>()(
               ? musica.fonte_id
               : extrairVideoIdYouTube(musica.fonte_id || musica.audio_url);
           if (ytId && controladorYT) {
-            controladorYT.buscar(0);
-            controladorYT.retomar();
+            controladorYT.tocar(ytId, volume, 0);
             iniciarTimerPosicao();
             return;
           }

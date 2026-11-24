@@ -148,13 +148,14 @@ export async function POST(req: NextRequest) {
     // ─── 5. Modo "Erros em Aberto" ───────────────────────────
     let idsErrados: string[] | null = null;
     if (tipo === 'erros') {
-      const erros = await errosEmAberto(supabase, user.id, concursoId);
-      if (erros.total < 5) {
+      // Busca todos os erros abertos do aluno na plataforma inteira (sem prender a um concurso específico)
+      const erros = await errosEmAberto(supabase, user.id, null);
+      if (erros.total < 1) {
         return NextResponse.json(
           {
             success: false,
             error:
-              'Você ainda não tem erros suficientes para montar este treino. Resolva mais questões primeiro.',
+              'Você não possui questões erradas em aberto no momento. Continue resolvendo questões no banco para alimentar seu caderno!',
           },
           { status: 400 }
         );
@@ -358,8 +359,18 @@ export async function POST(req: NextRequest) {
         distribuicao: distribuicaoMateriasUsada,
         distribuicao_dificuldade: distribuicaoDificuldadeUsada,
         blocos_info: blocosInfoUsados,
-        aplica_tri: aplicaTriUsado,
-        formato_info: {
+        aplica_tri: tipo === 'erros' ? false : aplicaTriUsado,
+        formato_info: tipo === 'erros' ? {
+          sigla: 'ERROS',
+          nome: 'Superação de Erros',
+          descricao: 'Treino direcionado exclusivamente para as questões que você já errou na plataforma',
+          detalhesEdital: 'Simulado focado nas suas vulnerabilidades reais, abrangendo todas as matérias.',
+          temRedacaoNaProvaReal: false,
+          redacaoDescartada: false,
+          adaptadoEstoque: false,
+          variacaoAtiva: null,
+          blocos: null,
+        } : {
           sigla: formatoOficial.sigla,
           nome: formatoOficial.nome,
           descricao: formatoOficial.descricao,

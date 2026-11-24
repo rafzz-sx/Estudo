@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
         userA:users!user_id_a (id, nome, apelido, avatar_url, nivel_atual, ultimo_login_em,
           user_concurso_favoritos (concursos (sigla))),
         userB:users!user_id_b (id, nome, apelido, avatar_url, nivel_atual, ultimo_login_em,
-          user_concurso_favoritos (concursos (sigla))),
-        mensagens:mensagem_chat (id, conteudo_texto, midia_url, tipo, enviado_em, lida, autor_id)
+          user_concurso_favoritos (concursos (sigla)))
       `)
       .or(`user_id_a.eq.${user.id},user_id_b.eq.${user.id}`)
       .order('ultima_mensagem_em', { ascending: false });
@@ -58,12 +57,32 @@ export async function GET(req: NextRequest) {
       const { data: gruposData } = await supabase
         .from('conversas')
         .select(`
-          id, criada_em, ultima_mensagem_em, tipo, nome_grupo, criador_id,
-          mensagens:mensagem_chat (id, conteudo_texto, midia_url, tipo, enviado_em, lida, autor_id)
+          id, criada_em, ultima_mensagem_em, tipo, nome_grupo, criador_id
         `)
         .in('id', grupoIdsFaltantes)
         .order('ultima_mensagem_em', { ascending: false });
       grupos = gruposData || [];
+    }
+
+    const todasIds = [...Array.from(diretaIds), ...grupoIdsFaltantes];
+    const msgsPorConversa: Record<string, any[]> = {};
+
+    if (todasIds.length > 0) {
+      // Busca apenas as mensagens recentes das conversas com limite adequado,
+      // evitando transferir o histórico inteiro de mensagens do banco
+      const { data: mensagensRecentes } = await supabase
+        .from('mensagem_chat')
+        .select('id, conversa_id, conteudo_texto, midia_url, tipo, enviado_em, lida, autor_id')
+        .in('conversa_id', todasIds)
+        .order('enviado_em', { ascending: false })
+        .limit(Math.min(todasIds.length * 20, 200));
+
+      for (const m of mensagensRecentes || []) {
+        if (!msgsPorConversa[m.conversa_id]) {
+          msgsPorConversa[m.conversa_id] = [];
+        }
+        msgsPorConversa[m.conversa_id].push(m);
+      }
     }
 
     // Formatar conversas diretas
@@ -72,9 +91,7 @@ export async function GET(req: NextRequest) {
         .filter((c: any) => c.tipo !== 'grupo')
         .map(async (c: any) => {
           const outro = c.user_id_a === user.id ? c.userB : c.userA;
-          const msgs = (c.mensagens || []).sort(
-            (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
-          );
+          const msgs = msgsPorConversa[c.id] || [];
           const ultimaMsg = msgs[0];
           const naoLidas = msgs.filter((m: any) => !m.lida && m.autor_id !== user.id).length;
 
@@ -114,12 +131,12 @@ export async function GET(req: NextRequest) {
     const gruposDaQueryDireta = await Promise.all(
       (diretas || [])
         .filter((c: any) => c.tipo === 'grupo')
-        .map((c: any) => formatarGrupo(c, user.id))
+        .map((c: any) => formatarGrupo(c, user.id, msgsPorConversa[c.id] || []))
     );
 
     // Formatar grupos da query separada
     const gruposFormatados = await Promise.all(
-      grupos.map((c: any) => formatarGrupo(c, user.id))
+      grupos.map((c: any) => formatarGrupo(c, user.id, msgsPorConversa[c.id] || []))
     );
 
     const todasConversas = [...formatadas, ...gruposDaQueryDireta, ...gruposFormatados]
@@ -135,8 +152,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function formatarGrupo(c: any, userId: string) {
-  const msgs = (c.mensagens || []).sort(
+async function formatarGrupo(c: any, userId: string, msgsDaConversa?: any[]) {
+  const msgs = msgsDaConversa || (c.mensagens || []).sort(
     (a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime()
   );
   const ultimaMsg = msgs[0];

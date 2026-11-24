@@ -57,11 +57,8 @@ export function YouTubeGlobalPlayer() {
       if (!iframeRef.current) return;
 
       const originParam = typeof window !== "undefined" ? encodeURIComponent(window.location.origin) : "";
-      const novoSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=0&rel=0&start=${Math.floor(
-        startSeconds
-      )}&origin=${originParam}`;
 
-      // Se já está no mesmo vídeo, reposiciona e executa playVideo
+      // Se já está no mesmo vídeo, apenas reposiciona e executa playVideo
       if (iframeRef.current.src && iframeRef.current.src.includes(videoId)) {
         postYT("seekTo", [Math.floor(startSeconds), true]);
         if (vol <= 0) {
@@ -74,6 +71,27 @@ export function YouTubeGlobalPlayer() {
         postYT("playVideo");
         return;
       }
+
+      // Se o iframe já está carregado com a API do YouTube, carrega o novo vídeo via postMessage
+      // sem recarregar a URL do iframe — isso evita bloqueio de autoplay pelo navegador!
+      if (iframeRef.current.src && iframeRef.current.src.includes("youtube.com")) {
+        if (vol <= 0) {
+          postYT("setVolume", [0]);
+          postYT("mute");
+        } else {
+          postYT("unMute");
+          postYT("setVolume", [Math.round(vol * 100)]);
+        }
+        postYT("loadVideoById", [videoId, Math.floor(startSeconds)]);
+        postYT("playVideo");
+        return;
+      }
+
+      // Primeiro carregamento do iframe
+      const muteParam = vol <= 0 ? "&mute=1" : "";
+      const novoSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=0&rel=0&start=${Math.floor(
+        startSeconds
+      )}${muteParam}&origin=${originParam}`;
 
       // Troca a URL do iframe
       iframeRef.current.src = novoSrc;

@@ -315,7 +315,7 @@ function Simulado() {
       const res = await fetchWithAuth("/api/simulados/start", {
         method: "POST",
         body: JSON.stringify({
-          concurso: config.concurso,
+          concurso: config.concurso || concursos[0]?.sigla || "ENEM",
           tipo: modo.tipo,
           variacao_id: config.variacao_id || undefined,
           dificuldade_modo: config.dificuldade_modo,
@@ -574,98 +574,117 @@ function Simulado() {
         )}
 
         <div className="space-y-6 rounded-2xl border border-bat-border bg-bat-bg-card p-6 shadow-sm">
-          {/* 1. SELEÇÃO DO CONCURSO */}
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-bat-text">
-              1. Escolha o Concurso Alvo
-            </label>
-            <select
-              value={config.concurso}
-              onChange={(e) => setConfig({ ...config, concurso: e.target.value })}
-              className="input-field text-base font-medium"
-            >
-              {concursos.length === 0 && (
-                <option value="">Nenhum concurso disponível</option>
-              )}
-              {concursos.map((c) => (
-                <option key={c.id} value={c.sigla}>
-                  {c.emoji ?? "🎯"} {c.sigla} — {c.nome} ({c.total_questoes.toLocaleString("pt-BR")} questões no banco)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* CARD DE DETALHES DO FORMATO REAL DO CONCURSO */}
-          <div className="rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/5 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-bat-gold-400/15 pb-2.5 mb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{concursoEscolhido?.emoji ?? "🏛️"}</span>
+          {/* SELEÇÃO DO CONCURSO OU MODO SUPERAÇÃO DE ERROS */}
+          {modoErros ? (
+            <div className="rounded-2xl border border-bat-gold-400/40 bg-bat-gold-400/10 p-5 shadow-sm space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🎯</span>
                 <div>
-                  <p className="text-sm font-bold text-bat-text">
-                    Formato Oficial: {formatoAtual.sigla}
-                  </p>
-                  <p className="text-[11px] text-bat-text-muted">
-                    {formatoAtual.nome}
+                  <h3 className="text-base font-bold text-bat-gold-400">
+                    Modo Universal: Superação de Erros
+                  </h3>
+                  <p className="text-xs text-bat-text-secondary mt-0.5 leading-relaxed">
+                    Este modo reúne automaticamente todas as questões que você já errou na plataforma (de qualquer matéria ou concurso). O foco aqui é puramente o seu diagnóstico individual e a eliminação dos seus pontos cegos.
                   </p>
                 </div>
-              </div>
-              <div className="text-right">
-                <span className="inline-block rounded-md bg-bat-gold-400/20 px-2 py-0.5 text-xs font-bold text-bat-gold-400">
-                  {formatoAtual.questoes} questões · {formatoAtual.duracaoHorasTexto}
-                </span>
               </div>
             </div>
-
-            <p className="text-xs text-bat-text-secondary leading-relaxed">
-              {formatoAtual.detalhesEdital}
-            </p>
-
-            {formatoAtual.temRedacaoNaProvaReal && (
-              <p className="mt-2 text-[11px] font-medium text-bat-gold-400/90 flex items-center gap-1.5">
-                <span>✍️</span>
-                <span>
-                  <strong>Redação oficial descartada no simulado:</strong> foco
-                  100% nas questões objetivas sob a velocidade e tempo real da prova.
-                </span>
-              </p>
-            )}
-
-            {/* Variações de Prova (ex: ENEM 1º dia / 2º dia / EEAR / ESA / CN) */}
-            {oficial && formatoAtual.variacoes && formatoAtual.variacoes.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-bat-gold-400/15">
-                <label className="mb-1.5 block text-xs font-semibold text-bat-text">
-                  Selecione o Dia ou Modelo da Prova:
+          ) : (
+            <>
+              {/* 1. SELEÇÃO DO CONCURSO */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-bat-text">
+                  1. Escolha o Concurso Alvo
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {formatoAtual.variacoes.map((v) => {
-                    const ativo = (config.variacao_id || formatoAtual.variacoes![0].id) === v.id;
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => setConfig({ ...config, variacao_id: v.id })}
-                        className={`cursor-pointer rounded-xl border p-3 text-left transition-all ${
-                          ativo
-                            ? "border-bat-gold-400 bg-bat-gold-400/15 text-bat-gold-400 font-bold ring-1 ring-bat-gold-400/40"
-                            : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-bold">{v.nome}</p>
-                          <span className="text-[10px] font-semibold text-bat-text-muted">
-                            {v.questoes} q
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-bat-text-muted mt-1 leading-tight">
-                          {v.descricao}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  value={config.concurso}
+                  onChange={(e) => setConfig({ ...config, concurso: e.target.value })}
+                  className="input-field text-base font-medium"
+                >
+                  {concursos.length === 0 && (
+                    <option value="">Nenhum concurso disponível</option>
+                  )}
+                  {concursos.map((c) => (
+                    <option key={c.id} value={c.sigla}>
+                      {c.emoji ?? "🎯"} {c.sigla} — {c.nome} ({c.total_questoes.toLocaleString("pt-BR")} questões no banco)
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-          </div>
+
+              {/* CARD DE DETALHES DO FORMATO REAL DO CONCURSO */}
+              <div className="rounded-xl border border-bat-gold-400/30 bg-bat-gold-400/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-bat-gold-400/15 pb-2.5 mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{concursoEscolhido?.emoji ?? "🏛️"}</span>
+                    <div>
+                      <p className="text-sm font-bold text-bat-text">
+                        Formato Oficial: {formatoAtual.sigla}
+                      </p>
+                      <p className="text-[11px] text-bat-text-muted">
+                        {formatoAtual.nome}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block rounded-md bg-bat-gold-400/20 px-2 py-0.5 text-xs font-bold text-bat-gold-400">
+                      {formatoAtual.questoes} questões · {formatoAtual.duracaoHorasTexto}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-bat-text-secondary leading-relaxed">
+                  {formatoAtual.detalhesEdital}
+                </p>
+
+                {formatoAtual.temRedacaoNaProvaReal && (
+                  <p className="mt-2 text-[11px] font-medium text-bat-gold-400/90 flex items-center gap-1.5">
+                    <span>✍️</span>
+                    <span>
+                      <strong>Redação oficial descartada no simulado:</strong> foco
+                      100% nas questões objetivas sob a velocidade e tempo real da prova.
+                    </span>
+                  </p>
+                )}
+
+                {/* Variações de Prova (ex: ENEM 1º dia / 2º dia / EEAR / ESA / CN) */}
+                {oficial && formatoAtual.variacoes && formatoAtual.variacoes.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-bat-gold-400/15">
+                    <label className="mb-1.5 block text-xs font-semibold text-bat-text">
+                      Selecione o Dia ou Modelo da Prova:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {formatoAtual.variacoes.map((v) => {
+                        const ativo = (config.variacao_id || formatoAtual.variacoes![0].id) === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setConfig({ ...config, variacao_id: v.id })}
+                            className={`cursor-pointer rounded-xl border p-3 text-left transition-all ${
+                              ativo
+                                ? "border-bat-gold-400 bg-bat-gold-400/15 text-bat-gold-400 font-bold ring-1 ring-bat-gold-400/40"
+                                : "border-bat-border bg-bat-bg-secondary text-bat-text-secondary hover:border-bat-gold-400/30"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-bold">{v.nome}</p>
+                              <span className="text-[10px] font-semibold text-bat-text-muted">
+                                {v.questoes} q
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-bat-text-muted mt-1 leading-tight">
+                              {v.descricao}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* 2. MODO DO SIMULADO */}
           <div>
@@ -1050,10 +1069,16 @@ function Simulado() {
 
           <button
             onClick={iniciar}
-            disabled={!config.concurso || ocupado || (porMateria && !config.materia_id)}
+            disabled={(!modoErros && !config.concurso) || ocupado || (porMateria && !config.materia_id)}
             className="btn-primary w-full py-4 text-base font-bold disabled:opacity-40 cursor-pointer shadow-md"
           >
-            {ocupado ? "Montando prova oficial..." : "Iniciar simulado agora →"}
+            {ocupado
+              ? modoErros
+                ? "Buscando seus erros..."
+                : "Montando prova oficial..."
+              : modoErros
+              ? "Iniciar superação de erros →"
+              : "Iniciar simulado agora →"}
           </button>
         </div>
       </div>
@@ -1090,9 +1115,13 @@ function Simulado() {
           <div className="mb-4 rounded-xl border border-bat-gold-400/25 bg-bat-gold-400/5 px-4 py-3.5">
             <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <p className="text-xs font-bold text-bat-gold-400 flex items-center gap-1.5">
-                <span>🏛️</span>
+                <span>{formatoInfo?.sigla === "ERROS" ? "🎯" : "🏛️"}</span>
                 <span>
-                  {formatoInfo?.sigla ? `Prova Calibrada Oficial — ${formatoInfo.sigla}` : "Prova Calibrada Oficial"} ({questoes.length} questões)
+                  {formatoInfo?.sigla === "ERROS"
+                    ? "Superação de Erros (Todas as matérias)"
+                    : formatoInfo?.sigla
+                    ? `Prova Calibrada Oficial — ${formatoInfo.sigla}`
+                    : "Prova Calibrada Oficial"} ({questoes.length} questões)
                 </span>
               </p>
               <span className="text-[11px] text-bat-gold-400/90 font-medium ml-auto">
