@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Administradores veem todos os tickets com dados do autor.
     // Alunos veem estritamente seus próprios tickets sem expor dados ou tickets de terceiros.
-    let query = supabase.from('tickets');
+    let query: any = supabase.from('tickets');
 
     if (ehAdmin) {
       query = query

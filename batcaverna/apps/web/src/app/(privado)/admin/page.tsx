@@ -508,6 +508,46 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Salvar ajuste manual tático de Soldado (Streak, XP, Avatar)
+  const salvarAjusteTatico = async () => {
+    if (!soldadoDossie) return;
+    setSalvandoAjusteUsuario(true);
+    try {
+      const res = await fetchWithAuth("/api/admin/usuarios", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: soldadoDossie.id,
+          acao: "ajuste_tatico",
+          streak_dias: streakAjuste,
+          xp_total: xpAjuste,
+          resetar_avatar: resetarAvatarAjuste,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setSoldadoDossie((ant) =>
+          ant
+            ? {
+                ...ant,
+                streak_dias: streakAjuste,
+                xp_total: xpAjuste,
+                avatar_url: resetarAvatarAjuste ? null : ant.avatar_url,
+              }
+            : null
+        );
+        setMostrarAjusteManual(false);
+        await carregarDadosIniciais();
+      } else {
+        alert(json.error || "Falha ao salvar ajuste manual.");
+      }
+    } catch {
+      alert("Erro de conexão ao salvar ajuste.");
+    } finally {
+      setSalvandoAjusteUsuario(false);
+    }
+  };
+
   // Responder Ticket
   const handleResponderTicket = async (ticketId: string) => {
     if (!textoResposta.trim() || enviandoResposta) return;

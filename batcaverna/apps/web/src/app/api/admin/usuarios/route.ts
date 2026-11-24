@@ -138,6 +138,8 @@ const ACOES = new Set([
   'suspender',
   'liberar',
   'desativar',
+  'ajuste_tatico',
+  'ajuste_dados',
 ]);
 
 export async function PATCH(req: NextRequest) {

@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let { data, error } = await query.order('titulo').limit(150);
+    let { data, error }: { data: any; error: any } = await query.order('titulo').limit(150);
 
     // Fallback: se a coluna user_id ainda não foi criada no banco
     if (error && error.code === '42703') {
