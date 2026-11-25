@@ -350,6 +350,7 @@ export function PainelContestacoes() {
                           </p>
 
                           {c.status === "aberta" && (
+                            <>
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               <button
                                 disabled={salvando === c.id}
@@ -389,6 +390,39 @@ export function PainelContestacoes() {
                                 Procede e anular
                               </button>
                             </div>
+
+                            {/* Retificação Direta de Gabarito (1-clique) */}
+                            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-bat-border/60 bg-bat-bg-primary/50 px-3 py-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-bat-text-muted">
+                                Corrigir Gabarito para:
+                              </span>
+                              {["A", "B", "C", "D", "E"].map((letra) => {
+                                const ehAtual = letra === g.questao.resposta_correta;
+                                return (
+                                  <button
+                                    key={letra}
+                                    type="button"
+                                    disabled={salvando === c.id || ehAtual}
+                                    onClick={() =>
+                                      julgar(g, c, "procede", { gabarito: letra })
+                                    }
+                                    className={`cursor-pointer rounded px-2 py-0.5 text-[11px] font-bold transition-all ${
+                                      ehAtual
+                                        ? "cursor-not-allowed border border-bat-success/40 bg-bat-success/20 text-bat-success opacity-70"
+                                        : "border border-bat-border bg-bat-bg-elevated text-bat-text hover:border-bat-gold-400 hover:bg-bat-gold-400 hover:text-black"
+                                    }`}
+                                    title={
+                                      ehAtual
+                                        ? "Gabarito cadastrado atualmente"
+                                        : `Retificar gabarito desta questão para ${letra}`
+                                    }
+                                  >
+                                    {letra}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            </>
                           )}
 
                           {c.resposta_admin && (

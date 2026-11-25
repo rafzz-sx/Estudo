@@ -21,24 +21,42 @@ export async function GET(req: NextRequest) {
       .select(`
         id, criada_em, ultima_mensagem_em,
         userA:users!user_id_a (id, nome, apelido, email),
-        userB:users!user_id_b (id, nome, apelido, email),
-        mensagens:mensagem_chat (id, conteudo_texto, tipo, enviado_em, sinalizada_para_revisao, autor_id)
+        userB:users!user_id_b (id, nome, apelido, email)
       `)
       .order('ultima_mensagem_em', { ascending: false })
       .limit(50);
 
     if (error) throw error;
 
+    const conversaIds = (conversas || []).map((c: any) => c.id);
+    const contagemPorConversa = new Map<string, { total: number; sinalizadas: number }>();
+
+    if (conversaIds.length > 0) {
+      // Busca somente flags booleanas e ID da conversa (evita trafegar conteúdo criptografado)
+      const { data: msgsMeta, error: mErr } = await supabase
+        .from('mensagem_chat')
+        .select('conversa_id, sinalizada_para_revisao')
+        .in('conversa_id', conversaIds);
+
+      if (!mErr && msgsMeta) {
+        for (const m of msgsMeta) {
+          const acc = contagemPorConversa.get(m.conversa_id) ?? { total: 0, sinalizadas: 0 };
+          acc.total += 1;
+          if (m.sinalizada_para_revisao) acc.sinalizadas += 1;
+          contagemPorConversa.set(m.conversa_id, acc);
+        }
+      }
+    }
+
     const formatadas = (conversas || []).map((c: any) => {
-      const msgs = c.mensagens || [];
-      const sinalizadas = msgs.filter((m: any) => m.sinalizada_para_revisao).length;
+      const stats = contagemPorConversa.get(c.id) ?? { total: 0, sinalizadas: 0 };
 
       return {
         id: c.id,
         user_a: c.userA,
         user_b: c.userB,
-        total_mensagens: msgs.length,
-        mensagens_sinalizadas: sinalizadas,
+        total_mensagens: stats.total,
+        mensagens_sinalizadas: stats.sinalizadas,
         ultima_mensagem_em: c.ultima_mensagem_em || c.criada_em,
       };
     });

@@ -134,6 +134,14 @@ const MODOS = [
     destaque: true,
   },
   {
+    tipo: "sprint",
+    rotulo: "Sprint Tático",
+    icone: "⚡",
+    questoes: 5,
+    minutos: 10,
+    desc: "5 questões rápidas em 10 minutos para treinar em qualquer lugar",
+  },
+  {
     tipo: "rapido",
     rotulo: "Rápido",
     icone: "⚡",
@@ -373,40 +381,125 @@ function Simulado() {
     }
   }, [config, ocupado, formatoAtual, userId]);
 
-  // ─── Retomar Prova Interrompida ────────────────────────────
+  // ─── Retomar Prova Interrompida (Local + Fallback Nuvem) ───
   const restaurou = useRef(false);
   useEffect(() => {
     if (restaurou.current) return;
     if (!userId) return;
+
+    const aplicarRestauracao = (
+      id: string,
+      qs: any[],
+      resps: Record<string, string>,
+      ind: number,
+      iniciadoEm: string,
+      duracaoMinutos: number,
+      dist: any,
+      distDif: any,
+      blocos: any,
+      tri: boolean
+    ) => {
+      const decorrido = Math.floor((Date.now() - new Date(iniciadoEm).getTime()) / 1000);
+      const restante = duracaoMinutos * 60 - decorrido;
+
+      setSimuladoId(id);
+      setQuestoes(qs);
+      setDistribuicao(dist ?? null);
+      setDistribuicaoDificuldade(distDif ?? null);
+      setBlocosInfo(blocos ?? null);
+      setAplicaTRI(Boolean(tri));
+      setRespostas(resps);
+      setIndice(Math.min(Math.max(0, ind), Math.max(0, qs.length - 1)));
+      inicioProva.current = new Date(iniciadoEm).getTime();
+      setSegundosRestantes(Math.max(1, restante));
+      setFase("prova");
+      window.dispatchEvent(new Event("batcaverna_study_activity"));
+    };
+
     const salva = lerProvaSalva(userId);
-    if (!salva) return;
-    restaurou.current = true;
+    if (salva) {
+      restaurou.current = true;
+      aplicarRestauracao(
+        salva.simuladoId,
+        salva.questoes as any,
+        salva.respostas ?? {},
+        salva.indice ?? 0,
+        salva.iniciadoEm,
+        salva.duracaoMinutos,
+        salva.distribuicao,
+        salva.distribuicaoDificuldade,
+        salva.blocosInfo,
+        Boolean(salva.aplicaTRI)
+      );
+      return;
+    }
 
-    const decorrido = Math.floor((Date.now() - new Date(salva.iniciadoEm).getTime()) / 1000);
-    const restante = salva.duracaoMinutos * 60 - decorrido;
+    // Se o usuário pediu um Sprint rápido direto (?auto=1), não bloqueia pela nuvem
+    if (params.get("auto") === "1") return;
 
-    setSimuladoId(salva.simuladoId);
-    setQuestoes(salva.questoes as any);
-    setDistribuicao(salva.distribuicao ?? null);
-    setDistribuicaoDificuldade(salva.distribuicaoDificuldade ?? null);
-    setBlocosInfo(salva.blocosInfo ?? null);
-    setAplicaTRI(Boolean(salva.aplicaTRI));
-    setRespostas(salva.respostas ?? {});
-    setIndice(
-      Math.min(Math.max(0, salva.indice ?? 0), Math.max(0, salva.questoes.length - 1))
-    );
-    inicioProva.current = new Date(salva.iniciadoEm).getTime();
-    setSegundosRestantes(Math.max(1, restante));
-    setFase("prova");
-    window.dispatchEvent(new Event("batcaverna_study_activity"));
-  }, [userId]);
+    let cancelado = false;
+    fetchWithAuth("/api/simulados/em-andamento")
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelado || !json?.success || !json?.data) return;
+        const d = json.data;
+        if (!Array.isArray(d.questoes) || d.questoes.length === 0) return;
 
-  // ─── Persistência local contínua ───────────────────────────
+        restaurou.current = true;
+        const resps: Record<string, string> = d.respostas ?? {};
+        const primeiroSemResposta = d.questoes.findIndex((q: any) => !resps[q.id]);
+        const indInicial = primeiroSemResposta >= 0 ? primeiroSemResposta : 0;
+
+        gravarProvaSalva({
+          userId,
+          simuladoId: d.simulado_id,
+          questoes: d.questoes,
+          respostas: resps,
+          indice: indInicial,
+          iniciadoEm: d.iniciado_em,
+          duracaoMinutos: d.duracao_minutos,
+          aplicaTRI: Boolean(d.aplica_tri),
+        });
+
+        aplicarRestauracao(
+          d.simulado_id,
+          d.questoes,
+          resps,
+          indInicial,
+          d.iniciado_em,
+          d.duracao_minutos,
+          null,
+          null,
+          null,
+          Boolean(d.aplica_tri)
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelado = true;
+    };
+  }, [userId, params]);
+
+  // ─── Persistência local contínua + Auto-Save em nuvem ──────
   useEffect(() => {
     if (fase !== "prova" || !simuladoId) return;
     const salva = lerProvaSalva(userId);
     if (!salva || salva.simuladoId !== simuladoId) return;
     gravarProvaSalva({ ...salva, respostas, indice });
+
+    const totalResp = Object.keys(respostas).length;
+    if (totalResp === 0) return;
+
+    const timer = setTimeout(() => {
+      fetchWithAuth(`/api/simulados/${simuladoId}/progresso`, {
+        method: "PATCH",
+        keepalive: true,
+        body: JSON.stringify({ respostas }),
+      }).catch(() => undefined);
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, [fase, simuladoId, respostas, indice, userId]);
 
   // ─── Auto-Start (?auto=1) ──────────────────────────────────
@@ -485,6 +578,73 @@ function Simulado() {
   }, [simuladoId, respostas, ocupado, updateUser]);
 
   finalizarRef.current = finalizar;
+
+  // ─── Refazer Erros Desta Prova Imediatamente ───────────────
+  const refazerErrosDestaProva = useCallback(async () => {
+    if (!resultado || ocupado) return;
+    const idsErradas = resultado.detalhes
+      .filter((d) => !d.correta)
+      .map((d) => d.questao_id);
+
+    if (!idsErradas.length) return;
+
+    setOcupado(true);
+    setErro(null);
+
+    try {
+      const res = await fetchWithAuth("/api/simulados/start", {
+        method: "POST",
+        body: JSON.stringify({
+          concurso: config.concurso || concursos[0]?.sigla || "ENEM",
+          tipo: "personalizado",
+          questao_ids: idsErradas,
+          total_questoes: idsErradas.length,
+          duracao_minutos: Math.max(5, Math.ceil(idsErradas.length * 2.5)),
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setErro(json.error ?? "Não foi possível carregar os erros desta prova.");
+        return;
+      }
+
+      apagarProvaSalva();
+      restaurou.current = false;
+      setSimuladoId(json.data.simulado_id);
+      setQuestoes(json.data.questoes);
+      setDistribuicao(json.data.distribuicao ?? null);
+      setDistribuicaoDificuldade(json.data.distribuicao_dificuldade ?? null);
+      setBlocosInfo(json.data.blocos_info ?? null);
+      setAplicaTRI(false);
+      setFormatoInfo(null);
+      setIneditasInfo(null);
+      setSegundosRestantes(json.data.duracao_minutos * 60);
+      setRespostas({});
+      setIndice(0);
+      setFase("prova");
+      setResultado(null);
+
+      const iniciadoEm: string = json.data.iniciado_em ?? new Date().toISOString();
+      inicioProva.current = new Date(iniciadoEm).getTime();
+      gravarProvaSalva({
+        userId: userId ?? "",
+        simuladoId: json.data.simulado_id,
+        questoes: json.data.questoes,
+        respostas: {},
+        indice: 0,
+        iniciadoEm,
+        duracaoMinutos: json.data.duracao_minutos,
+        distribuicao: null,
+        distribuicaoDificuldade: null,
+        blocosInfo: null,
+        aplicaTRI: false,
+      });
+    } catch {
+      setErro("Erro de conexão ao montar sessão de recuperação de erros.");
+    } finally {
+      setOcupado(false);
+    }
+  }, [resultado, ocupado, config.concurso, concursos, userId]);
 
   // ─── Cronômetro ────────────────────────────────────────────
   useEffect(() => {
@@ -1197,9 +1357,19 @@ function Simulado() {
         <div className="sticky top-16 z-20 mb-5 rounded-2xl border border-bat-border bg-bat-bg-card/95 p-4 backdrop-blur-md lg:top-0">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs text-bat-text-muted">
-                Questão {indice + 1} de {questoes.length}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-bat-text-muted">
+                  Questão {indice + 1} de {questoes.length}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent("batcaverna_set_zen"))}
+                  className="rounded-md border border-bat-border bg-bat-bg-secondary px-2 py-0.5 text-[10px] font-bold text-bat-text-secondary hover:border-bat-gold-400/50 hover:text-bat-gold-400 transition-colors cursor-pointer"
+                  title="Ocultar menus laterais durante a prova"
+                >
+                  🎯 Foco Zen
+                </button>
+              </div>
               <p className="text-sm font-semibold text-bat-text">
                 {respondidas} de {questoes.length} respondida{respondidas !== 1 ? "s" : ""}
               </p>
@@ -1503,6 +1673,16 @@ function Simulado() {
         )}
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {resultado.erros > 0 && (
+            <button
+              onClick={refazerErrosDestaProva}
+              disabled={ocupado}
+              className="btn-primary bg-rose-600 hover:bg-rose-500 text-white px-6 py-3 cursor-pointer font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(244,63,94,0.35)] transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              <span>🎯</span>
+              <span>Refazer os {resultado.erros} Erros Desta Prova Agora</span>
+            </button>
+          )}
           <button
             onClick={() => {
               apagarProvaSalva();

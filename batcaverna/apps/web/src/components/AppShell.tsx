@@ -106,7 +106,7 @@ function useRevisoesPendentes() {
   useEffect(() => {
     const buscar = async () => {
       try {
-        const res = await fetchWithAuth("/api/revisoes?limite=1");
+        const res = await fetchWithAuth("/api/revisoes?apenas_contagem=1");
         if (!res.ok) return;
         const json = await res.json();
         if (json.success) setPendentes(json.data.vencidas ?? 0);
@@ -153,9 +153,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>("");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [modoZen, setModoZen] = useState(false);
   const revisoesPendentes = useRevisoesPendentes();
   const novidadesPendentes = useNovidadesNaoVistas();
   const lastNavTimeRef = useRef(0);
+
+  // Modo Foco Zen: oculta menus laterais e barras durante estudo focado (/questoes ou /simulado)
+  useEffect(() => {
+    const aoAlterarZen = (e: Event) => {
+      const det = (e as CustomEvent<{ ativo?: boolean }>).detail;
+      setModoZen((prev) => (typeof det?.ativo === "boolean" ? det.ativo : !prev));
+    };
+    window.addEventListener("batcaverna_set_zen", aoAlterarZen);
+    return () => window.removeEventListener("batcaverna_set_zen", aoAlterarZen);
+  }, []);
+
+  // Sai automaticamente do Modo Zen caso navegue para outra seção da plataforma
+  useEffect(() => {
+    if (pathname !== "/questoes" && pathname !== "/simulado") {
+      setModoZen(false);
+    }
+  }, [pathname]);
 
   const handleNavClick = (
     e: React.MouseEvent,
@@ -307,6 +325,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <XpToast />
 
       {/* ═══ SIDEBAR (Desktop) ═══ */}
+      {!modoZen && (
       <aside className="hidden lg:flex flex-col w-64 bg-bat-bg-card border-r border-bat-border fixed inset-y-0 z-20">
         {/* Logo e Notificações */}
         <div className="px-5 py-5 border-b border-bat-border flex items-center justify-between">
@@ -412,8 +431,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </aside>
+      )}
 
       {/* ═══ TOPBAR MOBILE ═══ */}
+      {!modoZen && (
       <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-md border-b border-bat-border px-3 py-2.5">
         <div className="flex items-center justify-between gap-2 max-w-full">
           <div className="flex items-center gap-1.5 shrink-0">
@@ -447,6 +468,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      )}
 
       {/* ═══ SIDEBAR MOBILE (drawer / overlay) ═══ */}
       {sidebarOpen && (
@@ -520,6 +542,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ═══ BOTTOM NAVIGATION BAR MOBILE ROLÁVEL COM TODOS OS ATALHOS ═══ */}
+      {!modoZen && (
       <nav
         aria-label="Navegação rápida móvel"
         className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-bat-bg-card/95 backdrop-blur-lg border-t border-bat-border/80 px-1 py-1.5"
@@ -574,13 +597,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </div>
       </nav>
+      )}
+
+      {/* Botão flutuante para sair do Modo Foco Zen */}
+      {modoZen && (
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("batcaverna_set_zen", { detail: { ativo: false } }))}
+          className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 rounded-full border border-bat-gold-400/50 bg-bat-bg-card/95 px-3.5 py-2 text-xs font-bold text-bat-gold-400 shadow-lg backdrop-blur-md hover:bg-bat-gold-400 hover:text-black transition-all cursor-pointer"
+        >
+          <span>🎯</span>
+          <span>Sair do Foco Zen</span>
+        </button>
+      )}
 
       {/* ═══ CONTEÚDO PRINCIPAL ═══ */}
       {/* Respiro inferior 'pb-24 lg:pb-8' garante que em telas mobile a Bottom Bar
           nunca cubra os botões de ação ou o final do scroll */}
       <main
-        className={`flex-1 lg:ml-64 min-w-0 w-full max-w-full min-h-screen overflow-x-hidden pb-24 lg:pb-8 ${
-          tocandoAlgo ? "pt-32 lg:pt-20" : "pt-16 lg:pt-0"
+        className={`flex-1 min-w-0 w-full max-w-full min-h-screen overflow-x-hidden ${
+          modoZen
+            ? "pb-10 pt-2"
+            : `lg:ml-64 pb-24 lg:pb-8 ${tocandoAlgo ? "pt-32 lg:pt-20" : "pt-16 lg:pt-0"}`
         }`}
       >
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full min-w-0">

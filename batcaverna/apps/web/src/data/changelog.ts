@@ -4,7 +4,7 @@ import type { ReleaseItem } from '@batcaverna/types';
  * VERSÃO ATUAL DA PLATAFORMA BATCAVERNA
  * Esta é a ÚNICA constante de referência da versão do aplicativo web.
  */
-export const CURRENT_APP_VERSION = '3.8.0';
+export const CURRENT_APP_VERSION = '3.9.0';
 
 /**
  * HISTÓRICO CANÔNICO DE ATUALIZAÇÕES DA BATCAVERNA
@@ -17,6 +17,58 @@ export const CURRENT_APP_VERSION = '3.8.0';
  * - 'pequena': Muda o 3º número da direita (v3.5.X) -> 🛠️ Pequena Atualização (Ajustes, design, correções)
  */
 export const CHANGELOG_HISTORY: ReleaseItem[] = [
+  {
+    versao: '3.9.0',
+    dataLancamento: '2026-11-24T22:00:00-03:00',
+    titulo: 'Chute Consciente, Flashcards no Caderno, Modo Zen & Retomada na Nuvem',
+    resumo:
+      'Evolução tática no treino de questões e simulados: agora acertos no chute vão automaticamente para sua Revisão Espaçada e Caderno de Erros, o Caderno ganhou modo Flashcards e status SRS em tempo real, Simulados contam com Sprint Tático (5 questões/10 min) e retomada automática na nuvem, além do Modo Zen anti-distração e melhorias no Player e Ranking.',
+    destaque: true,
+    impacto: 'major',
+    classificacao: 'grande',
+    alteracoes: [
+      {
+        id: 'chute-consciente-srs',
+        tipo: 'novo',
+        titulo: 'Chute Consciente Integrado à Revisão Espaçada',
+        descricao:
+          'Marque "Chutei / Incerteza" ao responder no Banco de Questões: mesmo se acertar a letra, a questão entra no ciclo de revisão espaçada e aparece no seu Caderno de Erros para consolidar o conteúdo de verdade.',
+        tag: 'Banco de Questões & Revisões',
+      },
+      {
+        id: 'flashcards-status-caderno',
+        tipo: 'novo',
+        titulo: 'Modo Flashcards e Status SRS no Caderno de Erros',
+        descricao:
+          'Pratique seus erros no novo modal interativo de Flashcards (enunciado na frente e resposta no verso), acompanhe os selos da Revisão Espaçada em cada item e abra exatamente a questão desejada no Banco.',
+        tag: 'Caderno de Erros',
+      },
+      {
+        id: 'sprint-tatico-nuvem-simulado',
+        tipo: 'novo',
+        titulo: 'Sprint Tático, Retomada na Nuvem & Refazer Erros da Prova',
+        descricao:
+          'Novo treino rápido de 5 questões em 10 minutos no Dashboard e Simulados, botão para refazer na hora apenas os erros da prova recém-finalizada e recuperação automática em nuvem se fechar o app no meio do simulado.',
+        tag: 'Simulados',
+      },
+      {
+        id: 'modo-zen-meta-semanal',
+        tipo: 'novo',
+        titulo: 'Modo Zen Imersivo & Meta Semanal de Questões',
+        descricao:
+          'Ative o Modo Zen durante questões ou simulados para ocultar barras laterais e manter foco máximo, e configure sua meta semanal de questões com barra de acompanhamento em Progresso.',
+        tag: 'Foco & Progresso',
+      },
+      {
+        id: 'player-ranking-revisoes-fix',
+        tipo: 'correcao',
+        titulo: 'Ajustes no Player, Questão do Dia, Revisões & Velocidade',
+        descricao:
+          'Corrigido o fim de fila quando o modo repetir está desligado, liberação de capas no player, sincronização com YouTube, importação paralela de playlists do Spotify, link direto da Questão do Dia, contadores das revisões e cache inteligente no Ranking.',
+        tag: 'Estabilidade & Velocidade',
+      },
+    ],
+  },
   {
     versao: '3.8.0',
     dataLancamento: '2026-11-23T20:35:00-03:00',

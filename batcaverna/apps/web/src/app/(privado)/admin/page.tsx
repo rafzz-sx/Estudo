@@ -94,6 +94,9 @@ interface UsuarioAdmin {
   total_questoes_respondidas?: number;
   total_acertos?: number;
   taxa_acerto?: number | null;
+  tempo_estudo_total_segundos?: number;
+  media_segundos_questao?: number | null;
+  suspeito_grinder?: boolean;
   ultimo_login_em?: string | null;
 }
 
@@ -246,15 +249,14 @@ export default function AdminPage() {
   const [abaVisivel, setAbaVisivel] = useState(true);
   const abaAnteriorRef = useRef<AbaAdmin>("visao_geral");
 
-  // 1. Carregar dados iniciais
+  // 1. Carregar dados iniciais (painel em modo resumo + sem logs pesados do armazém no mount)
   const carregarDadosIniciais = async () => {
     try {
-      const [resUsers, resTickets, resInfo, resLogs, resPainel, resSaude] = await Promise.all([
+      const [resUsers, resTickets, resInfo, resPainel, resSaude] = await Promise.all([
         fetchWithAuth("/api/admin/usuarios"),
         fetchWithAuth("/api/tickets"),
         fetchWithAuth("/api/app-info"),
-        fetchWithAuth("/api/admin/armazem/logs"),
-        fetchWithAuth("/api/admin/painel"),
+        fetchWithAuth("/api/admin/painel?resumo=1"),
         fetchWithAuth("/api/admin/saude"),
       ]);
 
@@ -270,10 +272,6 @@ export default function AdminPage() {
         const json = await resInfo.json();
         if (json.data) setAppInfo(json.data);
       }
-      if (resLogs.ok) {
-        const json = await resLogs.json();
-        if (json.data) setLogsArmazem(json.data);
-      }
       if (resPainel.ok) {
         const json = await resPainel.json();
         if (json.data?.metricas) setMetricas(json.data.metricas);
@@ -285,6 +283,17 @@ export default function AdminPage() {
     } catch (e) {
       console.warn("Erro ao carregar dados do admin:", e);
     }
+  };
+
+  // Carregamento sob demanda de logs do Armazém apenas ao abrir a aba
+  const carregarLogsArmazem = async () => {
+    try {
+      const res = await fetchWithAuth("/api/admin/armazem/logs");
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setLogsArmazem(json.data);
+      }
+    } catch {}
   };
 
   // Carregar contadores para badges das abas
@@ -390,6 +399,7 @@ export default function AdminPage() {
     if (aba === "online") carregarOnline();
     if (aba === "auditoria") carregarAuditoria();
     if (aba === "moderacao") carregarModeracao();
+    if (aba === "armazem" && logsArmazem.length === 0) carregarLogsArmazem();
   }, [aba]);
 
   // Carregar mensagens de moderação
@@ -1985,6 +1995,11 @@ export default function AdminPage() {
                           <span className="block text-[10px] text-bat-text-muted">
                             {u.total_questoes_respondidas || 0} questões
                           </span>
+                          {u.suspeito_grinder && (
+                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300 border border-rose-500/40">
+                              🚨 Grinder ({u.media_segundos_questao}s/q)
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-bat-text-muted">
@@ -2145,6 +2160,54 @@ export default function AdminPage() {
                 </span>
                 <span className="text-[10px] text-bat-text-muted block">Taxa de acerto</span>
               </div>
+            </div>
+
+            {/* Ritmo de Estudo e Detecção de Grinder / Bot */}
+            <div
+              className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+                soldadoDossie.suspeito_grinder
+                  ? "bg-rose-500/10 border-rose-500/40 text-rose-300"
+                  : "bg-bat-bg-primary border-bat-border text-bat-text-secondary"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl shrink-0">
+                  {soldadoDossie.suspeito_grinder ? "🚨" : "⏱️"}
+                </span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider block">
+                    {soldadoDossie.suspeito_grinder
+                      ? "Alerta de Autoclicker / Grinder Detectado"
+                      : "Ritmo Médio de Resolução"}
+                  </span>
+                  <p className="text-xs">
+                    {soldadoDossie.suspeito_grinder ? (
+                      <span>
+                        Padrão suspeito: média real de{" "}
+                        <strong>{soldadoDossie.media_segundos_questao}s por questão</strong>{" "}
+                        em {soldadoDossie.total_questoes_respondidas} questões. Possível script ou spam de cliques.
+                      </span>
+                    ) : soldadoDossie.media_segundos_questao !== null && soldadoDossie.media_segundos_questao !== undefined ? (
+                      <span>
+                        Média real de <strong>{soldadoDossie.media_segundos_questao}s</strong>{" "}
+                        por questão ({formatarTempoEstudoMinutos(soldadoDossie.tempo_estudo_total_segundos || 0)} no cronômetro).
+                      </span>
+                    ) : (
+                      <span>
+                        {soldadoDossie.tempo_estudo_total_segundos
+                          ? `${formatarTempoEstudoMinutos(soldadoDossie.tempo_estudo_total_segundos)} acumulados no cronômetro.`
+                          : "Sem histórico suficiente de tempo por questão."}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {soldadoDossie.suspeito_grinder && (
+                <span className="shrink-0 px-2.5 py-1 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-extrabold uppercase">
+                  Sob Suspeita
+                </span>
+              )}
             </div>
 
             {/* Histórico de Apelidos */}

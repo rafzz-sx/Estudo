@@ -140,67 +140,77 @@ export async function POST(req: NextRequest) {
       throw erroPlaylist || new Error('Falha ao criar playlist');
     }
 
-    // 3. Cadastrar as faixas em `musicas` e associar em `playlist_itens`
-    let faixasAdicionadas = 0;
-    const faixasProcessadas = faixas.slice(0, 20); // Processa até 20 faixas por importação
+    // 3. Cadastrar as faixas em lotes paralelos (evita timeout em playlists maiores)
+    const faixasProcessadas = faixas.slice(0, 20);
+    const itensAssociar: { playlist_id: string; musica_id: string; ordem: number }[] = [];
+    const TAMANHO_LOTE = 5;
 
-    for (let i = 0; i < faixasProcessadas.length; i++) {
-      const f = faixasProcessadas[i];
-      try {
-        // Tenta encontrar correspondente no YouTube para tocar a faixa completa
-        const yt = await buscarPrimeiroVideoYouTube(f.titulo, f.artista);
+    for (let inicio = 0; inicio < faixasProcessadas.length; inicio += TAMANHO_LOTE) {
+      const lote = faixasProcessadas.slice(inicio, inicio + TAMANHO_LOTE);
+      const resultados = await Promise.allSettled(
+        lote.map(async (f, deslocamento) => {
+          const ordem = inicio + deslocamento;
+          const yt = await buscarPrimeiroVideoYouTube(f.titulo, f.artista);
 
-        let audioUrl = f.preview_url;
-        let fonte = 'spotify';
-        let fonteId = playlistId;
-        let capaUrl = f.capa_url;
-        let duracao = f.duracao_segundos || 180;
+          let audioUrl = f.preview_url;
+          let fonte = 'spotify';
+          let fonteId = playlistId;
+          let capaUrl = f.capa_url;
+          let duracao = f.duracao_segundos || 180;
 
-        if (yt && yt.videoId) {
-          audioUrl = `https://www.youtube.com/watch?v=${yt.videoId}`;
-          fonte = 'youtube';
-          fonteId = yt.videoId;
-          capaUrl = yt.capa_url || f.capa_url;
-          duracao = yt.duracao_segundos || duracao;
-        }
+          if (yt && yt.videoId) {
+            audioUrl = `https://www.youtube.com/watch?v=${yt.videoId}`;
+            fonte = 'youtube';
+            fonteId = yt.videoId;
+            capaUrl = yt.capa_url || f.capa_url;
+            duracao = yt.duracao_segundos || duracao;
+          }
 
-        if (!audioUrl) continue;
+          if (!audioUrl) return null;
 
-        // Tenta salvar com user_id para garantir privacidade
-        let payload: any = {
-          user_id: user.id,
-          titulo: f.titulo.slice(0, 200),
-          artista: f.artista.slice(0, 200),
-          capa_url: capaUrl || null,
-          audio_url: audioUrl,
-          duracao_segundos: duracao,
-          fonte,
-          fonte_id: fonteId,
-        };
+          const payload: any = {
+            user_id: user.id,
+            titulo: f.titulo.slice(0, 200),
+            artista: f.artista.slice(0, 200),
+            capa_url: capaUrl || null,
+            audio_url: audioUrl,
+            duracao_segundos: duracao,
+            fonte,
+            fonte_id: fonteId,
+          };
 
-        let musicaSalva: any = null;
-        const resInsert = await supabase.from('musicas').insert(payload).select().single();
-        if (resInsert.error && resInsert.error.code === '42703') {
-          // Caso user_id ainda não exista antes da migração
-          delete payload.user_id;
-          const retry = await supabase.from('musicas').insert(payload).select().single();
-          musicaSalva = retry.data;
-        } else {
-          musicaSalva = resInsert.data;
-        }
+          let musicaSalva: any = null;
+          const resInsert = await supabase.from('musicas').insert(payload).select('id').single();
+          if (resInsert.error && resInsert.error.code === '42703') {
+            delete payload.user_id;
+            const retry = await supabase.from('musicas').insert(payload).select('id').single();
+            musicaSalva = retry.data;
+          } else {
+            musicaSalva = resInsert.data;
+          }
 
-        if (musicaSalva?.id) {
-          await supabase.from('playlist_itens').insert({
+          return musicaSalva?.id ? { musica_id: musicaSalva.id as string, ordem } : null;
+        })
+      );
+
+      for (const res of resultados) {
+        if (res.status === 'fulfilled' && res.value) {
+          itensAssociar.push({
             playlist_id: novaPlaylist.id,
-            musica_id: musicaSalva.id,
-            ordem: i,
+            musica_id: res.value.musica_id,
+            ordem: res.value.ordem,
           });
-          faixasAdicionadas++;
+        } else if (res.status === 'rejected') {
+          console.warn('Erro ao inserir faixa do Spotify:', res.reason);
         }
-      } catch (itemErr) {
-        console.warn('Erro ao inserir faixa do Spotify:', itemErr);
       }
     }
+
+    if (itensAssociar.length > 0) {
+      itensAssociar.sort((a, b) => a.ordem - b.ordem);
+      await supabase.from('playlist_itens').insert(itensAssociar);
+    }
+    const faixasAdicionadas = itensAssociar.length;
 
     return NextResponse.json({
       success: true,

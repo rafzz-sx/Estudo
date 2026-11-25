@@ -29,6 +29,7 @@ import {
  */
 
 const PRESETS: Record<string, { questoes: number; minutos: number }> = {
+  sprint: { questoes: 5, minutos: 10 },
   rapido: { questoes: 10, minutos: 20 },
   materia: { questoes: 20, minutos: 40 },
   completo: { questoes: 45, minutos: 150 },
@@ -96,13 +97,45 @@ export async function POST(req: NextRequest) {
       variacaoId
     );
 
+    const rawIdsEspecificos: string[] | null =
+      Array.isArray(body?.questao_ids) && body.questao_ids.length > 0
+        ? Array.from(
+            new Set(
+              (body.questao_ids as unknown[])
+                .map((id) => uuidOuNulo(id))
+                .filter((id): id is string => Boolean(id))
+            )
+          ).slice(0, 180)
+        : null;
+
+    let idsEspecificos: string[] | null = null;
+    if (rawIdsEspecificos && rawIdsEspecificos.length > 0) {
+      const { data: qValidas } = await supabase
+        .from('questoes')
+        .select('id')
+        .in('id', rawIdsEspecificos)
+        .eq('ativa', true);
+
+      const setValidas = new Set((qValidas ?? []).map((q) => q.id));
+      const filtradas = rawIdsEspecificos.filter((id) => setValidas.has(id));
+      if (filtradas.length > 0) {
+        idsEspecificos = filtradas;
+      }
+    }
+
+    const tipoEfetivo = idsEspecificos ? 'erros' : tipo;
+
     const quantidadeDesejada =
-      tipo === 'oficial'
+      idsEspecificos
+        ? idsEspecificos.length
+        : tipo === 'oficial'
         ? formatoOficial.questoes
         : Math.min(180, Math.max(5, Number(body?.total_questoes) || preset.questoes));
 
     const duracaoMinutos =
-      tipo === 'oficial'
+      idsEspecificos
+        ? Math.max(5, Number(body?.duracao_minutos) || Math.ceil(idsEspecificos.length * 2.5))
+        : tipo === 'oficial'
         ? formatoOficial.minutos
         : Math.max(5, Number(body?.duracao_minutos) || preset.minutos);
 
@@ -171,13 +204,16 @@ export async function POST(req: NextRequest) {
       return r;
     };
 
-    const { count: totalDisponivel } = idsErrados
+    const { count: totalDisponivel } = idsEspecificos
+      ? { count: idsEspecificos.length }
+      : idsErrados
       ? { count: idsErrados.length }
       : await filtrarContagem(
           supabase.from('questoes').select('id', { count: 'exact', head: true })
         );
 
-    if (!totalDisponivel || totalDisponivel < 5) {
+    const minMinimo = (idsEspecificos || idsErrados || tipo === 'erros') ? 1 : 5;
+    if (!totalDisponivel || totalDisponivel < minMinimo) {
       return NextResponse.json(
         {
           success: false,
@@ -204,7 +240,10 @@ export async function POST(req: NextRequest) {
 
     const diaProvaNumero = formatoOficial.variacaoAtiva?.diaProvaNumero ?? null;
 
-    if (tipo === 'erros' && idsErrados) {
+    if (idsEspecificos) {
+      // 🎯 Modo recuperação direta de erros: usa exatamente as questões solicitadas
+      ids = [...idsEspecificos];
+    } else if (tipo === 'erros' && idsErrados) {
       // No modo erros, sorteamos do pool de erros do próprio aluno
       ids = [...idsErrados]
         .sort(() => Math.random() - 0.5)
@@ -310,7 +349,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         concurso_id: concursoId,
         materia_id: materiaId,
-        tipo,
+        tipo: tipoEfetivo,
         questoes_ids: ids,
         total_questoes: ids.length,
         duracao_minutos: duracaoMinutos,
@@ -359,8 +398,8 @@ export async function POST(req: NextRequest) {
         distribuicao: distribuicaoMateriasUsada,
         distribuicao_dificuldade: distribuicaoDificuldadeUsada,
         blocos_info: blocosInfoUsados,
-        aplica_tri: tipo === 'erros' ? false : aplicaTriUsado,
-        formato_info: tipo === 'erros' ? {
+        aplica_tri: tipoEfetivo === 'erros' ? false : aplicaTriUsado,
+        formato_info: tipoEfetivo === 'erros' ? {
           sigla: 'ERROS',
           nome: 'Superação de Erros',
           descricao: 'Treino direcionado exclusivamente para as questões que você já errou na plataforma',

@@ -29,6 +29,8 @@ const PROTECTED_ROUTES = [
   '/chat',
   '/musica',
   '/tickets',
+  '/novidades',
+  '/feedback',
   '/perfil',
   '/admin',
 ];

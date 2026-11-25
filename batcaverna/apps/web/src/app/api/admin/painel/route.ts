@@ -27,6 +27,53 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServerSupabaseClient();
     const agora = Date.now();
+    const apenasResumo = new URL(req.url).searchParams.get('resumo') === '1';
+    const ontem = new Date(agora - 86_400_000).toISOString();
+    const corteOnline = new Date(agora - 5 * 60_000).toISOString();
+
+    const [
+      { count: totalQuestoes },
+      { count: totalRespostas },
+      { count: ticketsAbertos },
+      { count: feedbacksNovos },
+      { count: novosUsuarios24h },
+      { count: totalUsuarios },
+    ] = await Promise.all([
+      supabase.from('questoes').select('id', { count: 'exact', head: true }).eq('ativa', true),
+      supabase.from('user_questao_respostas').select('id', { count: 'exact', head: true }),
+      supabase.from('tickets').select('id', { count: 'exact', head: true }).eq('status', 'aberto'),
+      supabase.from('feedback_plataforma').select('id', { count: 'exact', head: true }).eq('lido_por_admin', false),
+      supabase.from('users').select('id', { count: 'exact', head: true }).gte('criado_em', ontem),
+      supabase.from('users').select('id', { count: 'exact', head: true }),
+    ]);
+
+    if (apenasResumo) {
+      const { data: sessoesOnline } = await supabase
+        .from('study_sessions')
+        .select('user_id')
+        .is('finalizada_em', null)
+        .gte('ultima_atividade_em', corteOnline);
+
+      const onlineResumo = new Set((sessoesOnline ?? []).map((s) => s.user_id));
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          metricas: {
+            total_usuarios: totalUsuarios ?? 0,
+            usuarios_listados: totalUsuarios ?? 0,
+            online_agora: onlineResumo.size,
+            novos_24h: novosUsuarios24h ?? 0,
+            total_questoes: totalQuestoes ?? 0,
+            total_respostas: totalRespostas ?? 0,
+            tickets_abertos: ticketsAbertos ?? 0,
+            feedbacks_novos: feedbacksNovos ?? 0,
+            sessoes_ativas: onlineResumo.size,
+          },
+          usuarios: [],
+        },
+      });
+    }
 
     // ─── Usuários ────────────────────────────────────────────
     const { data: usuarios } = await supabase
@@ -108,41 +155,6 @@ export async function GET(req: NextRequest) {
         sessao_expirada: segundosRestantes !== null && segundosRestantes <= 0,
       };
     });
-
-    // ─── Métricas da plataforma ──────────────────────────────
-    const { count: totalQuestoes } = await supabase
-      .from('questoes')
-      .select('id', { count: 'exact', head: true })
-      .eq('ativa', true);
-
-    const { count: totalRespostas } = await supabase
-      .from('user_questao_respostas')
-      .select('id', { count: 'exact', head: true });
-
-    const { count: ticketsAbertos } = await supabase
-      .from('tickets')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'aberto');
-
-    const { count: feedbacksNovos } = await supabase
-      .from('feedback_plataforma')
-      .select('id', { count: 'exact', head: true })
-      .eq('lido_por_admin', false);
-
-    const ontem = new Date(agora - 86_400_000).toISOString();
-    const { count: novosUsuarios24h } = await supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true })
-      .gte('criado_em', ontem);
-
-    // O total precisa ser contado, não medido pelo tamanho da lista: a lista
-    // é limitada a 500 para não pesar a tela. Passando de 500 contas, o painel
-    // dizia "500 usuários" para sempre — enquanto "novos nas últimas 24 h",
-    // que já era `count: 'exact'`, continuava subindo. Contradição na mesma
-    // tela.
-    const { count: totalUsuarios } = await supabase
-      .from('users')
-      .select('id', { count: 'exact', head: true });
 
     return NextResponse.json({
       success: true,

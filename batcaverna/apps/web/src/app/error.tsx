@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function RootErrorBoundary({
   error,
@@ -32,6 +33,26 @@ export default function RootErrorBoundary({
       }, 100);
       return () => clearTimeout(timer);
     }
+
+    // Telemetria silenciosa gratuita para o Painel de Saúde do Admin
+    try {
+      const token =
+        typeof window !== "undefined" ? useAuthStore.getState().accessToken : null;
+      fetch("/api/telemetria/erro", {
+        method: "POST",
+        keepalive: true,
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          mensagem: error?.message || "Erro desconhecido",
+          digest: error?.digest,
+          rota: typeof window !== "undefined" ? window.location.pathname : "",
+        }),
+      }).catch(() => undefined);
+    } catch {}
 
     return () => {
       isMountedRef.current = false;

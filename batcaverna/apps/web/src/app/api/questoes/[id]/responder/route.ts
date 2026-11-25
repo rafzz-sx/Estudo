@@ -28,6 +28,7 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const respostaDada: string | undefined = body?.resposta_dada;
     const tempoGasto: number = Number(body?.tempo_gasto_segundos) || 0;
+    const chutou: boolean = body?.chutou === true;
 
     if (!respostaDada || !/^[A-Ea-e]$/.test(respostaDada.trim())) {
       return NextResponse.json(
@@ -87,6 +88,7 @@ export async function POST(
       {
         dadosUsuario: uRes.data,
         dadosRevisao: revRes.data,
+        chutou,
       }
     );
 

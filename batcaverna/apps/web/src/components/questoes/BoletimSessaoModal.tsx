@@ -27,6 +27,7 @@ export interface ItemHistoricoSessao {
   figura_svg: string | null;
   precisa_resolucao: boolean;
   alternativas: { letra: string; texto: string }[];
+  chutou?: boolean;
 }
 
 export interface BoletimSessaoModalProps {
@@ -300,6 +301,11 @@ export function BoletimSessaoModal({
                                 <span className="text-[10px] text-bat-text-muted">
                                   ⏱️ {formatarTempo(item.tempo_gasto)}
                                 </span>
+                                {item.chutou && (
+                                  <span className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold">
+                                    🎲 Chute Consciente
+                                  </span>
+                                )}
                               </div>
 
                               <p className="mt-1 line-clamp-2 text-xs text-bat-text-secondary leading-relaxed">

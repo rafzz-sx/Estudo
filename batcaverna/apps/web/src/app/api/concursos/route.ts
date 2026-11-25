@@ -30,13 +30,20 @@ export async function GET() {
       (concursos ?? []).map((c) => c.id)
     );
 
-    return NextResponse.json({
-      success: true,
-      data: (concursos ?? []).map((c) => ({
-        ...c,
-        total_questoes: contagem[c.id] ?? 0,
-      })),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: (concursos ?? []).map((c) => ({
+          ...c,
+          total_questoes: contagem[c.id] ?? 0,
+        })),
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        },
+      }
+    );
   } catch (error) {
     console.error('GET /api/concursos error:', error);
     return NextResponse.json(

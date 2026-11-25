@@ -67,9 +67,35 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const idsErradas = [...ultima.entries()]
-      .filter(([, v]) => !v.correta)
-      .map(([id]) => id);
+    // ─── Anotações, Chutes Conscientes e Revisão Espaçada ───
+    const [{ data: notas }, { data: revisoes }] = await Promise.all([
+      supabase
+        .from('user_questao_notas')
+        .select('questao_id, anotacao, resolvida')
+        .eq('user_id', user.id),
+      supabase
+        .from('revisoes_agendadas')
+        .select('questao_id, ativa, etapa, agendada_para, total_revisoes, aprendida_em')
+        .eq('user_id', user.id),
+    ]);
+
+    const notaPorId = new Map((notas ?? []).map((n) => [n.questao_id, n]));
+    const revisaoPorId = new Map((revisoes ?? []).map((r) => [r.questao_id, r]));
+
+    const setErradas = new Set(
+      [...ultima.entries()]
+        .filter(([, v]) => !v.correta)
+        .map(([id]) => id)
+    );
+
+    // Inclui também acertos por "Chute Consciente" marcados para revisão ativa
+    for (const n of notas ?? []) {
+      if (!n.resolvida && n.anotacao?.includes('[CHUTE CONSCIENTE]')) {
+        setErradas.add(n.questao_id);
+      }
+    }
+
+    const idsErradas = Array.from(setErradas);
 
     if (!idsErradas.length) {
       return NextResponse.json({
@@ -77,14 +103,6 @@ export async function GET(req: NextRequest) {
         data: { grupos: [], total: 0, resolvidas: 0, taxa_recuperacao: 0 },
       });
     }
-
-    // ─── Anotações e status ──────────────────────────────────
-    const { data: notas } = await supabase
-      .from('user_questao_notas')
-      .select('questao_id, anotacao, resolvida')
-      .eq('user_id', user.id);
-
-    const notaPorId = new Map((notas ?? []).map((n) => [n.questao_id, n]));
 
     const mostrarResolvidas = searchParams.get('resolvidas') === '1';
     const visiveis = idsErradas.filter((id) => {
@@ -164,13 +182,29 @@ export async function GET(req: NextRequest) {
         questoes: [] as any[],
       };
 
+      const nota = notaPorId.get(q.id);
+      const rev = revisaoPorId.get(q.id);
+      const chutouConsciente = Boolean(
+        nota?.anotacao?.includes('[CHUTE CONSCIENTE]')
+      );
+
       grupo.questoes.push({
         ...q,
         erros: ultima.get(q.id)?.erros ?? 1,
         errada_em: ultima.get(q.id)?.em ?? null,
         resposta_dada: ultima.get(q.id)?.resposta_dada ?? null,
-        anotacao: notaPorId.get(q.id)?.anotacao ?? null,
-        resolvida: notaPorId.get(q.id)?.resolvida ?? false,
+        anotacao: nota?.anotacao ?? null,
+        resolvida: nota?.resolvida ?? false,
+        chutou_consciente: chutouConsciente,
+        revisao: rev
+          ? {
+              ativa: rev.ativa,
+              etapa: rev.etapa,
+              agendada_para: rev.agendada_para,
+              total_revisoes: rev.total_revisoes ?? 0,
+              aprendida_em: rev.aprendida_em,
+            }
+          : null,
       });
 
       grupos.set(chave, grupo);

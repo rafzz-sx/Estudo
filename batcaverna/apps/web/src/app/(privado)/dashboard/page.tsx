@@ -530,6 +530,31 @@ export default function DashboardPage() {
               Praticar Questões →
             </div>
           </Link>
+
+          {/* Card permanente de Sprint Tático (5 questões / 10 min) */}
+          <Link
+            href={`/simulado?tipo=sprint${concurso?.sigla ? `&concurso=${encodeURIComponent(concurso.sigla)}` : ""}&auto=1`}
+            className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-emerald-500/30 bg-bat-bg-card p-5 no-underline transition-all hover:border-emerald-400/60 hover:bg-bat-bg-elevated cursor-pointer"
+          >
+            <div className="absolute inset-y-0 left-0 w-1 bg-emerald-400 group-hover:w-1.5 transition-all" />
+            <div className="flex items-start gap-3 pl-2">
+              <span className="text-2xl shrink-0">⚡</span>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                  5 Questões · 10 Minutos
+                </span>
+                <h3 className="heading mt-2 text-base font-bold text-bat-text group-hover:text-emerald-300 transition-colors">
+                  Sprint Tático
+                </h3>
+                <p className="mt-1 text-xs text-bat-text-secondary leading-relaxed">
+                  Treino expresso cronometrado{concurso?.sigla ? ` de ${concurso.sigla}` : ""} para manter sua ofensiva em qualquer intervalo do dia.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-end text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
+              Iniciar Sprint Agora →
+            </div>
+          </Link>
         </div>
       </section>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function PrivadoErrorBoundary({
   error,
@@ -14,26 +15,49 @@ export default function PrivadoErrorBoundary({
   const [tentando, setTentando] = useState(false);
   const [, startTransition] = useTransition();
   const isMountedRef = useRef(true);
+  const jaTentouAutoReset = useRef(false);
 
   useEffect(() => {
     isMountedRef.current = true;
     console.warn("[BatCaverna] Transição de rota interceptada pelo ErrorBoundary:", error?.message);
 
-    // Se o erro foi cancelamento de requisição (troca rápida de página / AbortError),
-    // tenta recuperação suave e instantânea.
+    // Se o erro foi estritamente cancelamento de transição/navegação (AbortError),
+    // tenta recuperação suave uma única vez.
     const isAbort =
       error?.name === "AbortError" ||
       error?.message?.toLowerCase().includes("abort") ||
-      error?.message?.toLowerCase().includes("cancelled") ||
-      error?.message?.toLowerCase().includes("fetch");
+      error?.message?.toLowerCase().includes("cancelled");
 
-    if (isAbort) {
+    if (isAbort && !jaTentouAutoReset.current) {
+      jaTentouAutoReset.current = true;
       const timer = setTimeout(() => {
         try {
           reset();
         } catch {}
       }, 100);
       return () => clearTimeout(timer);
+    }
+
+    if (!isAbort) {
+      // Telemetria silenciosa gratuita para o Painel de Saúde do Admin
+      try {
+        const token =
+          typeof window !== "undefined" ? useAuthStore.getState().accessToken : null;
+        fetch("/api/telemetria/erro", {
+          method: "POST",
+          keepalive: true,
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            mensagem: error?.message || "Erro desconhecido na área privada",
+            digest: error?.digest,
+            rota: typeof window !== "undefined" ? window.location.pathname : "",
+          }),
+        }).catch(() => undefined);
+      } catch {}
     }
 
     return () => {

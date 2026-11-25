@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
             `id, nome, apelido, email, email_verified, role, xp_total, nivel_atual,
              streak_dias, avatar_url, criado_em, ultimo_login_em,
              ativo, suspenso_ate, motivo_suspensao,
-             total_questoes_respondidas, total_acertos,
+             total_questoes_respondidas, total_acertos, tempo_estudo_total_segundos,
              user_concurso_favoritos (
                concursos (
                  sigla, nome
@@ -85,12 +85,56 @@ export async function GET(req: NextRequest) {
 
     const agora = Date.now();
 
+    // Detector de Grinder / Autoclicker baseado no tempo REAL registrado por questão
+    // (evita falsos positivos de usuários que apenas não ligam o cronômetro da sessão).
+    const idsAltoVolume = (users ?? [])
+      .filter((u) => (u.total_questoes_respondidas || 0) >= 25)
+      .map((u) => u.id);
+
+    const ritmoPorUsuario = new Map<string, { somaSeg: number; qtd: number; ultraRapidas: number }>();
+    if (idsAltoVolume.length > 0) {
+      for (let i = 0; i < idsAltoVolume.length; i += 100) {
+        const lote = idsAltoVolume.slice(i, i + 100);
+        const { data: amostras } = await supabase
+          .from('user_questao_respostas')
+          .select('user_id, tempo_gasto_segundos')
+          .in('user_id', lote)
+          .order('respondido_em', { ascending: false })
+          .limit(3000);
+
+        for (const a of amostras ?? []) {
+          const seg = Number(a.tempo_gasto_segundos);
+          if (!Number.isFinite(seg) || seg < 0) continue;
+          const acc = ritmoPorUsuario.get(a.user_id) ?? { somaSeg: 0, qtd: 0, ultraRapidas: 0 };
+          acc.somaSeg += seg;
+          acc.qtd += 1;
+          if (seg <= 3) acc.ultraRapidas += 1;
+          ritmoPorUsuario.set(a.user_id, acc);
+        }
+      }
+    }
+
     const lista = (users ?? []).map((u) => {
       const suspenso =
         !!u.suspenso_ate && new Date(u.suspenso_ate).getTime() > agora;
       const concursoFav = u.user_concurso_favoritos?.[0]?.concursos;
       const respondidas = u.total_questoes_respondidas || 0;
       const acertos = u.total_acertos || 0;
+      const tempoSegundos = Number(u.tempo_estudo_total_segundos) || 0;
+
+      const ritmo = ritmoPorUsuario.get(u.id);
+      const mediaSegundos =
+        ritmo && ritmo.qtd >= 10
+          ? Number((ritmo.somaSeg / ritmo.qtd).toFixed(1))
+          : null;
+      // Suspeito somente se houver >= 25 amostras reais de questão e média < 3.5s/questão com >= 60% ultra-rápidas
+      const suspeitoGrinder = Boolean(
+        ritmo &&
+          ritmo.qtd >= 25 &&
+          mediaSegundos !== null &&
+          mediaSegundos < 3.5 &&
+          ritmo.ultraRapidas / ritmo.qtd >= 0.6
+      );
       const taxa = respondidas > 0 ? Math.round((acertos / respondidas) * 100) : null;
 
       return {
@@ -100,6 +144,9 @@ export async function GET(req: NextRequest) {
         taxa_acerto: taxa,
         total_questoes_respondidas: respondidas,
         total_acertos: acertos,
+        tempo_estudo_total_segundos: tempoSegundos,
+        media_segundos_questao: mediaSegundos,
+        suspeito_grinder: suspeitoGrinder,
         apelidos_antigos: (historico[u.id] ?? []).map((h) => h.apelido),
         historico_detalhado: historico[u.id] ?? [],
         // Estado já resolvido, para a tela não repetir a regra.

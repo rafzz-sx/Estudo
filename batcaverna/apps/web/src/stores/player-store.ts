@@ -311,7 +311,7 @@ export const usePlayerStore = create<PlayerState>()(
         } else {
           proximo = indice + 1;
           if (proximo >= fila.length) {
-            if (repetir === 'nao' && fila.length <= 1) {
+            if (repetir === 'nao') {
               pararTimerPosicao();
               set({ tocando: false, posicao: 0 });
               controladorYT?.pausar();

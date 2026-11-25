@@ -56,10 +56,13 @@ export async function GET(req: NextRequest) {
       Math.max(1, parseInt(searchParams.get('per_page') || '10'))
     );
 
+    // ─── Filtro direto por ID (deep-link do Caderno / Questão do Dia) ───
+    const questaoId = uuidOuNulo(searchParams.get('id'));
+
     // ─── Resolve siglas/nomes para UUID ──────────────────────
     let concursoId = searchParams.get('concurso_id');
     const concursoSigla = searchParams.get('concurso');
-    if (!concursoId && concursoSigla && concursoSigla.toLowerCase() !== 'todos') {
+    if (!questaoId && !concursoId && concursoSigla && concursoSigla.toLowerCase() !== 'todos') {
       const { data } = await supabase
         .from('concursos')
         .select('id')
@@ -76,7 +79,7 @@ export async function GET(req: NextRequest) {
 
     let materiaId = searchParams.get('materia_id');
     const materiaNome = searchParams.get('materia');
-    if (!materiaId && materiaNome && materiaNome.toLowerCase() !== 'todas') {
+    if (!questaoId && !materiaId && materiaNome && materiaNome.toLowerCase() !== 'todas') {
       const { data } = await supabase
         .from('materias')
         .select('id')
@@ -108,59 +111,64 @@ export async function GET(req: NextRequest) {
         assuntos  (id, nome)
       `,
         { count: 'exact' }
-      );
+      )
+      .not('ativa', 'is', false);
 
-    // Exclui por padrão questões anuladas pela banca para os estudantes
-    if (searchParams.get('incluir_anuladas') !== '1') {
-      query = query.or('anulada.is.null,anulada.eq.false');
-    }
-
-    if (concursoId) query = query.eq('concurso_id', concursoId);
-    if (materiaId) query = query.eq('materia_id', materiaId);
-
-    let assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
-    const assuntoNome = searchParams.get('assunto');
-    if (!assuntoId && assuntoNome && assuntoNome.toLowerCase() !== 'todos') {
-      let qAssunto = supabase.from('assuntos').select('id').ilike('nome', assuntoNome);
-      if (materiaId) qAssunto = qAssunto.eq('materia_id', materiaId);
-      const { data: dataAssunto } = await qAssunto.maybeSingle();
-      if (dataAssunto) {
-        assuntoId = dataAssunto.id;
+    if (questaoId) {
+      query = query.eq('id', questaoId);
+    } else {
+      // Exclui por padrão questões anuladas pela banca para os estudantes
+      if (searchParams.get('incluir_anuladas') !== '1') {
+        query = query.or('anulada.is.null,anulada.eq.false');
       }
-    }
-    if (assuntoId) query = query.eq('assunto_id', assuntoId);
 
-    const ano = searchParams.get('ano');
-    if (ano && ano !== 'todos') query = query.eq('ano', parseInt(ano));
+      if (concursoId) query = query.eq('concurso_id', concursoId);
+      if (materiaId) query = query.eq('materia_id', materiaId);
 
-    const dificuldade = searchParams.get('dificuldade');
-    if (dificuldade && dificuldade !== 'todas') {
-      query = query.eq('dificuldade', dificuldade.toLowerCase());
-    }
+      let assuntoId = uuidOuNulo(searchParams.get('assunto_id'));
+      const assuntoNome = searchParams.get('assunto');
+      if (!assuntoId && assuntoNome && assuntoNome.toLowerCase() !== 'todos') {
+        let qAssunto = supabase.from('assuntos').select('id').ilike('nome', assuntoNome);
+        if (materiaId) qAssunto = qAssunto.eq('materia_id', materiaId);
+        const { data: dataAssunto } = await qAssunto.maybeSingle();
+        if (dataAssunto) {
+          assuntoId = dataAssunto.id;
+        }
+      }
+      if (assuntoId) query = query.eq('assunto_id', assuntoId);
 
-    const busca = limparTermoBusca(searchParams.get('busca'), 80);
-    if (busca.length >= 3) {
-      query = query.ilike('enunciado', `%${busca}%`);
-    }
+      const ano = searchParams.get('ano');
+      if (ano && ano !== 'todos') query = query.eq('ano', parseInt(ano));
 
-    if (searchParams.get('comentadas') === '1') {
-      query = query.not('explicacao', 'is', null);
-    }
+      const dificuldade = searchParams.get('dificuldade');
+      if (dificuldade && dificuldade !== 'todas') {
+        query = query.eq('dificuldade', dificuldade.toLowerCase());
+      }
 
-    // ─── Esconde o que o usuário já respondeu ────────────────
-    const user = await getAuthUserFromRequest(req);
-    if (user && searchParams.get('nao_respondidas') === '1') {
-      const LIMITE_EXCLUSAO = 200;
+      const busca = limparTermoBusca(searchParams.get('busca'), 80);
+      if (busca.length >= 3) {
+        query = query.ilike('enunciado', `%${busca}%`);
+      }
 
-      const { data: respondidas } = await supabase
-        .from('user_questao_respostas')
-        .select('questao_id')
-        .eq('user_id', user.id)
-        .order('respondido_em', { ascending: false })
-        .limit(LIMITE_EXCLUSAO);
+      if (searchParams.get('comentadas') === '1') {
+        query = query.not('explicacao', 'is', null);
+      }
 
-      const ids = [...new Set((respondidas ?? []).map((r: any) => r.questao_id))];
-      if (ids.length) query = query.not('id', 'in', `(${ids.join(',')})`);
+      // ─── Esconde o que o usuário já respondeu ────────────────
+      const user = await getAuthUserFromRequest(req);
+      if (user && searchParams.get('nao_respondidas') === '1') {
+        const LIMITE_EXCLUSAO = 200;
+
+        const { data: respondidas } = await supabase
+          .from('user_questao_respostas')
+          .select('questao_id')
+          .eq('user_id', user.id)
+          .order('respondido_em', { ascending: false })
+          .limit(LIMITE_EXCLUSAO);
+
+        const ids = [...new Set((respondidas ?? []).map((r: any) => r.questao_id))];
+        if (ids.length) query = query.not('id', 'in', `(${ids.join(',')})`);
+      }
     }
 
     // ─── Ordenação ───────────────────────────────────────────

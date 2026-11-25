@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest) {
 
     const { data: caso } = await supabase
       .from('questao_contestacoes')
-      .select('id, questao_id')
+      .select('id, questao_id, user_id')
       .eq('id', id)
       .maybeSingle();
 
@@ -247,6 +247,59 @@ export async function PATCH(req: NextRequest) {
         .update({ resposta_correta: novoGabarito })
         .eq('id', caso.questao_id);
       if (error) throw error;
+
+      // Recalcula o status de acerto nas respostas históricas desta questão
+      try {
+        await Promise.all([
+          supabase
+            .from('user_questao_respostas')
+            .update({ correta: true })
+            .eq('questao_id', caso.questao_id)
+            .ilike('resposta_dada', novoGabarito),
+          supabase
+            .from('user_questao_respostas')
+            .update({ correta: false })
+            .eq('questao_id', caso.questao_id)
+            .not('resposta_dada', 'ilike', novoGabarito),
+        ]);
+
+        const [{ count: totalResp }, { count: totalAcert }] = await Promise.all([
+          supabase
+            .from('user_questao_respostas')
+            .select('id', { count: 'exact', head: true })
+            .eq('questao_id', caso.questao_id),
+          supabase
+            .from('user_questao_respostas')
+            .select('id', { count: 'exact', head: true })
+            .eq('questao_id', caso.questao_id)
+            .eq('correta', true),
+        ]);
+
+        await supabase
+          .from('questoes')
+          .update({
+            vezes_respondida: totalResp ?? 0,
+            vezes_acertada: totalAcert ?? 0,
+          })
+          .eq('id', caso.questao_id);
+      } catch {
+        // Recálculo silencioso para não bloquear o julgamento
+      }
+
+      try {
+        await supabase.from('admin_audit_log').insert({
+          admin_id: admin.id,
+          acao: 'retificar_gabarito',
+          entidade_afetada: 'questoes',
+          entidade_id: caso.questao_id,
+          detalhes: {
+            novo_gabarito: novoGabarito,
+            contestacao_id: id,
+          },
+        });
+      } catch {
+        // Silencioso
+      }
     }
 
     if (body?.anular_questao === true) {
@@ -255,13 +308,52 @@ export async function PATCH(req: NextRequest) {
         .update({ anulada: true })
         .eq('id', caso.questao_id);
       if (error) throw error;
+
+      // Questão anulada passa a contar como acerto para quem respondeu
+      try {
+        await supabase
+          .from('user_questao_respostas')
+          .update({ correta: true })
+          .eq('questao_id', caso.questao_id);
+
+        const { count: totalResp } = await supabase
+          .from('user_questao_respostas')
+          .select('id', { count: 'exact', head: true })
+          .eq('questao_id', caso.questao_id);
+
+        await supabase
+          .from('questoes')
+          .update({
+            vezes_respondida: totalResp ?? 0,
+            vezes_acertada: totalResp ?? 0,
+          })
+          .eq('id', caso.questao_id);
+      } catch {
+        // Silencioso
+      }
+
+      try {
+        await supabase.from('admin_audit_log').insert({
+          admin_id: admin.id,
+          acao: 'anular_questao',
+          entidade_afetada: 'questoes',
+          entidade_id: caso.questao_id,
+          detalhes: {
+            contestacao_id: id,
+          },
+        });
+      } catch {
+        // Silencioso
+      }
     }
+
+    const respostaAdminLimpa = String(body?.resposta_admin ?? '').trim() || null;
 
     const { data, error } = await supabase
       .from('questao_contestacoes')
       .update({
         status,
-        resposta_admin: String(body?.resposta_admin ?? '').trim() || null,
+        resposta_admin: respostaAdminLimpa,
         resolvido_em: status === 'aberta' ? null : new Date().toISOString(),
         resolvido_por: status === 'aberta' ? null : admin.id,
       })
@@ -270,6 +362,39 @@ export async function PATCH(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Notifica o aluno quando o caso sai de 'aberta'
+    if (status !== 'aberta' && caso.user_id) {
+      try {
+        const tituloNotif = novoGabarito
+          ? `Gabarito retificado para letra ${novoGabarito}!`
+          : body?.anular_questao === true
+          ? 'Sua contestação procedeu: questão anulada'
+          : status === 'procede'
+          ? 'Sua contestação de questão foi analisada e aceita'
+          : 'Retorno sobre sua contestação de questão';
+
+        const mensagemNotif = respostaAdminLimpa
+          ? `Parecer do comando: ${respostaAdminLimpa}`
+          : novoGabarito
+          ? `Obrigado por reportar! O gabarito foi atualizado para a letra ${novoGabarito} e os acertos foram recalculados.`
+          : 'Agradecemos sua atenção ao banco de questões.';
+
+        await supabase.from('notificacoes').insert({
+          user_id: caso.user_id,
+          tipo: 'sistema',
+          titulo: tituloNotif.slice(0, 200),
+          mensagem: mensagemNotif,
+          dados_extra: {
+            questao_id: caso.questao_id,
+            contestacao_id: id,
+            status,
+          },
+        });
+      } catch {
+        // Silencioso
+      }
+    }
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

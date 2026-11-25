@@ -29,6 +29,19 @@ import { calcularNivel } from '@batcaverna/utils';
  *     do usuário — e nunca usava.
  */
 
+interface ItemRankingBruto {
+  user_id: string;
+  apelido: string;
+  avatar_url: string | null;
+  nivel_atual: number;
+  titulo_nivel: string;
+  valor: number;
+  percentual_acerto: number;
+}
+
+const RANKING_CACHE_TTL_MS = 45_000;
+const rankingCache = new Map<string, { expiraEm: number; itens: ItemRankingBruto[] }>();
+
 interface UsuarioRanking {
   id: string;
   nome: string | null;
@@ -82,13 +95,29 @@ export async function GET(req: NextRequest) {
     if (periodo === 'semanal') dataCorte = new Date(Date.now() - 7 * 86_400_000);
     else if (periodo === 'mensal') dataCorte = new Date(Date.now() - 30 * 86_400_000);
 
-    // ─── 1. Quem pediu para não aparecer ─────────────────────
+    // ─── 1. Quem pediu para não aparecer (aplicado após cache) ──
     const { data: ocultos } = await supabase
       .from('user_privacy_settings')
       .select('user_id')
       .eq('ocultar_do_ranking', true);
 
     const escondidos = new Set((ocultos ?? []).map((o) => o.user_id));
+
+    const chaveCache = `${tipo}:${periodo}:${(concurso || 'todos').toUpperCase()}`;
+    const agoraMs = Date.now();
+    const emCache = rankingCache.get(chaveCache);
+
+    if (emCache && emCache.expiraEm > agoraMs) {
+      const rankingFiltrado = emCache.itens
+        .filter((item) => !escondidos.has(item.user_id))
+        .slice(0, limit)
+        .map((item, index) => ({ ...item, posicao: index + 1 }));
+
+      return NextResponse.json({
+        success: true,
+        data: { tipo, periodo, concurso: concurso ?? 'todos', ranking: rankingFiltrado },
+      });
+    }
 
     // ─── 2. Filtro por concurso favoritado ───────────────────
     // A tela manda `concurso=EEAR`. Traduzimos para o conjunto de quem
@@ -132,7 +161,6 @@ export async function GET(req: NextRequest) {
 
     const agora = Date.now();
     const elegiveis = usuarios.filter((u) => {
-      if (escondidos.has(u.id)) return false;
       if (doConcurso && !doConcurso.has(u.id)) return false;
       if (u.ativo === false) return false;
       if (u.suspenso_ate && new Date(u.suspenso_ate).getTime() > agora) return false;
@@ -203,8 +231,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ─── 5. Monta o pódio ────────────────────────────────────
-    const ranking = elegiveis
+    // ─── 5. Monta o pódio completo em cache e aplica privacidade ─
+    const podioOrdenado: ItemRankingBruto[] = elegiveis
       .map((u) => {
         const stats = acertoPorUsuario[u.id];
         // O título vem do mesmo `calcularNivel` que a plataforma inteira usa.
@@ -229,7 +257,15 @@ export async function GET(req: NextRequest) {
       .filter((item) => item.valor > 0)
       .sort(
         (a, b) => b.valor - a.valor || b.percentual_acerto - a.percentual_acerto
-      )
+      );
+
+    rankingCache.set(chaveCache, {
+      expiraEm: Date.now() + RANKING_CACHE_TTL_MS,
+      itens: podioOrdenado,
+    });
+
+    const ranking = podioOrdenado
+      .filter((item) => !escondidos.has(item.user_id))
       .slice(0, limit)
       .map((item, index) => ({ ...item, posicao: index + 1 }));
 

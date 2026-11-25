@@ -58,9 +58,9 @@ const headersSeguranca = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      // i.ytimg.com = thumbnail das vídeo-aulas
+      // i.ytimg.com = thumbnail das vídeo-aulas; i.scdn.co = capas Spotify; images.unsplash.com = capas preset de playlist
       // data: e blob: = avatar e banner, que são gravados como data URL
-      "img-src 'self' data: blob: https://i.ytimg.com https://*.supabase.co",
+      "img-src 'self' data: blob: https://i.ytimg.com https://i.scdn.co https://images.unsplash.com https://*.supabase.co",
       "font-src 'self' data:",
       // archive.org = acervo de música; *.supabase.co = áudios e vídeos de mídia
       "media-src 'self' data: blob: https://archive.org https://*.archive.org https://*.supabase.co",

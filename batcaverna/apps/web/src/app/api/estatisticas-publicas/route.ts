@@ -32,16 +32,23 @@ export async function GET() {
 
     const anosDistintos = new Set((anos ?? []).map((q) => q.ano)).size;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        total_questoes: (totalQuestoes && totalQuestoes >= 2000) ? '+2 mil' : (totalQuestoes ?? 0),
-        total_questoes_exato: totalQuestoes ?? 0,
-        total_concursos: totalConcursos ?? 0,
-        total_materias: totalMaterias ?? 0,
-        anos_cobertos: anosDistintos,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          total_questoes: (totalQuestoes && totalQuestoes >= 2000) ? '+2 mil' : (totalQuestoes ?? 0),
+          total_questoes_exato: totalQuestoes ?? 0,
+          total_concursos: totalConcursos ?? 0,
+          total_materias: totalMaterias ?? 0,
+          anos_cobertos: anosDistintos,
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        },
+      }
+    );
   } catch (error) {
     console.error('GET /api/estatisticas-publicas error:', error);
     // A home não pode quebrar por causa disso: devolve zeros.

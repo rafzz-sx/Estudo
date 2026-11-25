@@ -80,6 +80,7 @@ interface Resultado {
   badges_novas: { nome: string; icone: string; cor_hex: string }[];
   total_respondidas: number;
   total_acertos: number;
+  chutou?: boolean;
 }
 
 interface OpcoesFiltro {
@@ -109,6 +110,7 @@ function BancoDeQuestoes() {
   const comboPersistido = useAuthStore((s) => s.user?.combo_atual ?? 0);
 
   const [filtros, setFiltros] = useState({
+    id: params.get("id") ?? null,
     concurso: params.get("concurso") ?? "todos",
     materia: params.get("materia") ?? "todas",
     assunto: params.get("assunto") ?? "todos",
@@ -126,15 +128,17 @@ function BancoDeQuestoes() {
 
   // Sincroniza estado de filtros caso a URL mude por navegação
   useEffect(() => {
+    const qId = params.get("id");
     const conc = params.get("concurso");
     const mat = params.get("materia");
     const ass = params.get("assunto");
     const assId = params.get("assunto_id");
     const foco = params.get("foco");
 
-    if (conc || mat || ass || assId || foco) {
+    if (qId || conc || mat || ass || assId || foco) {
       setFiltros((prev) => ({
         ...prev,
+        id: qId ?? null,
         concurso: conc ?? prev.concurso,
         materia: mat ?? prev.materia,
         assunto: ass ?? prev.assunto,
@@ -156,6 +160,7 @@ function BancoDeQuestoes() {
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [mostrarGabarito, setMostrarGabarito] = useState(false);
+  const [chutou, setChutou] = useState(false);
 
   // Combo espelha o banco; só muda quando o servidor responde.
   const [combo, setCombo] = useState(comboPersistido);
@@ -200,6 +205,7 @@ function BancoDeQuestoes() {
           ano: filtros.ano,
           dificuldade: filtros.dificuldade,
         });
+        if (filtros.id) qs.set("id", filtros.id);
         if (filtros.assunto_id) qs.set("assunto_id", filtros.assunto_id);
         if (filtros.nao_respondidas) qs.set("nao_respondidas", "1");
         if (filtros.comentadas) qs.set("comentadas", "1");
@@ -234,6 +240,7 @@ function BancoDeQuestoes() {
         setEscolhida(null);
         setResultado(null);
         setMostrarGabarito(false);
+        setChutou(false);
         inicioQuestao.current = Date.now();
         // Sinaliza estudo real: o aluno carregou questões para resolver.
         if (json.data.items.length > 0) {
@@ -270,6 +277,7 @@ function BancoDeQuestoes() {
         body: JSON.stringify({
           resposta_dada: escolhida,
           tempo_gasto_segundos: tempo,
+          chutou,
         }),
       });
       const json = await res.json();
@@ -309,6 +317,7 @@ function BancoDeQuestoes() {
         figura_svg: r.figura_svg,
         precisa_resolucao: r.precisa_resolucao,
         alternativas: questao.alternativas,
+        chutou: r.chutou,
       };
       setHistoricoSessao((prev) => [...prev, itemHistorico]);
 
@@ -356,6 +365,7 @@ function BancoDeQuestoes() {
     setEscolhida(null);
     setResultado(null);
     setMostrarGabarito(false);
+    setChutou(false);
     inicioQuestao.current = Date.now();
     topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -373,6 +383,7 @@ function BancoDeQuestoes() {
   const limparFoco = () => {
     setFiltros((prev) => ({
       ...prev,
+      id: null,
       assunto: "todos",
       assunto_id: null,
       foco: null,
@@ -399,6 +410,7 @@ function BancoDeQuestoes() {
             onChange={(e) =>
               setFiltros({
                 ...filtros,
+                id: null,
                 concurso: e.target.value,
                 materia: "todas",
                 assunto: "todos",
@@ -425,6 +437,7 @@ function BancoDeQuestoes() {
             onChange={(e) =>
               setFiltros({
                 ...filtros,
+                id: null,
                 materia: e.target.value,
                 assunto: "todos",
                 assunto_id: null,
@@ -450,6 +463,7 @@ function BancoDeQuestoes() {
               const a = opcoes?.assuntos?.find((x) => x.nome === val);
               setFiltros({
                 ...filtros,
+                id: null,
                 assunto: val,
                 assunto_id: a?.id ?? (val === "todos" ? null : filtros.assunto_id),
               });
@@ -478,7 +492,7 @@ function BancoDeQuestoes() {
         <Campo label="Ano da prova">
           <select
             value={filtros.ano}
-            onChange={(e) => setFiltros({ ...filtros, ano: e.target.value })}
+            onChange={(e) => setFiltros({ ...filtros, id: null, ano: e.target.value })}
             className="input-field text-sm"
           >
             <option value="todos">Todos os anos</option>
@@ -493,7 +507,7 @@ function BancoDeQuestoes() {
         <Campo label="Dificuldade">
           <select
             value={filtros.dificuldade}
-            onChange={(e) => setFiltros({ ...filtros, dificuldade: e.target.value })}
+            onChange={(e) => setFiltros({ ...filtros, id: null, dificuldade: e.target.value })}
             className="input-field text-sm"
           >
             {DIFICULDADES.map((d) => (
@@ -509,7 +523,7 @@ function BancoDeQuestoes() {
             type="checkbox"
             checked={filtros.nao_respondidas}
             onChange={(e) =>
-              setFiltros({ ...filtros, nao_respondidas: e.target.checked })
+              setFiltros({ ...filtros, id: null, nao_respondidas: e.target.checked })
             }
             className="accent-bat-gold-400"
           />
@@ -526,7 +540,7 @@ function BancoDeQuestoes() {
             type="checkbox"
             checked={filtros.comentadas}
             onChange={(e) =>
-              setFiltros({ ...filtros, comentadas: e.target.checked })
+              setFiltros({ ...filtros, id: null, comentadas: e.target.checked })
             }
             className="mt-0.5 accent-bat-gold-400"
           />
@@ -572,8 +586,8 @@ function BancoDeQuestoes() {
 
       {/* ═══════════ QUESTÃO ═══════════ */}
       <section className="min-w-0 flex-1">
-        {/* Banner de Treino Focado no Assunto / Ponto Fraco */}
-        {(filtros.assunto !== "todos" || filtros.assunto_id || filtros.foco === "ponto_fraco") && (
+        {/* Banner de Treino Focado no Assunto / Ponto Fraco / Questão Direcionada */}
+        {(filtros.id || filtros.assunto !== "todos" || filtros.assunto_id || filtros.foco === "ponto_fraco") && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-bat-gold-400/40 bg-gradient-to-r from-bat-gold-400/15 via-bat-bg-card to-bat-bg-card p-4 sm:p-5 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bat-gold-400/20 text-2xl text-bat-gold-400">
@@ -582,7 +596,9 @@ function BancoDeQuestoes() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-bat-gold-400">
-                    {filtros.foco === "ponto_fraco"
+                    {filtros.id
+                      ? "Questão Direcionada"
+                      : filtros.foco === "ponto_fraco"
                       ? "Treino Focado no Ponto Fraco"
                       : "Treino Focado no Assunto"}
                   </span>
@@ -698,11 +714,21 @@ function BancoDeQuestoes() {
                     Questão {(pagina - 1) * 10 + indice + 1} de{" "}
                     {total >= 2000 ? "+2 mil" : total.toLocaleString("pt-BR")}
                   </span>
-                  {sessao.respondidas > 0 && (
-                    <span>
-                      {sessao.acertos}/{sessao.respondidas} nesta sessão
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {sessao.respondidas > 0 && (
+                      <span>
+                        {sessao.acertos}/{sessao.respondidas} nesta sessão
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => window.dispatchEvent(new CustomEvent("batcaverna_set_zen"))}
+                      className="rounded-lg border border-bat-border bg-bat-bg-secondary px-2 py-0.5 text-[10px] font-bold text-bat-text-secondary hover:border-bat-gold-400/50 hover:text-bat-gold-400 transition-colors cursor-pointer"
+                      title="Ocultar menus para foco total na questão"
+                    >
+                      🎯 Foco Zen
+                    </button>
+                  </div>
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-bat-bg-secondary">
                   <div
@@ -817,16 +843,32 @@ function BancoDeQuestoes() {
 
             {/* ─── Ações ─── */}
             {!resultado ? (
-              <button
-                onClick={responder}
-                disabled={!escolhida || enviando}
-                className="btn-primary flex items-center justify-center gap-2 px-8 py-3 disabled:opacity-30 transition-all duration-150 active:scale-[0.98]"
-              >
-                {enviando && (
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-bat-bg border-r-transparent" />
-                )}
-                {enviando ? "Verificando..." : "Confirmar resposta"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={responder}
+                  disabled={!escolhida || enviando}
+                  className="btn-primary flex items-center justify-center gap-2 px-8 py-3 disabled:opacity-30 transition-all duration-150 active:scale-[0.98]"
+                >
+                  {enviando && (
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-bat-bg border-r-transparent" />
+                  )}
+                  {enviando ? "Verificando..." : "Confirmar resposta"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setChutou(!chutou)}
+                  disabled={enviando}
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                    chutou
+                      ? "border-amber-500/60 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                      : "border-bat-border/50 bg-bat-card/40 text-bat-text-muted hover:border-bat-border hover:text-bat-text"
+                  }`}
+                  title="Marque se você respondeu no chute ou tem dúvida teórica. Se acertar, o sistema não mascarará a lacuna e agendará para revisão!"
+                >
+                  <span>{chutou ? "🎲 Chute / Incerteza (Ativo)" : "🎲 Chutei / Incerteza"}</span>
+                </button>
+              </div>
             ) : (
               <div>
                 {/* Veredito */}
@@ -849,6 +891,21 @@ function BancoDeQuestoes() {
                       +{resultado.xp_ganho} XP
                     </span>
                   </div>
+
+                  {/* Chute Consciente com Acerto */}
+                  {resultado.chutou && resultado.correta && (
+                    <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 flex items-start gap-2.5">
+                      <span className="text-base shrink-0">🎲</span>
+                      <div>
+                        <strong className="text-amber-300 font-semibold block">
+                          Chute Consciente Registrado!
+                        </strong>
+                        <p className="mt-0.5 text-bat-text-secondary leading-relaxed">
+                          Você acertou o gabarito e faturou o XP, mas como marcou incerteza, o sistema não vai mascarar sua dúvida: esta questão foi adicionada à sua <strong>Revisão Espaçada</strong> e ao <strong>Caderno de Erros</strong> para fixação real da matéria.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* O escudo salvou a sequência: o aluno tem que saber, senão
                       ele acha que a plataforma esqueceu de zerar. */}

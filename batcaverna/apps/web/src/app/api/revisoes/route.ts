@@ -24,10 +24,46 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const incluirFuturas = searchParams.get('futuras') === '1';
+    const apenasContagem = searchParams.get('apenas_contagem') === '1';
     const limite = Math.min(50, Math.max(1, parseInt(searchParams.get('limite') || '20')));
 
     const supabase = createServerSupabaseClient();
     const hoje = new Date().toISOString().slice(0, 10);
+
+    // Contadores executados sempre em paralelo (mesmo quando vencidas === 0)
+    const [{ count: vencidas }, { count: futuras }, { count: aprendidas }] =
+      await Promise.all([
+        supabase
+          .from('revisoes_agendadas')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('ativa', true)
+          .lte('agendada_para', hoje),
+        supabase
+          .from('revisoes_agendadas')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('ativa', true)
+          .gt('agendada_para', hoje),
+        supabase
+          .from('revisoes_agendadas')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('ativa', false)
+          .not('aprendida_em', 'is', null),
+      ]);
+
+    if (apenasContagem) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          itens: [],
+          vencidas: vencidas ?? 0,
+          agendadas_futuras: futuras ?? 0,
+          aprendidas: aprendidas ?? 0,
+        },
+      });
+    }
 
     let query = supabase
       .from('revisoes_agendadas')
@@ -44,7 +80,12 @@ export async function GET(req: NextRequest) {
     if (!agendadas?.length) {
       return NextResponse.json({
         success: true,
-        data: { itens: [], vencidas: 0, agendadas_futuras: 0, aprendidas: 0 },
+        data: {
+          itens: [],
+          vencidas: vencidas ?? 0,
+          agendadas_futuras: futuras ?? 0,
+          aprendidas: aprendidas ?? 0,
+        },
       });
     }
 
@@ -82,28 +123,6 @@ export async function GET(req: NextRequest) {
         };
       })
       .filter(Boolean);
-
-    // ─── Contadores para o painel ────────────────────────────
-    const { count: vencidas } = await supabase
-      .from('revisoes_agendadas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('ativa', true)
-      .lte('agendada_para', hoje);
-
-    const { count: futuras } = await supabase
-      .from('revisoes_agendadas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('ativa', true)
-      .gt('agendada_para', hoje);
-
-    const { count: aprendidas } = await supabase
-      .from('revisoes_agendadas')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('ativa', false)
-      .not('aprendida_em', 'is', null);
 
     return NextResponse.json({
       success: true,

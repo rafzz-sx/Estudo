@@ -208,6 +208,7 @@ export async function GET(req: NextRequest) {
 
     const agora = Date.now();
     const cincoMinAtras = new Date(agora - 5 * 60_000).toISOString();
+    const quinzeMinAtras = new Date(agora - 15 * 60_000).toISOString();
     const umDiaAtras = new Date(agora - 24 * 60 * 60_000).toISOString();
 
     const [
@@ -217,6 +218,7 @@ export async function GET(req: NextRequest) {
       { count: ticketsAbertosTotal },
       { count: feedbacksPendentesTotal },
       { count: usuariosTotal },
+      { data: errosFrontendRecentes },
     ] = await Promise.all([
       supabase
         .from('study_sessions')
@@ -242,7 +244,20 @@ export async function GET(req: NextRequest) {
       supabase
         .from('users')
         .select('id', { count: 'exact', head: true }),
+      supabase
+        .from('admin_audit_log')
+        .select('detalhes, criado_em')
+        .eq('acao', 'erro_frontend')
+        .gte('criado_em', quinzeMinAtras)
+        .order('criado_em', { ascending: false })
+        .limit(5),
     ]);
+
+    const errosFrontend = (errosFrontendRecentes ?? []).map((e: any) => ({
+      mensagem: String(e.detalhes?.mensagem ?? 'Erro de interface'),
+      rota: String(e.detalhes?.rota ?? ''),
+      criado_em: e.criado_em,
+    }));
 
     const telemetriaAoVivo = {
       latencia_db_ms: latenciaDbMs,
@@ -254,6 +269,8 @@ export async function GET(req: NextRequest) {
       feedbacks_pendentes: feedbacksPendentesTotal ?? 0,
       usuarios_total: usuariosTotal ?? 0,
       questoes_total: questoes ?? 0,
+      erros_frontend_15m: errosFrontend.length,
+      erros_frontend_recentes: errosFrontend,
       memoria_heap_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       uptime_segundos: Math.round(process.uptime()),
     };

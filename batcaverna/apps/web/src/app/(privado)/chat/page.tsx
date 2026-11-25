@@ -353,13 +353,13 @@ export default function ChatPage() {
     const executarLoop = () => {
       if (!ativo) return;
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        const ocioso = Date.now() - ultimaAtividadeRef.current > 45000;
-        const proximoIntervalo = ocioso ? 10000 : 4000;
+        const ocioso = Date.now() - ultimaAtividadeRef.current > 35000;
+        const proximoIntervalo = ocioso ? 14000 : 4500;
         carregarMensagens(conversaAtivaId, true);
         timeoutId = setTimeout(executarLoop, proximoIntervalo);
       } else {
-        // Aba em segundo plano: checagem leve a cada 20 segundos
-        timeoutId = setTimeout(executarLoop, 20000);
+        // Aba em segundo plano: checagem leve a cada 35 segundos
+        timeoutId = setTimeout(executarLoop, 35000);
       }
     };
 

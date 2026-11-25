@@ -114,6 +114,31 @@ export default function ProgressoPage() {
   const tempoEstudoTotal = useStudySessionStore((state) => state.tempoEstudoTotal);
   const tempoEstudoHoje = useStudySessionStore((state) => state.tempoEstudoHoje);
 
+  // Meta semanal de questões (configurável localmente por soldado)
+  const [metaSemanal, setMetaSemanal] = useState<number>(70);
+  const [editandoMeta, setEditandoMeta] = useState(false);
+
+  useEffect(() => {
+    try {
+      const chave = `batcaverna_meta_semanal_${user?.id || "anon"}`;
+      const salva = localStorage.getItem(chave);
+      if (salva) {
+        const num = Number(salva);
+        if (Number.isFinite(num) && num >= 10 && num <= 2000) setMetaSemanal(num);
+      }
+    } catch {}
+  }, [user?.id]);
+
+  const salvarMetaSemanal = (nova: number) => {
+    const limpa = Math.min(2000, Math.max(10, Math.round(nova) || 70));
+    setMetaSemanal(limpa);
+    try {
+      const chave = `batcaverna_meta_semanal_${user?.id || "anon"}`;
+      localStorage.setItem(chave, String(limpa));
+    } catch {}
+    setEditandoMeta(false);
+  };
+
   useEffect(() => {
     setTimeout(() => setVisible(true), 100);
 
@@ -279,6 +304,84 @@ export default function ProgressoPage() {
         />
       </div>
 
+      {/* ═══ META SEMANAL DE COMBATE ═══ */}
+      {(() => {
+        const semanaAtual = evolucao.length > 0 ? evolucao[evolucao.length - 1] : null;
+        const feitasSemana = semanaAtual?.respondidas ?? 0;
+        const pctMeta = Math.min(100, Math.round((feitasSemana / Math.max(1, metaSemanal)) * 100));
+        const bateu = feitasSemana >= metaSemanal;
+
+        return (
+          <div className="bg-bat-bg-card border border-bat-border rounded-2xl p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="heading text-base font-bold text-bat-text flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>Meta Semanal de Questões</span>
+                  {bateu && (
+                    <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300">
+                      ✅ Meta Batida!
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-bat-text-muted">
+                  Você resolveu <strong className="text-bat-text">{feitasSemana}</strong> de{" "}
+                  <strong className="text-bat-gold-400">{metaSemanal} questões</strong> nesta semana ({pctMeta}%).
+                </p>
+              </div>
+
+              {!editandoMeta ? (
+                <button
+                  type="button"
+                  onClick={() => setEditandoMeta(true)}
+                  className="rounded-lg border border-bat-border bg-bat-bg-secondary px-3 py-1.5 text-xs font-semibold text-bat-text-secondary hover:border-bat-gold-400/50 hover:text-bat-gold-400 cursor-pointer"
+                >
+                  ⚙️ Ajustar Meta
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={10}
+                    max={2000}
+                    step={10}
+                    defaultValue={metaSemanal}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        salvarMetaSemanal(Number((e.target as HTMLInputElement).value));
+                      }
+                    }}
+                    id="input-meta-semanal"
+                    className="input-field w-24 text-xs font-mono text-center py-1.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById("input-meta-semanal") as HTMLInputElement | null;
+                      salvarMetaSemanal(Number(el?.value || metaSemanal));
+                    }}
+                    className="btn-primary px-3 py-1.5 text-xs font-bold cursor-pointer"
+                  >
+                    Salvar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full h-2.5 bg-bat-bg-secondary rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  bateu
+                    ? "bg-emerald-400"
+                    : "bg-gradient-to-r from-bat-gold-400 to-amber-300"
+                }`}
+                style={{ width: `${pctMeta}%` }}
+              />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ═══ EVOLUÇÃO ═══ */}
       {/* A curva vem ANTES do histórico de concursos porque é a pergunta que
           traz o aluno a esta tela: "eu estou melhorando?". O resto é
@@ -360,7 +463,7 @@ export default function ProgressoPage() {
                 <MathText>{questaoDoDia.enunciado}</MathText>
               </p>
               <Link
-                href={`/questoes?concurso=${questaoDoDia.concursos?.sigla ?? "todos"}`}
+                href={`/questoes?id=${questaoDoDia.id}`}
                 className="btn-primary inline-block py-2.5 px-5 text-sm no-underline"
               >
                 Resolver agora →

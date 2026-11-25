@@ -49,6 +49,18 @@ export function YouTubeGlobalPlayer() {
     }
   }, []);
 
+  /** Registra o widget como ouvinte oficial de eventos (infoDelivery, onStateChange, onError) */
+  const enviarHandshakeYT = useCallback(() => {
+    if (iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+          "*"
+        );
+      } catch {}
+    }
+  }, []);
+
   /** Carrega ou troca o vídeo do YouTube */
   const carregarVideo = useCallback(
     (videoId: string, vol: number, startSeconds = 0) => {
@@ -84,6 +96,7 @@ export function YouTubeGlobalPlayer() {
         }
         postYT("loadVideoById", [videoId, Math.floor(startSeconds)]);
         postYT("playVideo");
+        enviarHandshakeYT();
         return;
       }
 
@@ -107,10 +120,10 @@ export function YouTubeGlobalPlayer() {
           postYT("setVolume", [Math.round(vol * 100)]);
         }
         postYT("playVideo");
-        postYT("listening");
+        enviarHandshakeYT();
       };
     },
-    [postYT]
+    [postYT, enviarHandshakeYT]
   );
 
   /** Registra o controlador no singleton do player-store */

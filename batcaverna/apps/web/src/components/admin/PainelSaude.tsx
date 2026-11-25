@@ -20,6 +20,8 @@ interface Telemetria {
   feedbacks_pendentes: number;
   usuarios_total: number;
   questoes_total: number;
+  erros_frontend_15m?: number;
+  erros_frontend_recentes?: { mensagem: string; rota: string; criado_em: string }[];
   memoria_heap_mb: number;
   uptime_segundos: number;
 }
@@ -223,6 +225,33 @@ export function PainelSaude() {
               Heap: {telemetria.memoria_heap_mb} MB
             </span>
           </div>
+        </div>
+      )}
+
+      {/* ═══ FEED DE ERROS SILENCIOSOS DE FRONTEND (ÚLTIMOS 15 MIN) ═══ */}
+      {telemetria && (telemetria.erros_frontend_15m ?? 0) > 0 && (
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-rose-300 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
+              <span>Telemetria de Interface: {telemetria.erros_frontend_15m} falha(s) nos últimos 15 min</span>
+            </h3>
+          </div>
+          <ul className="space-y-1.5 text-xs">
+            {(telemetria.erros_frontend_recentes ?? []).map((ef, idx) => (
+              <li
+                key={idx}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-bat-bg-card/80 px-3 py-1.5 border border-rose-500/20"
+              >
+                <span className="font-mono text-rose-200 truncate max-w-xl">
+                  <strong className="text-bat-gold-400">{ef.rota || '/'}</strong> · {ef.mensagem}
+                </span>
+                <span className="text-[10px] text-bat-text-muted font-mono">
+                  {new Date(ef.criado_em).toLocaleTimeString('pt-BR')}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

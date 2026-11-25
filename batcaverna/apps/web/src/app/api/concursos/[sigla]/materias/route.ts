@@ -41,7 +41,14 @@ export async function GET(
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json(
+      { success: true, data },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        },
+      }
+    );
   } catch (error) {
     console.error('GET /api/concursos/[sigla]/materias error:', error);
     return NextResponse.json(

@@ -31,6 +31,14 @@ interface QuestaoErrada {
   errada_em: string | null;
   anotacao: string | null;
   resolvida: boolean;
+  chutou_consciente?: boolean;
+  revisao?: {
+    ativa: boolean;
+    etapa: number;
+    agendada_para: string | null;
+    total_revisoes: number;
+    aprendida_em: string | null;
+  } | null;
   concursos: { sigla: string; emoji: string | null } | null;
   materias: { nome: string; icone_emoji: string | null } | null;
   assuntos: { nome: string } | null;
@@ -104,6 +112,11 @@ export default function CadernoPage() {
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
   const [salvoComSucesso, setSalvoComSucesso] = useState<string | null>(null);
+
+  // Modo Flashcard Tático
+  const [flashcardsAberto, setFlashcardsAberto] = useState(false);
+  const [flashIdx, setFlashIdx] = useState(0);
+  const [flashVirado, setFlashVirado] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -222,6 +235,10 @@ export default function CadernoPage() {
     return gruposFiltrados.reduce((acc, g) => acc + g.questoes.length, 0);
   }, [gruposFiltrados]);
 
+  const listaFlashcards = useMemo(() => {
+    return gruposFiltrados.flatMap((g) => g.questoes);
+  }, [gruposFiltrados]);
+
   const salvarAnotacao = async (questaoId: string) => {
     setSalvando(questaoId);
     try {
@@ -266,7 +283,21 @@ export default function CadernoPage() {
               <span>Análise Tática de Vulnerabilidades</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {listaFlashcards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlashIdx(0);
+                    setFlashVirado(false);
+                    setFlashcardsAberto(true);
+                  }}
+                  className="py-2 px-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <span>⚡</span>
+                  <span>Flashcards ({listaFlashcards.length})</span>
+                </button>
+              )}
               <Link
                 href="/questoes"
                 className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 shadow-md no-underline"
@@ -751,6 +782,48 @@ export default function CadernoPage() {
                                 <span>Com Anotação</span>
                               </span>
                             )}
+
+                            {/* Chute Consciente */}
+                            {q.chutou_consciente && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                                <span>🎲</span>
+                                <span>Acerto por Chute</span>
+                              </span>
+                            )}
+
+                            {/* Pílula Unificada de Repetição Espaçada */}
+                            {q.revisao && (() => {
+                              if (!q.revisao.ativa && q.revisao.aprendida_em) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    ✅ Aprendida no SRS
+                                  </span>
+                                );
+                              }
+                              if (q.revisao.ativa && q.revisao.agendada_para) {
+                                const hojeStr = new Date().toISOString().slice(0, 10);
+                                const vencida = q.revisao.agendada_para <= hojeStr;
+                                const diffDias = Math.max(
+                                  1,
+                                  Math.ceil(
+                                    (new Date(q.revisao.agendada_para).getTime() - new Date(hojeStr).getTime()) /
+                                      86_400_000
+                                  )
+                                );
+                                return (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                      vencida
+                                        ? "bg-bat-gold-400/20 text-bat-gold-400 border-bat-gold-400/50 animate-pulse"
+                                        : "bg-sky-500/10 text-sky-300 border-sky-500/30"
+                                    }`}
+                                  >
+                                    {vencida ? "🔁 Revisão hoje" : `📅 Revisão em ${diffDias}d`}
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
 
                           {/* Enunciado resumido */}
@@ -967,6 +1040,140 @@ export default function CadernoPage() {
           ))}
         </div>
       )}
+
+      {/* ═══ MODAL MODO FLASHCARD TÁTICO ═══ */}
+      {flashcardsAberto && listaFlashcards.length > 0 && (() => {
+        const idxSeguro = Math.min(flashIdx, listaFlashcards.length - 1);
+        const card = listaFlashcards[idxSeguro];
+        const altCerta = card.alternativas?.find((a) => a.letra === card.resposta_correta);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+            <div className="w-full max-w-2xl rounded-3xl border border-bat-gold-400/35 bg-bat-bg-card shadow-2xl overflow-hidden animate-fade-in">
+              {/* Topo do Deck */}
+              <div className="flex items-center justify-between border-b border-bat-border bg-bat-bg-secondary/60 px-5 py-3.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-bat-gold-400">
+                  <span>⚡</span>
+                  <span>Flashcard Tático</span>
+                  <span className="rounded-md bg-bat-bg-primary px-2 py-0.5 text-bat-text-muted font-mono">
+                    {idxSeguro + 1} / {listaFlashcards.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFlashcardsAberto(false)}
+                  className="rounded-lg p-1.5 text-bat-text-muted hover:bg-bat-bg-elevated hover:text-bat-text cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Corpo do Cartão */}
+              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="rounded-md bg-bat-bg-secondary px-2 py-0.5 font-bold text-bat-gold-400 border border-bat-gold-400/20">
+                    {card.concursos?.sigla || "Questão"} {card.ano ? `· ${card.ano}` : ""}
+                  </span>
+                  {card.materias?.nome && (
+                    <span className="rounded-md bg-bat-bg-secondary px-2 py-0.5 text-bat-text-secondary">
+                      {card.materias.icone_emoji} {card.materias.nome}
+                    </span>
+                  )}
+                  {card.assuntos?.nome && (
+                    <span className="rounded-md bg-bat-bg-secondary px-2 py-0.5 text-bat-text-muted">
+                      {card.assuntos.nome}
+                    </span>
+                  )}
+                </div>
+
+                {/* Frente */}
+                <div className="rounded-2xl border border-bat-border bg-bat-bg-primary p-5 text-sm leading-relaxed text-bat-text whitespace-pre-line">
+                  <MathText>{card.enunciado}</MathText>
+                </div>
+
+                {/* Verso (Gabarito & Raciocínio) */}
+                {!flashVirado ? (
+                  <button
+                    type="button"
+                    onClick={() => setFlashVirado(true)}
+                    className="w-full rounded-2xl border border-bat-gold-400/50 bg-bat-gold-400/15 py-4 text-sm font-bold text-bat-gold-400 hover:bg-bat-gold-400/25 transition-all cursor-pointer"
+                  >
+                    🔄 Virar Cartão e Ver Resposta
+                  </button>
+                ) : (
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
+                      <p className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 mb-1">
+                        ✅ Gabarito: Letra {card.resposta_correta}
+                      </p>
+                      {altCerta && (
+                        <p className="text-bat-text font-medium">
+                          <MathText>{altCerta.texto}</MathText>
+                        </p>
+                      )}
+                    </div>
+
+                    {card.anotacao && (
+                      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-bat-text-secondary leading-relaxed">
+                        <strong className="text-amber-300 block mb-1">📝 Sua Anotação:</strong>
+                        {card.anotacao}
+                      </div>
+                    )}
+
+                    {card.explicacao && (
+                      <div className="rounded-2xl border border-bat-border bg-bat-bg-secondary/50 p-4 text-xs text-bat-text-secondary leading-relaxed whitespace-pre-line">
+                        <strong className="text-bat-text block mb-1">💡 Comentário Oficial:</strong>
+                        <MathText>{card.explicacao}</MathText>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Ações de Navegação e Retenção */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-bat-border bg-bat-bg-secondary/40 px-5 py-3.5">
+                <button
+                  type="button"
+                  disabled={idxSeguro === 0}
+                  onClick={() => {
+                    setFlashIdx((i) => Math.max(0, i - 1));
+                    setFlashVirado(false);
+                  }}
+                  className="rounded-xl border border-bat-border px-3.5 py-2 text-xs font-bold text-bat-text-secondary hover:text-bat-text disabled:opacity-30 cursor-pointer"
+                >
+                  ← Anterior
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {flashVirado && !card.resolvida && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await marcarResolvida(card.id);
+                        setFlashVirado(false);
+                        setFlashIdx((i) => (i + 1 < listaFlashcards.length ? i : 0));
+                      }}
+                      className="rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-3.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 cursor-pointer"
+                    >
+                      ✅ Dominei! Superar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFlashVirado(false);
+                      setFlashIdx((i) => (i + 1 < listaFlashcards.length ? i + 1 : 0));
+                    }}
+                    className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer"
+                  >
+                    {idxSeguro + 1 < listaFlashcards.length ? "Próximo Card →" : "Reiniciar Deck ↻"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

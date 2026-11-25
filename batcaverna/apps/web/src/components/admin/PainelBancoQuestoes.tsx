@@ -71,6 +71,39 @@ export function PainelBancoQuestoes() {
   const [materiasConcurso, setMateriasConcurso] = useState<any[]>([]);
   const [carregandoMaterias, setCarregandoMaterias] = useState(false);
 
+  // Mapa de Calor (Concurso × Matéria)
+  const [mapaCalorAberto, setMapaCalorAberto] = useState(false);
+  const [carregandoMapaCalor, setCarregandoMapaCalor] = useState(false);
+  const [mapaCalor, setMapaCalor] = useState<{
+    materias: { id: string; nome: string; icone_emoji: string | null }[];
+    linhas: {
+      concurso_id: string;
+      sigla: string;
+      nome: string;
+      emoji: string | null;
+      total: number;
+      celulas: Record<string, number>;
+    }[];
+    total_geral: number;
+  } | null>(null);
+
+  const toggleMapaCalor = async () => {
+    const proximo = !mapaCalorAberto;
+    setMapaCalorAberto(proximo);
+    if (proximo && !mapaCalor) {
+      setCarregandoMapaCalor(true);
+      try {
+        const res = await fetchWithAuth("/api/admin/questoes/mapa-calor");
+        const json = await res.json();
+        if (json.success && json.data) setMapaCalor(json.data);
+      } catch {
+        setAviso({ tipo: "erro", msg: "Erro ao gerar mapa de calor do estoque." });
+      } finally {
+        setCarregandoMapaCalor(false);
+      }
+    }
+  };
+
   const formNovaPadrao = {
     concurso_id: "",
     materia_id: "",
@@ -359,7 +392,19 @@ export function PainelBancoQuestoes() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={toggleMapaCalor}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer border transition-all ${
+              mapaCalorAberto
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                : "bg-bat-bg-secondary border-bat-border text-bat-text hover:border-bat-gold-400/40"
+            }`}
+          >
+            <span>🔥</span>
+            <span>{mapaCalorAberto ? "Ocultar Mapa de Calor" : "Mapa de Calor do Estoque"}</span>
+          </button>
           <button
             onClick={handleAbrirCriacao}
             className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-[0_0_15px_rgba(245,197,24,0.3)]"
@@ -376,6 +421,80 @@ export function PainelBancoQuestoes() {
           </button>
         </div>
       </div>
+
+      {/* ═══ MAPA DE CALOR DO ESTOQUE (CONCURSO × MATÉRIA) ═══ */}
+      {mapaCalorAberto && (
+        <div className="rounded-2xl border border-bat-gold-400/30 bg-bat-bg-card p-5 space-y-3 shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="heading text-sm font-bold text-bat-gold-400 flex items-center gap-2">
+                <span>🔥</span>
+                <span>Mapa de Calor do Estoque de Questões Ativas</span>
+              </h3>
+              <p className="text-[11px] text-bat-text-muted">
+                🟢 ≥ 40 questões · 🟡 15–39 questões · 🔴 &lt; 15 questões (crítico para simulados)
+              </p>
+            </div>
+            {mapaCalor && (
+              <span className="text-xs font-mono font-bold text-bat-text-secondary">
+                Total ativo: {mapaCalor.total_geral.toLocaleString("pt-BR")} questões
+              </span>
+            )}
+          </div>
+
+          {carregandoMapaCalor ? (
+            <div className="h-32 rounded-xl bg-bat-bg-secondary/60 animate-pulse" />
+          ) : mapaCalor && mapaCalor.linhas.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-bat-border text-[10px] uppercase tracking-wider text-bat-text-muted">
+                    <th className="py-2 pr-3 font-bold">Concurso</th>
+                    {mapaCalor.materias.map((m) => (
+                      <th key={m.id} className="px-2 py-2 text-center font-semibold whitespace-nowrap">
+                        {m.icone_emoji} {m.nome}
+                      </th>
+                    ))}
+                    <th className="pl-3 py-2 text-right font-bold">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-bat-border/40 font-mono">
+                  {mapaCalor.linhas.map((l) => (
+                    <tr key={l.concurso_id} className="hover:bg-bat-bg-elevated/30">
+                      <td className="py-2 pr-3 font-bold text-bat-text whitespace-nowrap">
+                        {l.emoji} {l.sigla}
+                      </td>
+                      {mapaCalor.materias.map((m) => {
+                        const qtd = l.celulas[m.id] ?? 0;
+                        const cor =
+                          qtd === 0
+                            ? "text-bat-text-muted/40"
+                            : qtd < 15
+                            ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                            : qtd < 40
+                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                            : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+                        return (
+                          <td key={m.id} className="px-1.5 py-1.5 text-center">
+                            <span className={`inline-block min-w-8 rounded px-1.5 py-0.5 text-[11px] font-bold ${cor}`}>
+                              {qtd || "—"}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td className="pl-3 py-2 text-right font-extrabold text-bat-gold-400">
+                        {l.total}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-bat-text-muted">Nenhum dado disponível.</p>
+          )}
+        </div>
+      )}
 
       {/* Alertas */}
       {aviso && (

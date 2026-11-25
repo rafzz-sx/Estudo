@@ -329,6 +329,7 @@ export interface ResultadoResposta {
   badges_novas: { nome: string; icone: string; cor_hex: string }[];
   total_respondidas: number;
   total_acertos: number;
+  chutou?: boolean;
 }
 
 interface QuestaoParaCorrecao {
@@ -353,6 +354,7 @@ interface QuestaoParaCorrecao {
 export interface DadosOtimizados {
   dadosUsuario?: any;
   dadosRevisao?: any;
+  chutou?: boolean;
 }
 
 /**
@@ -514,14 +516,53 @@ export async function registrarResposta(
     }
   })();
 
-  // 5. Repetição espaçada (reaproveitando dados da consulta inicial)
+  // 5. Repetição espaçada (se chutou e acertou, força ir para a repetição espaçada)
+  // Questões anuladas não devem entrar como erro nem como chute pendente.
+  const chutou = !anulada && otimizados?.chutou === true;
+  const resultadoParaRevisao = chutou ? false : correta;
   const pRevisao = atualizarRevisao(
     supabase,
     userId,
     questao.id,
-    correta,
+    resultadoParaRevisao,
     filaAntes ?? null
   );
+
+  // 5.1 Se chutou, registra nota no caderno de erros preservando eventual texto prévio
+  const pNotaChute = (async () => {
+    if (!chutou) return;
+    try {
+      const { data: notaExistente } = await supabase
+        .from('user_questao_notas')
+        .select('anotacao')
+        .eq('user_id', userId)
+        .eq('questao_id', questao.id)
+        .maybeSingle();
+
+      const tagChute =
+        '[CHUTE CONSCIENTE] Aluno marcou incerteza ao responder. Necessita revisão teórica.';
+      const textoAnterior = notaExistente?.anotacao?.trim() ?? '';
+      const novaAnotacao = textoAnterior
+        ? textoAnterior.includes('[CHUTE CONSCIENTE]')
+          ? textoAnterior
+          : `${tagChute}\n\n${textoAnterior}`
+        : tagChute;
+
+      await supabase.from('user_questao_notas').upsert(
+        {
+          user_id: userId,
+          questao_id: questao.id,
+          anotacao: novaAnotacao.slice(0, 4000),
+          resolvida: false,
+          resolvida_em: null,
+          atualizado_em: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,questao_id' }
+      );
+    } catch {
+      // Silencioso
+    }
+  })();
 
   // 6. Badges (com cache em memória e checagem rápida)
   const pBadges = conferirBadges(supabase, userId, {
@@ -550,11 +591,12 @@ export async function registrarResposta(
   })();
 
   // Aguarda todos os updates em paralelo
-  const [, , , , revisao, badgesNovas, frase] = await Promise.all([
+  const [, , , , , revisao, badgesNovas, frase] = await Promise.all([
     pHistorico,
     pUser,
     pMateriaStats,
     pQuestao,
+    pNotaChute,
     pRevisao,
     pBadges,
     pFrase,
@@ -591,5 +633,6 @@ export async function registrarResposta(
     badges_novas: badgesNovas,
     total_respondidas: totalRespondidas,
     total_acertos: totalAcertos,
+    chutou,
   };
 }

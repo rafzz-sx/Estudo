@@ -503,16 +503,39 @@ export async function errosEmAberto(
   }
 
   const erradas = [...ultima.entries()].filter(([, ok]) => !ok).map(([id]) => id);
-  if (!erradas.length) return { ids: [], total: 0 };
 
   const { data: notas } = await supabase
     .from('user_questao_notas')
-    .select('questao_id, resolvida')
-    .eq('user_id', userId)
-    .eq('resolvida', true);
+    .select(
+      concursoId
+        ? 'questao_id, resolvida, anotacao, questoes!inner (concurso_id)'
+        : 'questao_id, resolvida, anotacao'
+    )
+    .eq('user_id', userId);
 
-  const resolvidas = new Set((notas ?? []).map((n) => n.questao_id));
-  const abertos = erradas.filter((id) => !resolvidas.has(id));
+  const notasLista = (notas ?? []) as unknown as {
+    questao_id: string;
+    resolvida: boolean | null;
+    anotacao: string | null;
+    questoes?: { concurso_id: string } | { concurso_id: string }[] | null;
+  }[];
+
+  const resolvidas = new Set(
+    notasLista.filter((n) => n.resolvida).map((n) => n.questao_id)
+  );
+  const abertosSet = new Set(erradas.filter((id) => !resolvidas.has(id)));
+
+  // Inclui também chutes conscientes pendentes de revisão
+  for (const n of notasLista) {
+    if (n.resolvida || !n.anotacao?.includes('[CHUTE CONSCIENTE]')) continue;
+    if (concursoId) {
+      const qRel = Array.isArray(n.questoes) ? n.questoes[0] : n.questoes;
+      if (qRel?.concurso_id !== concursoId) continue;
+    }
+    abertosSet.add(n.questao_id);
+  }
+
+  const abertos = Array.from(abertosSet);
 
   return { ids: abertos, total: abertos.length };
 }

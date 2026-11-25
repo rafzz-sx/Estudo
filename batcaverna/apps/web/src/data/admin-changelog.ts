@@ -8,7 +8,7 @@
  * 2. Registramos as novidades técnicas no `ADMIN_CHANGELOG_HISTORY`.
  * 3. NUNCA vazamos informações administrativas no `changelog.ts` público dos alunos.
  */
-export const CURRENT_ADMIN_VERSION = '2.4.0';
+export const CURRENT_ADMIN_VERSION = '2.5.0';
 
 export interface AdminAlteracao {
   modulo: string;
@@ -24,6 +24,30 @@ export interface AdminReleaseItem {
 }
 
 export const ADMIN_CHANGELOG_HISTORY: AdminReleaseItem[] = [
+  {
+    versao: '2.5.0',
+    dataLancamento: '2026-11-24T22:00:00-03:00',
+    titulo: 'Retificação A–E nas Contestações, Anti-Grinder Real, Mapa de Calor & Otimização do Painel',
+    resumo:
+      'Evolução tática e de performance do Command Center: retificação direta de gabarito com recálculo histórico e alerta aos alunos, detecção de autoclicker por tempo real por questão, matriz de cobertura Concurso × Matéria, telemetria de falhas de interface na aba Saúde e carregamento enxuto de rotas administrativas.',
+    alteracoes: [
+      {
+        modulo: 'Contestações & Banco de Questões',
+        descricao:
+          'Adicionada retificação rápida de gabarito (A–E) nas contestações com recálculo automático do histórico de respostas/acertos e notificação direta aos alunos afetados, além do Mapa de Calor Concurso × Matéria no Banco de Questões.',
+      },
+      {
+        modulo: 'Auditoria & Anti-Grinder',
+        descricao:
+          'Novo detector de ritmo anômalo (grinder/autoclicker) baseado nas amostras reais de tempo por questão no Dossiê do Soldado e listagem de usuários, evitando falsos positivos.',
+      },
+      {
+        modulo: 'Saúde, Telemetria & Performance',
+        descricao:
+          'Telemetria automática de falhas de interface capturada pelos Error Boundaries na aba Saúde, carregamento em modo resumo no mount do painel, lazy-load dos logs do Armazém e listagem de moderação de chat sem trafegar textos criptografados.',
+      },
+    ],
+  },
   {
     versao: '2.4.0',
     dataLancamento: '2026-11-23T20:35:00-03:00',
